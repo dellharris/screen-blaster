@@ -533,7 +533,9 @@ function positionYTOverlay(){
   const btn=document.getElementById('yt-back');
   btn.style.left=(r.left+12)+'px'; btn.style.top=(r.top+12)+'px';
 }
+let _episodePrevState='start';
 function showYouTubeEmbed(){
+  _episodePrevState=STATE;
   stopBGM();
   LOOP_SLOTS.forEach((_,i)=>{try{if(LOOP_SLOTS[i].node)LOOP_SLOTS[i].node.stop();}catch(e){}LOOP_SLOTS[i].playing=false;LOOP_SLOTS[i].node=null;});
   LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;});
@@ -541,7 +543,9 @@ function showYouTubeEmbed(){
   document.getElementById('yt-overlay').style.display='block';
   document.getElementById('yt-frame').style.display='block';
   document.getElementById('yt-frame').src='https://www.youtube.com/embed/LjPjHN7uyO0?autoplay=1&rel=0&modestbranding=1&playsinline=1';
-  document.getElementById('yt-back').style.display='block';
+  const backBtn=document.getElementById('yt-back');
+  backBtn.style.display='block';
+  backBtn.textContent=(_episodePrevState==='eliminated'||_episodePrevState==='lockout')?'◀ BACK TO COOLDOWN':'◀ BACK';
   STATE='episode';
 }
 function exitEpisode(){
@@ -549,7 +553,8 @@ function exitEpisode(){
   document.getElementById('yt-frame').style.display='none';
   document.getElementById('yt-frame').src='';
   document.getElementById('yt-back').style.display='none';
-  startBGM(); STATE='start';
+  startBGM();
+  STATE=(_episodePrevState==='eliminated'||_episodePrevState==='lockout')?_episodePrevState:'start';
 }
 addEventListener('resize',()=>{ resize(); if(STATE==='episode') positionYTOverlay(); });
 
@@ -1158,6 +1163,7 @@ function handleKPTap(cx,cy){
     if(cx>=GW/2+6&&cx<=GW-10&&cy>=100&&cy<=180){
       if(buyChain()){sfxPowerup();burst(GW*3/4,140,'#f59e0b',22);addNotif('🔗 CHAIN UNLOCKED!',GW/2,90,'#f59e0b');}
     }
+    if(cy>=_storeWatchBtnY&&cy<=_storeWatchBtnY+40){ showYouTubeEmbed(); return; }
     // YT buttons in store — y tracks actual button position
     handleYTButtonTap(cx,cy,GW/2,_storeYtBtnY,0.95);
   }
@@ -1464,7 +1470,7 @@ const BLASTERS=[
 ];
 
 let STATE='boot',frame=0,score=0,gameT=0,vel=1,penaltyMins=0;
-let eTimer=0,gameMode='1p',elimTab='store',_storeYtBtnY=284;
+let eTimer=0,gameMode='1p',elimTab='store',_storeYtBtnY=284,_storeWatchBtnY=278;
 let currentLevel=parseInt(localStorage.getItem('sb_level')||'1');
 const maxLevel=()=>Math.max(currentLevel,parseInt(localStorage.getItem('sb_maxlevel')||'1'));
 let selectedLevel=currentLevel;
@@ -2270,10 +2276,21 @@ function drawEliminatedStore(y){
     });
     _ytY=sy2+78;
   }
-  // Like & Subscribe — always after all chain collections
-  X.fillStyle='#334155';X.font='8px "Courier New"';X.textAlign='center';
-  X.fillText('Enjoying Harris Adventures?',GW/2,_ytY);
-  _storeYtBtnY=_ytY+8;
+  // Watch + Like/Subscribe — always after all chain collections
+  const _wPulse=.5+Math.sin(Date.now()/480)*.35;
+  X.shadowColor='#f59e0b'; X.shadowBlur=14+_wPulse*10;
+  const _wGrd=X.createLinearGradient(10,_ytY,10,_ytY+40);
+  _wGrd.addColorStop(0,`rgba(251,191,36,${.2+_wPulse*.1})`);
+  _wGrd.addColorStop(1,'rgba(0,0,0,.28)');
+  rr(X,10,_ytY,GW-20,40,10,_wGrd,'#f59e0b',1.8+_wPulse*.4);
+  X.shadowBlur=0;
+  X.fillStyle='rgba(255,255,255,.09)'; rr(X,12,_ytY+3,GW-24,14,8,'rgba(255,255,255,.09)');
+  X.shadowColor='#fbbf24'; X.shadowBlur=12+_wPulse*7;
+  X.fillStyle='#fef08a'; X.font='bold 14px "Courier New"'; X.textAlign='center';
+  X.fillText('▶  WATCH EPISODE 1  —  HARRIS ADVENTURES',GW/2,_ytY+25);
+  X.shadowBlur=0;
+  _storeWatchBtnY=_ytY;
+  _storeYtBtnY=_ytY+50;
   drawYTButtons(GW/2,_storeYtBtnY,0.95);
 }
 
