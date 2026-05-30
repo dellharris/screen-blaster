@@ -546,7 +546,7 @@ function playerInput(pidx){
   }
   return {up:K['arrowup']||gp.up,down:K['arrowdown']||gp.down,left:K['arrowleft']||gp.left,right:K['arrowright']||gp.right};
 }
-addEventListener('keydown',e=>{ K[e.key.toLowerCase()]=1; handleCodeKey(e.key); initAudio(); if(e.key==='Escape'&&STATE==='episode'){ep1Vid.pause();ep1Vid.currentTime=0;STATE='start';} });
+addEventListener('keydown',e=>{ K[e.key.toLowerCase()]=1; handleCodeKey(e.key); initAudio(); if(e.key==='Escape'&&STATE==='episode'){ep1Vid.pause();ep1Vid.currentTime=0;startBGM();STATE='start';} });
 addEventListener('keyup',e=>{ K[e.key.toLowerCase()]=0; });
 C.addEventListener('touchstart',e=>{ e.preventDefault(); initAudio(); const rect=C.getBoundingClientRect(),s=GW/rect.width; const cx=(e.touches[0].clientX-rect.left)*s,cy=(e.touches[0].clientY-rect.top)*s; touchY=e.touches[0].clientY; touchX=e.touches[0].clientX; touchActive=true; handleTap(cx,cy); });
 C.addEventListener('touchmove',e=>{ e.preventDefault(); touchY=e.touches[0].clientY; touchX=e.touches[0].clientX; });
@@ -560,11 +560,11 @@ function handleTap(cx,cy){
       if(cx>=GW/2-215&&cx<=GW/2-25){ gameMode='1p'; STATE='charSelect'; return; }
       if(cx>=GW/2+25&&cx<=GW/2+215){ gameMode='2p'; STATE='p2CharSelect'; return; }
     }
-    if(cy>=464&&cy<=502&&cx>=GW/2-140&&cx<=GW/2+140){ initAudio(); ep1Vid.play(); STATE='episode'; return; }
+    if(cy>=464&&cy<=502&&cx>=GW/2-140&&cx<=GW/2+140){ initAudio(); stopBGM(); LOOP_SLOTS.forEach((_,i)=>stopLoop(i)); ep1Vid.play(); STATE='episode'; return; }
     return;
   }
   if(STATE==='episode'){
-    if(cx>=8&&cx<=108&&cy>=8&&cy<=40){ ep1Vid.pause();ep1Vid.currentTime=0;STATE='start'; return; }
+    if(cx>=8&&cx<=108&&cy>=8&&cy<=40){ ep1Vid.pause();ep1Vid.currentTime=0;startBGM();STATE='start'; return; }
     ep1Vid.paused?ep1Vid.play():ep1Vid.pause(); return;
   }
   if(STATE==='p2CharSelect') { STATE='spSettings'; return; }
@@ -1234,7 +1234,7 @@ function drawEpisode(){
   rr(X,8,8,100,30,5,'rgba(0,0,0,.75)','#555',1);
   X.fillStyle='#aaa';X.font='bold 11px "Courier New"';X.textAlign='center';X.fillText('◀ BACK',58,28);
   // End of video → back to menu
-  if(ep1Vid.ended){ep1Vid.currentTime=0;STATE='start';}
+  if(ep1Vid.ended){ep1Vid.currentTime=0;startBGM();STATE='start';}
 }
 
 function loop(){
