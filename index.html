@@ -10,9 +10,12 @@
 <meta name="apple-mobile-web-app-title" content="Screen Blaster">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#040214">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="characters/jude_spacesuit.png">
 <title>Harris Adventures: Screen Blaster</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
+html { height:100%; overflow:hidden; }
 body {
   background: #040214;
   background-image:
@@ -22,7 +25,7 @@ body {
     radial-gradient(ellipse at 15% 80%, rgba(60,30,230,.25) 0%, transparent 45%),
     radial-gradient(ellipse at 85% 15%, rgba(30,190,170,.18) 0%, transparent 45%);
   display:flex; align-items:center; justify-content:center;
-  min-height:100dvh; overflow:hidden;
+  height:100dvh; overflow:hidden;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 canvas { display:block; touch-action:none; }
@@ -104,6 +107,33 @@ canvas { display:block; touch-action:none; }
   </div>
 </div>
 
+<!-- iOS Add to Home Screen prompt -->
+<div id="ios-prompt" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(4,2,26,.92);align-items:flex-end;justify-content:center;">
+  <div style="width:100%;max-width:520px;background:#0a0520;border-top:1.5px solid rgba(139,92,246,.45);border-left:1.5px solid rgba(139,92,246,.25);border-right:1.5px solid rgba(139,92,246,.25);border-radius:20px 20px 0 0;padding:18px 22px calc(30px + env(safe-area-inset-bottom));font-family:'Courier New',monospace;text-align:center;">
+    <div style="width:36px;height:4px;background:#1e2d3d;border-radius:2px;margin:0 auto 16px;"></div>
+    <div style="font-size:12px;color:#475569;letter-spacing:1.5px;margin-bottom:6px;">FOR BEST EXPERIENCE ON iPHONE</div>
+    <div style="font-size:22px;font-weight:900;font-family:'Arial Black',sans-serif;color:#fef08a;margin-bottom:10px;">Play Fullscreen 🎮</div>
+    <div style="color:#64748b;font-size:13px;line-height:1.7;margin-bottom:20px;">Add to your Home Screen to remove the URL bar and tab strip — game locks to landscape with no browser chrome</div>
+    <div style="background:rgba(0,0,0,.45);border:1px solid #1e293b;border-radius:12px;padding:16px 18px;margin-bottom:18px;text-align:left;">
+      <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:14px;">
+        <div style="flex-shrink:0;width:22px;height:22px;background:#1e3a5f;border:1px solid #3b82f6;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#60a5fa;font-size:11px;font-weight:bold;text-align:center;line-height:22px;">1</div>
+        <div style="color:#94a3b8;font-size:13px;line-height:1.55;">Tap the <span style="background:#112240;border:1px solid #334155;border-radius:5px;padding:1px 7px;color:#93c5fd;font-size:12px;">⬆ Share</span> button at the bottom of Safari</div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <div style="flex-shrink:0;width:22px;height:22px;background:#1e3a5f;border:1px solid #3b82f6;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#60a5fa;font-size:11px;font-weight:bold;text-align:center;line-height:22px;">2</div>
+        <div style="color:#94a3b8;font-size:13px;line-height:1.55;">Scroll down and tap <span style="background:#112240;border:1px solid #334155;border-radius:5px;padding:1px 7px;color:#93c5fd;font-size:12px;">＋ Add to Home Screen</span></div>
+      </div>
+    </div>
+    <button onclick="dismissIOSPrompt()" style="display:block;width:100%;padding:15px;border-radius:11px;border:1.5px solid #1e293b;background:transparent;color:#475569;font-family:'Courier New',monospace;font-size:14px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;">Not Now — Stay in Browser</button>
+  </div>
+</div>
+
+<!-- Portrait orientation hint (non-blocking) -->
+<div id="portrait-hint" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:150;background:rgba(6,2,24,.9);border-top:1px solid rgba(139,92,246,.3);padding:10px 16px calc(10px + env(safe-area-inset-bottom));text-align:center;font-family:'Courier New',monospace;pointer-events:none;">
+  <span style="color:#8b5cf6;font-size:12px;font-weight:bold;">↻ Rotate to landscape</span>
+  <span style="color:#334155;font-size:11px;"> · Add to Home Screen for true fullscreen</span>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════
 // CANVAS & UTILS
@@ -113,13 +143,40 @@ const GW=800, GH=520; // 380 play + 140 SP-404
 const PLAY_H=375; // gameplay area height
 C.width=GW; C.height=GH;
 function resize(){
-  const sw=innerWidth/GW, sh=innerHeight/GH;
-  // Fill width always (no side bars). On tall screens the nebula background fills gaps.
-  // On very short screens (landscape phone) fill height instead to keep controls visible.
-  const s = sh < sw ? sh : sw;
+  const vw=window.visualViewport?window.visualViewport.width:innerWidth;
+  const vh=window.visualViewport?window.visualViewport.height:innerHeight;
+  const sw=vw/GW, sh=vh/GH, s=sh<sw?sh:sw;
   C.style.width=Math.round(GW*s)+'px'; C.style.height=Math.round(GH*s)+'px';
 }
 resize(); addEventListener('resize',resize);
+if(window.visualViewport) window.visualViewport.addEventListener('resize',resize);
+addEventListener('orientationchange',()=>setTimeout(()=>{window.scrollTo(0,1);resize();updatePortraitHint();},300));
+
+// ── Fullscreen & mobile ──────────────────────────────────────────
+function tryFullscreen(){
+  try{
+    const e=document.documentElement;
+    if(e.requestFullscreen) e.requestFullscreen().catch(()=>{});
+    else if(e.webkitRequestFullscreen) e.webkitRequestFullscreen();
+  }catch(e){}
+  if(screen.orientation&&screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{});
+}
+const _isIOSBrowser=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.navigator.standalone;
+let _iosPromptTriggered=false;
+function showIOSPromptIfNeeded(){
+  _iosPromptTriggered=true;
+  if(_isIOSBrowser&&!localStorage.getItem('sb_ios_prompt'))
+    document.getElementById('ios-prompt').style.display='flex';
+}
+function dismissIOSPrompt(){
+  localStorage.setItem('sb_ios_prompt','1');
+  document.getElementById('ios-prompt').style.display='none';
+}
+function updatePortraitHint(){
+  const el=document.getElementById('portrait-hint');
+  if(el) el.style.display=innerWidth<innerHeight&&!window.navigator.standalone?'block':'none';
+}
+updatePortraitHint(); addEventListener('resize',updatePortraitHint);
 function rr(c,x,y,w,h,r,fill,stroke,lw){
   c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
   if(fill){c.fillStyle=fill;c.fill();} if(stroke){c.strokeStyle=stroke;c.lineWidth=lw||1;c.stroke();}
@@ -1170,8 +1227,8 @@ function handleTap(cx,cy){
   if(STATE==='start'){
     if(cy>=GH-38&&cy<=GH-10&&cx>=GW-148){ STATE='leaderboard'; loadLeaderboard(); return; }
     if(cy>=388&&cy<=440){
-      if(cx>=GW/2-215&&cx<=GW/2-25){ gameMode='1p'; STATE='charSelect'; return; }
-      if(cx>=GW/2+25&&cx<=GW/2+215){ gameMode='2p'; STATE='p2CharSelect'; return; }
+      if(cx>=GW/2-215&&cx<=GW/2-25){ gameMode='1p'; tryFullscreen(); STATE='charSelect'; return; }
+      if(cx>=GW/2+25&&cx<=GW/2+215){ gameMode='2p'; tryFullscreen(); STATE='p2CharSelect'; return; }
     }
     if(cy>=464&&cy<=500){
       if(cx>=GW/2-215&&cx<=GW/2-60){ initAudio(); showYouTubeEmbed(); return; }
@@ -1917,6 +1974,7 @@ function drawTitle(){
   if(titleImg.complete&&titleImg.naturalWidth>0){X.drawImage(titleImg,0,0,GW,GH);X.fillStyle='rgba(4,2,20,.5)';X.fillRect(0,0,GW,GH);}
   else{X.fillStyle='#040214';X.fillRect(0,0,GW,GH);}
   drawBG(.5);frame++;
+  if(!_iosPromptTriggered) showIOSPromptIfNeeded();
   X.textAlign='center';
   X.shadowColor='#fbbf24';X.shadowBlur=40;X.fillStyle='#fef08a';X.font='bold 62px Arial Black';X.fillText('SCREEN',GW/2,160);
   X.shadowColor='#38bdf8';X.shadowBlur=30;X.fillStyle='#38bdf8';X.font='bold 62px Arial Black';X.fillText('BLASTER',GW/2,226);X.shadowBlur=0;

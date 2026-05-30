@@ -1,0 +1,18 @@
+{
+  "name": "Harris Adventures: Screen Blaster",
+  "short_name": "Screen Blaster",
+  "description": "Blast screens, collect gold chains, build SP-404 beats",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#040214",
+  "theme_color": "#040214",
+  "start_url": ".",
+  "icons": [
+    {
+      "src": "characters/jude_spacesuit.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
