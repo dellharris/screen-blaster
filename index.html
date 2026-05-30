@@ -319,8 +319,66 @@ function updateHPItems(){
 }
 
 // ═══════════════════════════════════════════════════════════
-// SP-404 UI
+// BLASTER DOWNGRADE NODES
 // ═══════════════════════════════════════════════════════════
+function spawnDowngradeNode(){
+  const y=55+Math.random()*(PLAY_H-110);
+  downgradeNodes.push({x:GW+30,y,spd:2.8+Math.random()*1.8+vel*.2,phase:Math.random()*Math.PI*2,life:500});
+}
+
+function drawDowngradeNode(d){
+  X.save();X.translate(d.x,d.y+Math.sin(frame*.09+d.phase)*6);
+  // Speed trail
+  for(let t=3;t>=1;t--){X.globalAlpha=t*.06;X.fillStyle='#ef4444';X.beginPath();for(let i=0;i<6;i++){const a=(i/6)*Math.PI*2,r=i%2?8:16;i===0?X.moveTo(Math.cos(a)*r+d.spd*t*.6,Math.sin(a)*r):X.lineTo(Math.cos(a)*r+d.spd*t*.6,Math.sin(a)*r);}X.closePath();X.fill();}
+  X.globalAlpha=1;
+  X.shadowColor='#ef4444';X.shadowBlur=22;
+  X.strokeStyle='#ef4444';X.lineWidth=2;X.fillStyle='rgba(239,68,68,.3)';
+  X.beginPath();
+  for(let i=0;i<6;i++){const a=(i/6)*Math.PI*2+frame*.04,r=i%2?9:18;i===0?X.moveTo(Math.cos(a)*r,Math.sin(a)*r):X.lineTo(Math.cos(a)*r,Math.sin(a)*r);}
+  X.closePath();X.fill();X.stroke();
+  // Inner X
+  X.strokeStyle='#fca5a5';X.lineWidth=2.5;
+  X.beginPath();X.moveTo(-7,-7);X.lineTo(7,7);X.moveTo(7,-7);X.lineTo(-7,7);X.stroke();
+  X.shadowBlur=0;
+  // Label
+  X.fillStyle='#fca5a5';X.font='bold 8px "Courier New"';X.textAlign='center';X.fillText('▼ DOWNGRADE',0,-24);
+  X.restore();
+}
+
+function updateDowngradeNodes(){
+  const DN_START=90; // seconds before first node
+  if(gameT>=DN_START){
+    dnTimer++;
+    // Interval shrinks from 420 frames (7s) to 90 frames (1.5s) as game progresses
+    const interval=Math.max(90,420-Math.floor((gameT-DN_START)/20)*30);
+    if(dnTimer>=interval){
+      dnTimer=0;
+      spawnDowngradeNode();
+      if(vel>3) spawnDowngradeNode(); // two at a time at high speed
+      if(vel>5) spawnDowngradeNode(); // three at a time
+    }
+  }
+  downgradeNodes=downgradeNodes.filter(d=>d.x>-60&&d.life>0);
+  downgradeNodes.forEach(d=>{
+    d.x-=d.spd;d.life--;
+    players.forEach(p=>{
+      if(!p.alive||d.life<=0) return;
+      if(Math.abs(d.x-p.x)<26&&Math.abs(d.y-p.y)<26){
+        d.life=0;
+        if(p.blvl>0){
+          const was=BLASTERS[p.blvl].name;
+          p.blvl=Math.max(0,p.blvl-1);
+          sfxHit();burst(d.x,d.y,'#ef4444',18);
+          addNotif(`▼ ${was} → ${BLASTERS[p.blvl].name}`,p.x,p.y-38,'#f87171');
+        } else {
+          // Already basic — extra vulnerability, count as a hit
+          burst(d.x,d.y,'#ef4444',14);
+          addNotif('BASIC — WIDE OPEN!',p.x,p.y-38,'#ef4444');
+        }
+      }
+    });
+  });
+}
 const SP_Y=PLAY_H+6, SP_PAD_X=220, SP_PAD_W=71, SP_PAD_H=50, SP_GAP=6;
 const SP_PAD_COLORS=['#ef4444','#f97316','#eab308','#8b5cf6','#3b82f6','#10b981','#f59e0b','#ec4899'];
 
@@ -572,6 +630,7 @@ function drawZenSprite(cx,cy,sc=1){
 // GOLD CHAIN COLLECTIBLE
 // ═══════════════════════════════════════════════════════════
 let chains=[], chainTimer=0;
+let downgradeNodes=[], dnTimer=0;
 const CHAIN_MIN_T=290; // seconds before first chain can appear
 
 function maybeSpawnChain(){
@@ -655,7 +714,7 @@ function makePlayer(charIdx,x,y){
 
 function launch(){
   initAudio(); startBGM();
-  score=0;gameT=0;vel=1;frame=0;eTimer=0;chainTimer=0;chains=[];chainsCollected=0;unlockFlash=0;hpItems=[];screensDestroyed=0;hpWarning=0;notifs=[];
+  score=0;gameT=0;vel=1;frame=0;eTimer=0;chainTimer=0;chains=[];chainsCollected=0;unlockFlash=0;hpItems=[];screensDestroyed=0;hpWarning=0;notifs=[];downgradeNodes=[];dnTimer=0;
   LOOP_SLOTS.forEach((_,i)=>{stopLoop(i);LOOP_SLOTS[i].unlocked=i<pchains();LOOP_SLOTS[i].playing=false;});
   // Fire up pre-programmed loops from settings
   settingsLoopsOn.forEach((on,i)=>{if(on&&i<pchains())startLoop(i);});
@@ -763,6 +822,7 @@ function update(){
   pups.forEach(pu=>{pu.x-=1.2;pu.life--;players.forEach((p,pi)=>{if(!p.alive||pu.life<=0)return;if(Math.abs(pu.x-p.x)<32&&Math.abs(pu.y-p.y)<32){p.blvl=pu.lv;sfxPowerup();burst(pu.x,pu.y,BLASTERS[pu.lv].color,22);pu.life=0;}});});
   updateChains();
   updateHPItems();
+  updateDowngradeNodes();
   players.forEach((p,pi)=>{
     if(!p.alive||p.inv>0) return;
     eBullets.forEach(b=>{if(Math.abs(b.x-p.x)<26&&Math.abs(b.y-p.y)<30){b.x=-9999;hitPlayer(pi);}});
@@ -810,6 +870,9 @@ function drawHUD(){
   if(gameT>=CHAIN_MIN_T-30&&gameT<CHAIN_MIN_T&&chains.length===0&&chainsCollected===0){if(Math.floor(frame/30)%2){X.fillStyle='#f59e0b';X.font='bold 11px "Courier New"';X.textAlign='center';X.fillText('⛓ GOLD CHAIN INCOMING...',GW/2,PLAY_H-30);}}
   // HP warning
   if(hpWarning>0&&Math.floor(frame/12)%2){X.shadowColor='#ef4444';X.shadowBlur=18;X.fillStyle='#ef4444';X.font='bold 13px "Courier New"';X.textAlign='center';X.fillText('♥ HP BOOST — CATCH IT!',GW/2,PLAY_H-46);X.shadowBlur=0;}
+  // Downgrade node proximity warning
+  const dnClose=downgradeNodes.some(d=>d.x<GW*.6);
+  if(dnClose&&Math.floor(frame/10)%2){X.shadowColor='#f87171';X.shadowBlur=16;X.fillStyle='#f87171';X.font='bold 12px "Courier New"';X.textAlign='center';X.fillText('⚠  DOWNGRADE NODE — DODGE IT!',GW/2,PLAY_H-62);X.shadowBlur=0;}
   // Kill counter (next HP in N screens)
   const toHP=10-screensDestroyed%10;
   rr(X,GW-118,PLAY_H-22,110,14,3,'rgba(0,0,0,.5)');X.fillStyle=toHP<=3?'#ef4444':'#94a3b8';X.font='8px "Courier New"';X.textAlign='right';X.fillText(`♥ HP in ${toHP} blast${toHP===1?'':'s'}`,GW-8,PLAY_H-22+9);
@@ -1042,6 +1105,7 @@ function drawGame(){
   eBullets.forEach(b=>{X.fillStyle='#ef4444';X.shadowColor='#ef4444';X.shadowBlur=8;X.beginPath();X.arc(b.x,b.y,4,0,Math.PI*2);X.fill();X.shadowBlur=0;});
   pups.forEach(drawPup);
   chains.forEach(drawChain);
+  downgradeNodes.forEach(drawDowngradeNode);
   hpItems.forEach(drawHPItem);
   enemies.forEach(drawEnemy);
   bullets.forEach(b=>{
