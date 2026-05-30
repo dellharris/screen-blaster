@@ -1158,8 +1158,8 @@ function handleKPTap(cx,cy){
     if(cx>=GW/2+6&&cx<=GW-10&&cy>=100&&cy<=180){
       if(buyChain()){sfxPowerup();burst(GW*3/4,140,'#f59e0b',22);addNotif('🔗 CHAIN UNLOCKED!',GW/2,90,'#f59e0b');}
     }
-    // YT buttons in store (y offset matches drawEliminatedStore sy+94)
-    handleYTButtonTap(cx,cy,GW/2,291,0.95);
+    // YT buttons in store — y tracks actual button position
+    handleYTButtonTap(cx,cy,GW/2,_storeYtBtnY,0.95);
   }
   // Sampler: beat toggle + pad taps
   if(elimTab==='sampler'){
@@ -1464,7 +1464,7 @@ const BLASTERS=[
 ];
 
 let STATE='boot',frame=0,score=0,gameT=0,vel=1,penaltyMins=0;
-let eTimer=0,gameMode='1p',elimTab='store';
+let eTimer=0,gameMode='1p',elimTab='store',_storeYtBtnY=284;
 let currentLevel=parseInt(localStorage.getItem('sb_level')||'1');
 const maxLevel=()=>Math.max(currentLevel,parseInt(localStorage.getItem('sb_maxlevel')||'1'));
 let selectedLevel=currentLevel;
@@ -2257,9 +2257,7 @@ function drawEliminatedStore(y){
   });
   X.fillStyle='#2a3a4a';X.font='8px "Courier New"';X.textAlign='center';
   X.fillText('Blast screens to earn OB  ·  every 10 kills = HP boost',GW/2,sy+72);
-  // Like & Subscribe
-  X.fillStyle='#334155';X.font='8px "Courier New"';X.textAlign='center';X.fillText('Enjoying Harris Adventures?',GW/2,sy+88);
-  drawYTButtons(GW/2,sy+94,0.95);
+  let _ytY=sy+88;
   if(pchains()>=8){
     const sy2=sy+82;
     X.fillStyle='#e879f9';X.font='bold 9px "Courier New"';X.textAlign='left';X.fillText('BEAT 2 CHAINS — Eb MINOR:',12,sy2+12);
@@ -2270,7 +2268,13 @@ function drawEliminatedStore(y){
       X.fillStyle=unlocked?CHAIN_DESIGNS[i].col:'#2a2a2a';X.font='bold 6px "Courier New"';X.textAlign='center';
       X.fillText(CHAIN_DESIGNS[i].label,sx+sw/2,sy2+65);
     });
+    _ytY=sy2+78;
   }
+  // Like & Subscribe — always after all chain collections
+  X.fillStyle='#334155';X.font='8px "Courier New"';X.textAlign='center';
+  X.fillText('Enjoying Harris Adventures?',GW/2,_ytY);
+  _storeYtBtnY=_ytY+8;
+  drawYTButtons(GW/2,_storeYtBtnY,0.95);
 }
 
 function drawEliminatedSampler(y){
