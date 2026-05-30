@@ -9,11 +9,22 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Screen Blaster">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#040214">
 <title>Harris Adventures: Screen Blaster</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:#000; display:flex; align-items:center; justify-content:center; min-height:100dvh; overflow:hidden; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+body {
+  background: #040214;
+  background-image:
+    radial-gradient(ellipse at 22% 35%, rgba(110,30,200,.32) 0%, transparent 52%),
+    radial-gradient(ellipse at 78% 65%, rgba(30,150,210,.22) 0%, transparent 52%),
+    radial-gradient(ellipse at 55% 20%, rgba(170,30,120,.2) 0%, transparent 48%),
+    radial-gradient(ellipse at 15% 80%, rgba(60,30,230,.25) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 15%, rgba(30,190,170,.18) 0%, transparent 45%);
+  display:flex; align-items:center; justify-content:center;
+  min-height:100dvh; overflow:hidden;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
 canvas { display:block; touch-action:none; }
 </style>
 </head>
@@ -28,7 +39,13 @@ const C=document.getElementById('c'), X=C.getContext('2d');
 const GW=800, GH=520; // 380 play + 140 SP-404
 const PLAY_H=375; // gameplay area height
 C.width=GW; C.height=GH;
-function resize(){ const s=Math.min(innerWidth/GW,innerHeight/GH); C.style.width=GW*s+'px'; C.style.height=GH*s+'px'; }
+function resize(){
+  const sw=innerWidth/GW, sh=innerHeight/GH;
+  // Fill width always (no side bars). On tall screens the nebula background fills gaps.
+  // On very short screens (landscape phone) fill height instead to keep controls visible.
+  const s = sh < sw ? sh : sw;
+  C.style.width=Math.round(GW*s)+'px'; C.style.height=Math.round(GH*s)+'px';
+}
 resize(); addEventListener('resize',resize);
 function rr(c,x,y,w,h,r,fill,stroke,lw){
   c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
