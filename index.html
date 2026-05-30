@@ -1531,26 +1531,36 @@ const ytSubbed = ()=>localStorage.getItem('sb_ytsub')==='1';
 
 function drawYTButtons(cx, y, scale=1){
   const s=scale, liked=ytLiked(), subbed=ytSubbed();
+  const lh=32*s, pulse=.5+Math.sin(Date.now()/380)*.35;
   // LIKE
-  const lw=88*s,lh=32*s,lx=cx-lw-5;
-  const lbg=liked?'rgba(59,130,246,.35)':'rgba(0,0,0,.55)';
-  const lbord=liked?'#60a5fa':'#444';
-  rr(X,lx,y,lw,lh,7*s,lbg,lbord,liked?2:1);
-  if(liked){X.shadowColor='#60a5fa';X.shadowBlur=10;}
-  X.fillStyle=liked?'#93c5fd':'#888';
+  const lw=88*s,lx=cx-lw-5;
+  const lcol=liked?'#60a5fa':'#3b82f6';
+  X.shadowColor=lcol; X.shadowBlur=liked?14+pulse*8:8+pulse*4;
+  const gl=X.createLinearGradient(lx,y,lx,y+lh);
+  gl.addColorStop(0,liked?`rgba(59,130,246,${.32+pulse*.1})`:`rgba(59,130,246,${.1+pulse*.06})`);
+  gl.addColorStop(1,'rgba(0,0,0,.2)');
+  rr(X,lx,y,lw,lh,7*s,gl,lcol,liked?2:1.5);
+  X.shadowBlur=0;
+  X.fillStyle='rgba(255,255,255,.08)'; rr(X,lx+2,y+2,lw-4,lh*.38,5*s,'rgba(255,255,255,.08)');
+  X.shadowColor=lcol; X.shadowBlur=liked?9+pulse*5:4;
+  X.fillStyle=liked?'#fff':'#93c5fd';
   X.font=`bold ${Math.round(11*s)}px "Courier New"`;X.textAlign='center';
   X.fillText(liked?'👍  LIKED':'👍  LIKE',lx+lw/2,y+lh/2+4*s);
   X.shadowBlur=0;
   // SUBSCRIBE
-  const sw=110*s,sh=32*s,sx=cx+5;
-  const sbg=subbed?'rgba(34,197,94,.3)':'rgba(239,68,68,.2)';
-  const sbord=subbed?'#22c55e':'#ef4444';
-  rr(X,sx,y,sw,sh,7*s,sbg,sbord,subbed?2:1.5);
-  if(subbed){X.shadowColor='#22c55e';X.shadowBlur=10;}
-  else if(Math.floor(Date.now()/600)%2){X.shadowColor='#ef4444';X.shadowBlur=6;}
+  const sw=110*s,sx=cx+5;
+  const scol=subbed?'#22c55e':'#ef4444';
+  X.shadowColor=scol; X.shadowBlur=subbed?14+pulse*8:10+pulse*6;
+  const gs=X.createLinearGradient(sx,y,sx,y+lh);
+  gs.addColorStop(0,subbed?`rgba(34,197,94,${.28+pulse*.1})`:`rgba(239,68,68,${.16+pulse*.08})`);
+  gs.addColorStop(1,'rgba(0,0,0,.2)');
+  rr(X,sx,y,sw,lh,7*s,gs,scol,subbed?2:1.5+pulse*.3);
+  X.shadowBlur=0;
+  X.fillStyle='rgba(255,255,255,.08)'; rr(X,sx+2,y+2,sw-4,lh*.38,5*s,'rgba(255,255,255,.08)');
+  X.shadowColor=scol; X.shadowBlur=8+pulse*5;
   X.fillStyle=subbed?'#86efac':'#fca5a5';
   X.font=`bold ${Math.round(11*s)}px "Courier New"`;X.textAlign='center';
-  X.fillText(subbed?'🔔  SUBSCRIBED':'🔔  SUBSCRIBE',sx+sw/2,y+sh/2+4*s);
+  X.fillText(subbed?'🔔  SUBSCRIBED':'🔔  SUBSCRIBE',sx+sw/2,y+lh/2+4*s);
   X.shadowBlur=0;
 }
 
@@ -1978,30 +1988,61 @@ function drawTitle(){
   X.textAlign='center';
   X.shadowColor='#fbbf24';X.shadowBlur=40;X.fillStyle='#fef08a';X.font='bold 62px Arial Black';X.fillText('SCREEN',GW/2,160);
   X.shadowColor='#38bdf8';X.shadowBlur=30;X.fillStyle='#38bdf8';X.font='bold 62px Arial Black';X.fillText('BLASTER',GW/2,226);X.shadowBlur=0;
-  rr(X,GW/2-230,248,460,170,10,'rgba(0,0,0,.6)');
+  rr(X,GW/2-230,248,460,170,10,'rgba(0,0,0,.55)','#1e293b',1);
   X.fillStyle='#e2e8f0';X.font='13px "Courier New"';X.fillText('Blast iPhones, tablets & laptops flying at you',GW/2,272);
   X.fillStyle='#f59e0b';X.fillText('⛓ Catch gold chains to unlock SP-404 beat loops',GW/2,292);
   X.fillStyle='#34d399';X.fillText('Layer loops on your sampler while you play',GW/2,312);
   X.fillStyle='#ef4444';X.fillText('ELIMINATED = device goes down',GW/2,332);
   X.fillStyle='#9ca3af';X.font='11px "Courier New"';X.fillText('5 min cooldown  ·  make beats & shop during cooldown   |   losses: '+losses(),GW/2,352);X.fillText('chains appear after ~2 min of play',GW/2,368);
-  // Player badge + leaderboard button
+  // Player badge + leaderboard button — polished
+  const bPulse=.5+Math.sin(Date.now()/600)*.25;
   if(playerName){
-    rr(X,8,GH-38,200,28,5,'rgba(0,0,0,.5)','#8b5cf6',1);
+    X.shadowColor='#8b5cf6'; X.shadowBlur=8+bPulse*6;
+    const gpb=X.createLinearGradient(8,GH-38,8,GH-10);
+    gpb.addColorStop(0,`rgba(139,92,246,${.18+bPulse*.06})`); gpb.addColorStop(1,'rgba(0,0,0,.3)');
+    rr(X,8,GH-38,200,28,5,gpb,'#8b5cf6',1.2);
+    X.shadowBlur=0;
     X.fillStyle='#c4b5fd';X.font='bold 10px "Courier New"';X.textAlign='left';X.fillText(`👤 ${playerName}  ·  HI: ${localStorage.getItem('sb_hiscore')||0}`,14,GH-19);
   }
-  rr(X,GW-148,GH-38,138,28,5,'rgba(0,0,0,.5)','#fbbf24',1);
+  X.shadowColor='#fbbf24'; X.shadowBlur=8+bPulse*6;
+  const glb=X.createLinearGradient(GW-148,GH-38,GW-148,GH-10);
+  glb.addColorStop(0,`rgba(251,191,36,${.18+bPulse*.06})`); glb.addColorStop(1,'rgba(0,0,0,.3)');
+  rr(X,GW-148,GH-38,138,28,5,glb,'#fbbf24',1.2);
+  X.shadowBlur=0;
   X.fillStyle='#fef08a';X.font='bold 11px "Courier New"';X.textAlign='center';X.fillText('🏆 LEADERBOARD',GW-79,GH-19);
-  // 1P / 2P buttons
-  const blink=Math.floor(Date.now()/500)%2;
-  rr(X,GW/2-215,388,190,52,10,blink?'rgba(239,68,68,.25)':'rgba(239,68,68,.12)','#ef4444',2);
-  X.fillStyle='#ef4444';X.font='bold 18px "Courier New"';X.textAlign='center';X.fillText('1 PLAYER',GW/2-120,420);
-  rr(X,GW/2+25,388,190,52,10,blink?'rgba(56,189,248,.25)':'rgba(56,189,248,.12)','#38bdf8',2);
-  X.fillStyle='#38bdf8';X.font='bold 18px "Courier New"';X.fillText('2 PLAYERS',GW/2+120,420);
-  X.fillStyle='rgba(255,255,255,.3)';X.font='9px "Courier New"';X.fillText('P1: WASD / CTRL 1   ·   P2: ARROWS / CTRL 2',GW/2,454);
-  // Watch + Like + Subscribe row
-  const epBlink=Math.floor(Date.now()/700)%2;
-  rr(X,GW/2-215,464,155,36,9,epBlink?'rgba(251,191,36,.2)':'rgba(251,191,36,.08)','#fbbf24',1.5);
-  X.fillStyle='#fbbf24';X.font='bold 12px "Courier New"';X.textAlign='center';X.fillText('▶  WATCH EP.1',GW/2-138,486);
+  // 1P / 2P buttons — smooth gradient + glow pulse
+  const gPulse=.5+Math.sin(Date.now()/420)*.38;
+  [{bx:GW/2-215,col:'#ef4444',rgb:'239,68,68',label:'▶  1 PLAYER',tx:GW/2-120},
+   {bx:GW/2+25, col:'#38bdf8',rgb:'56,189,248',label:'▶  2 PLAYERS',tx:GW/2+120}
+  ].forEach(({bx,col,rgb,label,tx})=>{
+    X.shadowColor=col; X.shadowBlur=22+gPulse*14;
+    const grd=X.createLinearGradient(bx,388,bx,440);
+    grd.addColorStop(0,`rgba(${rgb},${.16+gPulse*.1})`);
+    grd.addColorStop(.55,`rgba(${rgb},.05)`);
+    grd.addColorStop(1,'rgba(0,0,0,.28)');
+    rr(X,bx,388,190,52,10,grd,col,1.8+gPulse*.5);
+    X.shadowBlur=0;
+    X.fillStyle='rgba(255,255,255,.09)'; rr(X,bx+3,391,184,18,8,'rgba(255,255,255,.09)');
+    X.shadowColor=col; X.shadowBlur=14+gPulse*8;
+    X.fillStyle='#fff'; X.font='bold 18px "Courier New"'; X.textAlign='center';
+    X.fillText(label,tx,421);
+    X.shadowBlur=0;
+  });
+  X.fillStyle='rgba(255,255,255,.22)';X.font='9px "Courier New"';X.textAlign='center';
+  X.fillText('P1: WASD / CTRL 1   ·   P2: ARROWS / CTRL 2',GW/2,454);
+  // Watch + Like + Subscribe row — polished
+  const wPulse=.5+Math.sin(Date.now()/500)*.3;
+  X.shadowColor='#f59e0b'; X.shadowBlur=12+wPulse*8;
+  const gwrd=X.createLinearGradient(GW/2-215,464,GW/2-215,500);
+  gwrd.addColorStop(0,`rgba(251,191,36,${.16+wPulse*.09})`);
+  gwrd.addColorStop(1,'rgba(0,0,0,.25)');
+  rr(X,GW/2-215,464,155,36,9,gwrd,'#f59e0b',1.5+wPulse*.4);
+  X.shadowBlur=0;
+  X.fillStyle='rgba(255,255,255,.08)'; rr(X,GW/2-213,467,151,12,7,'rgba(255,255,255,.08)');
+  X.shadowColor='#fbbf24'; X.shadowBlur=8+wPulse*5;
+  X.fillStyle='#fef08a'; X.font='bold 12px "Courier New"'; X.textAlign='center';
+  X.fillText('▶  WATCH EP.1',GW/2-138,486);
+  X.shadowBlur=0;
   drawYTButtons(GW/2+43,464,1);
   // Particle burst from notifs/parts on title screen
   tickParts(); tickNotifs();
