@@ -824,7 +824,7 @@ function drawZenSprite(cx,cy,sc=1){
 // ═══════════════════════════════════════════════════════════
 let chains=[], chainTimer=0;
 let downgradeNodes=[], dnTimer=0;
-const CHAIN_MIN_T=290; // seconds before first chain can appear
+const CHAIN_MIN_T=120; // seconds before first chain can appear
 
 function maybeSpawnChain(){
   if(gameT<CHAIN_MIN_T)return;
@@ -1333,7 +1333,7 @@ function drawTitle(){
   X.fillStyle='#f59e0b';X.fillText('⛓ Catch gold chains to unlock SP-404 beat loops',GW/2,292);
   X.fillStyle='#34d399';X.fillText('Layer loops on your sampler while you play',GW/2,312);
   X.fillStyle='#ef4444';X.fillText('ELIMINATED = device goes down',GW/2,332);
-  X.fillStyle='#9ca3af';X.font='11px "Courier New"';X.fillText('5 min cooldown  ·  make beats & shop during cooldown   |   losses: '+losses(),GW/2,352);X.fillText('chains appear after ~5 min of play',GW/2,368);
+  X.fillStyle='#9ca3af';X.font='11px "Courier New"';X.fillText('5 min cooldown  ·  make beats & shop during cooldown   |   losses: '+losses(),GW/2,352);X.fillText('chains appear after ~2 min of play',GW/2,368);
   // 1P / 2P buttons
   const blink=Math.floor(Date.now()/500)%2;
   rr(X,GW/2-215,388,190,52,10,blink?'rgba(239,68,68,.25)':'rgba(239,68,68,.12)','#ef4444',2);
