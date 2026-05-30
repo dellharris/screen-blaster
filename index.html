@@ -1174,8 +1174,8 @@ function handleTap(cx,cy){
       if(cx>=GW/2+25&&cx<=GW/2+215){ gameMode='2p'; STATE='p2CharSelect'; return; }
     }
     if(cy>=464&&cy<=500){
-      if(cx>=GW/2-215&&cx<=GW/2-45){ initAudio(); showYouTubeEmbed(); return; }
-      if(handleYTButtonTap(cx,cy,GW/2+10,464,1)) return;
+      if(cx>=GW/2-215&&cx<=GW/2-60){ initAudio(); showYouTubeEmbed(); return; }
+      if(handleYTButtonTap(cx,cy,GW/2+43,464,1)) return;
     }
     return;
   }
@@ -1942,9 +1942,9 @@ function drawTitle(){
   X.fillStyle='rgba(255,255,255,.3)';X.font='9px "Courier New"';X.fillText('P1: WASD / CTRL 1   ·   P2: ARROWS / CTRL 2',GW/2,454);
   // Watch + Like + Subscribe row
   const epBlink=Math.floor(Date.now()/700)%2;
-  rr(X,GW/2-215,464,170,36,9,epBlink?'rgba(251,191,36,.2)':'rgba(251,191,36,.08)','#fbbf24',1.5);
-  X.fillStyle='#fbbf24';X.font='bold 12px "Courier New"';X.textAlign='center';X.fillText('▶  WATCH EP.1',GW/2-130,486);
-  drawYTButtons(GW/2+10,464,1);
+  rr(X,GW/2-215,464,155,36,9,epBlink?'rgba(251,191,36,.2)':'rgba(251,191,36,.08)','#fbbf24',1.5);
+  X.fillStyle='#fbbf24';X.font='bold 12px "Courier New"';X.textAlign='center';X.fillText('▶  WATCH EP.1',GW/2-138,486);
+  drawYTButtons(GW/2+43,464,1);
   // Particle burst from notifs/parts on title screen
   tickParts(); tickNotifs();
 }
