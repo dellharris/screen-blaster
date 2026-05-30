@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Screen Blaster">
@@ -17,6 +19,7 @@ canvas { display:block; touch-action:none; }
 </head>
 <body>
 <canvas id="c"></canvas>
+<input id="ni" type="text" maxlength="16" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" style="position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none;width:1px;height:1px;">
 <script>
 // ═══════════════════════════════════════════════════════════
 // CANVAS & UTILS
@@ -40,6 +43,238 @@ const losses=()=>parseInt(localStorage.getItem('sb_losses')||'0');
 const lockedUntil=()=>parseInt(localStorage.getItem('sb_until')||'0');
 function recordLoss(){ const n=losses(),m=PMINS[Math.min(n,PMINS.length-1)]; localStorage.setItem('sb_until',Date.now()+m*60000); localStorage.setItem('sb_losses',n+1); return m; }
 function unlock(){ localStorage.removeItem('sb_until'); localStorage.removeItem('sb_losses'); }
+
+// ═══════════════════════════════════════════════════════════
+// ACCOUNT & LEADERBOARD SYSTEM
+// ═══════════════════════════════════════════════════════════
+// Paste your Firebase config here after creating a project at console.firebase.google.com
+const FB_CONFIG={
+  apiKey:'',
+  authDomain:'',
+  projectId:'',
+};
+
+let db=null;
+let playerId=localStorage.getItem('sb_pid')||null;
+let playerName=localStorage.getItem('sb_name')||null;
+let playerCode=localStorage.getItem('sb_code')||null;
+let leaderboard=[],lbLoaded=false,lbLoading=false;
+
+// name entry state
+let nameInputStr='',codeInputStr='',nameMode='create',nameField='name',showNewCode=false,newCodeStr='';
+
+function initDB(){
+  try{
+    if(!FB_CONFIG.apiKey) return;
+    if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    db=firebase.firestore();
+    loadLeaderboard();
+  }catch(e){}
+}
+
+function focusNameInput(){
+  const el=document.getElementById('ni');
+  el.value=nameField==='name'?nameInputStr:codeInputStr;
+  setTimeout(()=>el.focus(),80);
+}
+
+async function createAccount(name){
+  if(!name.trim()) return;
+  const pid=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36));
+  const code=Math.random().toString(36).slice(2,8).toUpperCase();
+  const data={name:name.trim(),code,highScore:0,obucks:0,pchains:0,pchains2:0,level:1,gamesPlayed:0,created:firebase.firestore.FieldValue.serverTimestamp()};
+  try{ if(db) await db.collection('players').doc(pid).set(data); }catch(e){}
+  playerId=pid; playerName=name.trim(); playerCode=code;
+  localStorage.setItem('sb_pid',pid); localStorage.setItem('sb_name',name.trim()); localStorage.setItem('sb_code',code);
+  newCodeStr=code; showNewCode=true;
+}
+
+async function loginWithCode(name,code){
+  if(!db) return false;
+  try{
+    const snap=await db.collection('players').where('name','==',name.trim()).where('code','==',code.trim().toUpperCase()).limit(1).get();
+    if(snap.empty) return false;
+    const doc=snap.docs[0],data=doc.data();
+    playerId=doc.id; playerName=data.name; playerCode=data.code;
+    localStorage.setItem('sb_pid',playerId); localStorage.setItem('sb_name',data.name); localStorage.setItem('sb_code',data.code);
+    if(data.obucks) localStorage.setItem('sb_obucks',data.obucks);
+    if(data.pchains) localStorage.setItem('sb_pchains',data.pchains);
+    if(data.pchains2) localStorage.setItem('sb_pchains2',data.pchains2);
+    if(data.level) localStorage.setItem('sb_level',data.level);
+    return true;
+  }catch(e){return false;}
+}
+
+async function syncScore(){
+  if(!db||!playerId) return;
+  const hs=Math.max(score,parseInt(localStorage.getItem('sb_hiscore')||'0'));
+  localStorage.setItem('sb_hiscore',hs);
+  try{
+    await db.collection('players').doc(playerId).set({
+      name:playerName,code:playerCode,highScore:hs,
+      obucks:obucks(),pchains:pchains(),pchains2:pchains2(),level:currentLevel,
+      gamesPlayed:firebase.firestore.FieldValue.increment(1),
+      lastPlayed:firebase.firestore.FieldValue.serverTimestamp()
+    },{merge:true});
+    loadLeaderboard();
+  }catch(e){}
+}
+
+async function loadLeaderboard(){
+  if(!db||lbLoading) return;
+  lbLoading=true;
+  try{
+    const snap=await db.collection('players').orderBy('highScore','desc').limit(12).get();
+    leaderboard=snap.docs.map(d=>({...d.data(),id:d.id}));
+    lbLoaded=true;
+  }catch(e){}
+  lbLoading=false;
+}
+
+// ── Draw name entry screen ─────────────────────────────────
+function drawNameEntry(){
+  X.fillStyle='#02000a';X.fillRect(0,0,GW,GH);drawBG(.3);frame++;
+  X.textAlign='center';
+  X.shadowColor='#fbbf24';X.shadowBlur=30;X.fillStyle='#fef08a';X.font='bold 42px Arial Black';X.fillText('HARRIS',GW/2,130);
+  X.shadowColor='#a78bfa';X.shadowBlur=20;X.fillStyle='#c4b5fd';X.font='bold 42px Arial Black';X.fillText('ADVENTURES',GW/2,180);X.shadowBlur=0;
+
+  if(showNewCode){
+    rr(X,GW/2-220,210,440,220,14,'rgba(0,0,0,.75)','#22c55e',2);
+    X.fillStyle='#4ade80';X.font='bold 14px "Courier New"';X.fillText(`WELCOME, ${playerName}!`,GW/2,242);
+    X.fillStyle='#94a3b8';X.font='10px "Courier New"';X.fillText('YOUR RECOVERY CODE — SAVE THIS!',GW/2,264);
+    X.shadowColor='#fbbf24';X.shadowBlur=18;X.fillStyle='#fef08a';X.font='bold 38px "Courier New"';X.fillText(newCodeStr,GW/2,314);X.shadowBlur=0;
+    X.fillStyle='#64748b';X.font='9px "Courier New"';X.fillText('If you get a new device, use your name + this code to log back in.',GW/2,342);X.fillText('You will NOT see this code again — screenshot it now.',GW/2,358);
+    const blink=Math.floor(Date.now()/500)%2;
+    rr(X,GW/2-100,374,200,42,10,blink?'rgba(34,197,94,.3)':'rgba(34,197,94,.1)','#22c55e',2);
+    X.fillStyle='#22c55e';X.font='bold 14px "Courier New"';X.fillText('✓  GOT IT',GW/2,401);
+    return;
+  }
+
+  // Mode tabs
+  const tw=(GW-100)/2-4;
+  [['create','NEW PLAYER'],['recover','RETURNING']].forEach(([m,l],i)=>{
+    const tx=50+i*(tw+8),active=nameMode===m;
+    rr(X,tx,198,tw,30,6,active?'rgba(139,92,246,.35)':'rgba(0,0,0,.4)',active?'#8b5cf6':'#2a2a2a',active?2:1);
+    X.fillStyle=active?'#e9d5ff':'#555';X.font='bold 11px "Courier New"';X.fillText(l,tx+tw/2,218);
+  });
+
+  rr(X,50,238,GW-100,nameMode==='recover'?200:148,12,'rgba(0,0,0,.6)','#2a2a2a',1);
+  // Name field
+  X.fillStyle='#94a3b8';X.font='9px "Courier New"';X.textAlign='left';X.fillText('PLAYER NAME',62,260);
+  const nameFoc=nameField==='name';
+  rr(X,58,264,GW-116,36,6,'rgba(0,0,0,.5)',nameFoc?'#8b5cf6':'#334155',nameFoc?2:1);
+  X.fillStyle=nameInputStr?'#fff':'#475569';X.font='bold 16px "Courier New"';X.textAlign='left';
+  X.fillText((nameInputStr||'Enter name...')+(nameFoc&&Math.floor(frame/22)%2?'|':''),66,288);
+
+  if(nameMode==='recover'){
+    X.fillStyle='#94a3b8';X.font='9px "Courier New"';X.textAlign='left';X.fillText('RECOVERY CODE',62,316);
+    const codeFoc=nameField==='code';
+    rr(X,58,320,GW-116,36,6,'rgba(0,0,0,.5)',codeFoc?'#f59e0b':'#334155',codeFoc?2:1);
+    X.fillStyle=codeInputStr?'#fbbf24':'#475569';X.font='bold 18px "Courier New"';X.textAlign='left';
+    X.fillText((codeInputStr.toUpperCase()||'XXXXXX')+(codeFoc&&Math.floor(frame/22)%2?'|':''),66,344);
+  }
+
+  const btnY=nameMode==='recover'?374:320;
+  const blink=Math.floor(Date.now()/500)%2&&nameInputStr.length>=2;
+  rr(X,58,btnY,GW-116,42,10,blink?'rgba(139,92,246,.3)':'rgba(139,92,246,.1)',nameInputStr.length>=2?'#8b5cf6':'#2a2a2a',nameInputStr.length>=2?2:1);
+  X.fillStyle=nameInputStr.length>=2?'#e9d5ff':'#444';X.font='bold 15px "Courier New"';X.textAlign='center';
+  X.fillText(nameMode==='create'?'▶  CREATE ACCOUNT':'▶  LOG IN',GW/2,btnY+26);
+
+  X.fillStyle='#1e3a5f';X.font='8px "Courier New"';X.textAlign='center';X.fillText('No password needed · your device remembers you automatically',GW/2,GH-12);
+}
+
+// ── Draw leaderboard screen ────────────────────────────────
+function drawLeaderboard(){
+  X.fillStyle='#020010';X.fillRect(0,0,GW,GH);drawBG(.2);frame++;
+  X.textAlign='center';
+  X.shadowColor='#fbbf24';X.shadowBlur=25;X.fillStyle='#fef08a';X.font='bold 32px Arial Black';X.fillText('🏆  LEADERBOARD',GW/2,34);X.shadowBlur=0;
+  X.fillStyle='#475569';X.font='9px "Courier New"';X.fillText(playerName?`YOU: ${playerName}  ·  HI: ${localStorage.getItem('sb_hiscore')||0}`:'Not signed in',GW/2,52);
+
+  if(!db){
+    X.fillStyle='#ef4444';X.font='10px "Courier New"';X.fillText('Firebase not configured — add your config to enable leaderboard',GW/2,GH/2);
+  } else if(!lbLoaded){
+    X.fillStyle='#64748b';X.font='bold 12px "Courier New"';X.fillText('Loading...',GW/2,GH/2);
+  } else if(leaderboard.length===0){
+    X.fillStyle='#64748b';X.font='bold 12px "Courier New"';X.fillText('No scores yet — be the first!',GW/2,GH/2);
+  } else {
+    leaderboard.forEach((p,i)=>{
+      const ry=64+i*40,isMe=p.id===playerId;
+      const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':null;
+      rr(X,10,ry,GW-20,34,5,isMe?'rgba(139,92,246,.25)':'rgba(0,0,0,.35)',isMe?'#8b5cf6':'#1e293b',isMe?2:1);
+      if(isMe){X.shadowColor='#8b5cf6';X.shadowBlur=8;}
+      // Rank
+      X.fillStyle=i<3?['#fef08a','#e2e8f0','#fdba74'][i]:'#64748b';
+      X.font=`bold 13px "Courier New"`;X.textAlign='left';
+      X.fillText(medal||(i+1),22,ry+22);
+      // Name + level
+      X.fillStyle=isMe?'#e9d5ff':'#e2e8f0';X.font=`bold ${isMe?'13':'12'}px "Courier New"`;
+      X.fillText(p.name.slice(0,14),i<3?56:50,ry+22);
+      X.fillStyle='#475569';X.font='8px "Courier New"';X.fillText(`LV ${p.level||1}  ·  ${p.gamesPlayed||0} games`,i<3?56:50,ry+32);
+      // Score
+      X.fillStyle=isMe?'#fbbf24':'#94a3b8';X.font=`bold 14px "Courier New"`;X.textAlign='right';
+      X.fillText(p.highScore.toLocaleString(),GW-18,ry+22);X.shadowBlur=0;
+    });
+  }
+
+  // Back button
+  rr(X,10,GH-44,120,34,7,'rgba(0,0,0,.5)','#334155',1);
+  X.fillStyle='#64748b';X.font='bold 11px "Courier New"';X.textAlign='center';X.fillText('◀ BACK',70,GH-22);
+
+  // Refresh button
+  rr(X,GW-130,GH-44,120,34,7,'rgba(0,0,0,.5)','#334155',1);
+  X.fillStyle='#64748b';X.font='bold 11px "Courier New"';X.fillText('↻ REFRESH',GW-70,GH-22);
+  tickNotifs();
+}
+
+// wire up hidden input to name/code fields
+const _ni=document.getElementById('ni');
+_ni.addEventListener('input',e=>{
+  if(nameField==='name') nameInputStr=e.target.value.slice(0,16);
+  else codeInputStr=e.target.value.slice(0,6).toUpperCase();
+});
+_ni.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&STATE==='nameEntry') handleNameConfirm();
+});
+
+async function handleNameConfirm(){
+  if(showNewCode){ showNewCode=false; STATE='intro'; return; }
+  if(nameMode==='create'&&nameInputStr.trim().length>=2){
+    await createAccount(nameInputStr);
+  } else if(nameMode==='recover'&&nameInputStr.trim().length>=2&&codeInputStr.length>=6){
+    const ok=await loginWithCode(nameInputStr,codeInputStr);
+    if(ok){STATE='intro';}
+    else{addNotif('CODE NOT FOUND — check name & code',GW/2,280,'#ef4444');}
+  }
+}
+
+// ── Handle taps on account screens ────────────────────────
+function handleNameEntryTap(cx,cy){
+  if(showNewCode){if(cy>=374&&cy<=416)handleNameConfirm();return;}
+  // Mode tabs
+  const tw=(GW-100)/2-4;
+  if(cy>=198&&cy<=228){
+    if(cx>=50&&cx<=50+tw){nameMode='create';nameField='name';_ni.value=nameInputStr;focusNameInput();}
+    if(cx>=50+tw+8&&cx<=GW-50){nameMode='recover';nameField='name';_ni.value=nameInputStr;focusNameInput();}
+    return;
+  }
+  // Name field tap
+  if(cx>=58&&cx<=GW-58&&cy>=264&&cy<=300){nameField='name';_ni.value=nameInputStr;focusNameInput();return;}
+  // Code field tap (recover mode)
+  if(nameMode==='recover'&&cx>=58&&cx<=GW-58&&cy>=320&&cy<=356){nameField='code';_ni.value=codeInputStr;focusNameInput();return;}
+  // Button
+  const btnY=nameMode==='recover'?374:320;
+  if(cx>=58&&cx<=GW-58&&cy>=btnY&&cy<=btnY+42) handleNameConfirm();
+}
+
+function handleLeaderboardTap(cx,cy){
+  if(cy>=GH-44&&cy<=GH-10){
+    if(cx<=130){STATE='start';return;}
+    if(cx>=GW-130){loadLeaderboard();return;}
+  }
+}
+
+// ── Sync triggers ──────────────────────────────────────────
+function triggerSync(){ if(playerId&&db) setTimeout(syncScore,200); }
 
 // ═══════════════════════════════════════════════════════════
 // OLYMPIC BUCKS
@@ -739,8 +974,11 @@ C.addEventListener('touchend',e=>{ e.preventDefault(); touchActive=false; touchY
 C.addEventListener('click',e=>{ initAudio(); const rect=C.getBoundingClientRect(),s=GW/rect.width; const cx=(e.clientX-rect.left)*s,cy=(e.clientY-rect.top)*s; handleTap(cx,cy); });
 
 function handleTap(cx,cy){
+  if(STATE==='nameEntry')   { handleNameEntryTap(cx,cy); return; }
+  if(STATE==='leaderboard') { handleLeaderboardTap(cx,cy); return; }
   if(STATE==='intro')       { STATE='start'; return; }
   if(STATE==='start'){
+    if(cy>=GH-38&&cy<=GH-10&&cx>=GW-148){ STATE='leaderboard'; loadLeaderboard(); return; }
     if(cy>=388&&cy<=440){
       if(cx>=GW/2-215&&cx<=GW/2-25){ gameMode='1p'; STATE='charSelect'; return; }
       if(cx>=GW/2+25&&cx<=GW/2+215){ gameMode='2p'; STATE='p2CharSelect'; return; }
@@ -1199,7 +1437,7 @@ function checkBlackHole(){
       stopBGM();
       LOOP_SLOTS.forEach((_,i)=>stopLoop(i));
       LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].playing&&LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;});
-      sfxLevelUp();
+      sfxLevelUp(); triggerSync();
       levelCompleteTab='next';
       STATE='levelComplete';
     }
@@ -1286,7 +1524,7 @@ function hitPlayer(pidx){
   p.lives--;p.inv=130;sfxHit();burst(p.x,p.y,'#fbbf24',22);
   if(p.lives<=0){
     p.alive=false;burst(p.x,p.y,'#ef4444',36);
-    if(players.every(pl=>!pl.alive)){penaltyMins=recordLoss();stopBGM();LOOP_SLOTS.forEach((_,i)=>stopLoop(i));LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].playing&&LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;});elimTab='store';STATE='eliminated';}
+    if(players.every(pl=>!pl.alive)){penaltyMins=recordLoss();stopBGM();LOOP_SLOTS.forEach((_,i)=>stopLoop(i));LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].playing&&LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;});elimTab='store';triggerSync();STATE='eliminated';}
   }
 }
 
@@ -1409,6 +1647,13 @@ function drawTitle(){
   X.fillStyle='#34d399';X.fillText('Layer loops on your sampler while you play',GW/2,312);
   X.fillStyle='#ef4444';X.fillText('ELIMINATED = device goes down',GW/2,332);
   X.fillStyle='#9ca3af';X.font='11px "Courier New"';X.fillText('5 min cooldown  ·  make beats & shop during cooldown   |   losses: '+losses(),GW/2,352);X.fillText('chains appear after ~2 min of play',GW/2,368);
+  // Player badge + leaderboard button
+  if(playerName){
+    rr(X,8,GH-38,200,28,5,'rgba(0,0,0,.5)','#8b5cf6',1);
+    X.fillStyle='#c4b5fd';X.font='bold 10px "Courier New"';X.textAlign='left';X.fillText(`👤 ${playerName}  ·  HI: ${localStorage.getItem('sb_hiscore')||0}`,14,GH-19);
+  }
+  rr(X,GW-148,GH-38,138,28,5,'rgba(0,0,0,.5)','#fbbf24',1);
+  X.fillStyle='#fef08a';X.font='bold 11px "Courier New"';X.textAlign='center';X.fillText('🏆 LEADERBOARD',GW-79,GH-19);
   // 1P / 2P buttons
   const blink=Math.floor(Date.now()/500)%2;
   rr(X,GW/2-215,388,190,52,10,blink?'rgba(239,68,68,.25)':'rgba(239,68,68,.12)','#ef4444',2);
@@ -1813,7 +2058,9 @@ function handleLevelCompleteTap(cx,cy){
 
 function loop(){
   X.textAlign='center';
-  if(STATE==='boot')        STATE=lockedUntil()>Date.now()?'lockout':'intro';
+  if(STATE==='boot'){ initDB(); if(!playerId){nameInputStr='';codeInputStr='';nameMode='create';nameField='name';STATE='nameEntry';setTimeout(focusNameInput,200);}else if(lockedUntil()>Date.now())STATE='lockout';else STATE='intro'; }
+  else if(STATE==='nameEntry')     drawNameEntry();
+  else if(STATE==='leaderboard')   drawLeaderboard();
   else if(STATE==='intro')         drawIntro();
   else if(STATE==='start')         drawTitle();
   else if(STATE==='charSelect')    drawCharSelect();
