@@ -46,8 +46,22 @@ function unlock(){ localStorage.removeItem('sb_until'); localStorage.removeItem(
 // ═══════════════════════════════════════════════════════════
 const obucks=()=>parseInt(localStorage.getItem('sb_obucks')||'0');
 const pchains=()=>parseInt(localStorage.getItem('sb_pchains')||'0');
+const pchains2=()=>parseInt(localStorage.getItem('sb_pchains2')||'0');
 function addOBucks(n){ localStorage.setItem('sb_obucks',obucks()+n); }
-function buyChain(){ if(obucks()<50||pchains()>=8)return false; localStorage.setItem('sb_obucks',obucks()-50); localStorage.setItem('sb_pchains',pchains()+1); return true; }
+function buyChain(){
+  if(obucks()<50) return false;
+  const pc=pchains();
+  if(pc<8){
+    localStorage.setItem('sb_obucks',obucks()-50);
+    localStorage.setItem('sb_pchains',pc+1);
+    return true;
+  }
+  const pc2=pchains2();
+  if(pc2>=8) return false;
+  localStorage.setItem('sb_obucks',obucks()-50);
+  localStorage.setItem('sb_pchains2',pc2+1);
+  return true;
+}
 
 // ═══════════════════════════════════════════════════════════
 // ASSETS
@@ -111,6 +125,18 @@ const LOOP_SLOTS=[
   {name:'VOCAL',  color:'#f59e0b', unlocked:false, playing:false, buf:null, node:null},
   {name:'DROP',   color:'#ec4899', unlocked:false, playing:false, buf:null, node:null},
 ];
+const LOOP_SLOTS2=[
+  {name:'KICK',   color:'#f43f5e', unlocked:false, playing:false, buf:null, node:null},
+  {name:'SNARE',  color:'#fb923c', unlocked:false, playing:false, buf:null, node:null},
+  {name:'HIHAT',  color:'#fbbf24', unlocked:false, playing:false, buf:null, node:null},
+  {name:'SYNTH',  color:'#818cf8', unlocked:false, playing:false, buf:null, node:null},
+  {name:'BASS',   color:'#c084fc', unlocked:false, playing:false, buf:null, node:null},
+  {name:'CHORDS', color:'#34d399', unlocked:false, playing:false, buf:null, node:null},
+  {name:'MELODY', color:'#22d3ee', unlocked:false, playing:false, buf:null, node:null},
+  {name:'DROP',   color:'#e879f9', unlocked:false, playing:false, buf:null, node:null},
+];
+let activeBeat=0;
+function activeSlots(){ return activeBeat===0?LOOP_SLOTS:LOOP_SLOTS2; }
 let chainsCollected=0;
 
 function initAudio(){
@@ -134,6 +160,7 @@ function generateAllLoops(){
   LOOP_SLOTS[5].buf=genMelody(sr,bpx,bars);
   LOOP_SLOTS[6].buf=genVocal(sr,bpx,bars);
   LOOP_SLOTS[7].buf=genDrop(sr,bpx,bars);
+  generateBeat2Loops();
 }
 
 function emptyBuf(sr,bpx,bars){ return AC.createBuffer(2,Math.ceil(sr*bars*4*bpx),sr); }
@@ -241,18 +268,129 @@ function genDrop(sr,bpx,bars){
   return buf;
 }
 
+// ── Beat 2: Eb minor 150 BPM ──────────────────────────────────────────
+// Key frequencies (Eb minor)
+const Eb2=77.78,Gb2=92.50,Ab2=103.83,Bb2=116.54,Db3=138.59,
+      Eb3=155.56,F3=174.61,Gb3=185.00,Ab3=207.65,Bb3=233.08,
+      Eb4=311.13,Db4=277.18;
+
+function genKick2(sr,bpx,bars){
+  const buf=emptyBuf(sr,bpx,bars); const L=buf.getChannelData(0),R=buf.getChannelData(1);
+  const hits=[0,6,10,16,22,26,32,38,42,48,54,58]; const step=bpx/4;
+  hits.forEach(h=>{
+    const t=h*step,sn=Math.floor(0.38*sr),s0=Math.floor(t*sr);
+    for(let i=0;i<sn&&s0+i<L.length;i++){const ti=i/sr,freq=140*Math.exp(-ti*22),env=Math.exp(-ti*10);const v=Math.sin(2*Math.PI*freq*ti)*env*.95;L[s0+i]+=v;R[s0+i]+=v;}
+  });
+  return buf;
+}
+
+function genSnare2(sr,bpx,bars){
+  const buf=emptyBuf(sr,bpx,bars); const L=buf.getChannelData(0),R=buf.getChannelData(1);
+  const hits=[8,24,40,56],ghosts=[4,12,20,28,36,44,52,60]; const step=bpx/4;
+  hits.forEach(h=>{const t=h*step,s0=Math.floor(t*sr),sn=Math.floor(0.22*sr);for(let i=0;i<sn&&s0+i<L.length;i++){const env=Math.exp(-i/sn*10),v=(Math.random()*2-1)*env*.65+(Math.sin(2*Math.PI*200*i/sr)*Math.exp(-i/sr*25)*.3);L[s0+i]+=v;R[s0+i]+=v;}});
+  ghosts.forEach(h=>{const t=h*step,s0=Math.floor(t*sr),sn=Math.floor(0.06*sr);for(let i=0;i<sn&&s0+i<L.length;i++){const env=Math.exp(-i/sn*14),v=(Math.random()*2-1)*env*.18;L[s0+i]+=v;R[s0+i]+=v;}});
+  return buf;
+}
+
+function genHihat2(sr,bpx,bars){
+  const buf=emptyBuf(sr,bpx,bars); const L=buf.getChannelData(0),R=buf.getChannelData(1);
+  const step=bpx/4; const total=bars*16;
+  for(let h=0;h<total;h++){const amp=h%2===0?.28:h%4===2?.18:.10;const t=h*step,s0=Math.floor(t*sr),sn=Math.floor(0.04*sr);for(let i=0;i<sn&&s0+i<L.length;i++){const env=Math.exp(-i/sn*16),v=(Math.random()*2-1)*env*amp;L[s0+i]+=v;R[s0+i]+=v;}}
+  return buf;
+}
+
+function genBass2(sr,bpx,bars){
+  const buf=emptyBuf(sr,bpx,bars); const L=buf.getChannelData(0),R=buf.getChannelData(1);
+  const notes=[Eb2,Eb2,Bb2,Eb2,Ab2,Ab2,Gb2,Eb2]; const step=bpx/2;
+  for(let i=0;i<bars*8;i++){
+    const f=notes[i%notes.length],t=i*step,sn=Math.floor(.42*sr),s0=Math.floor(t*sr);
+    for(let j=0;j<sn&&s0+j<L.length;j++){const ti=j/sr,env=Math.exp(-ti*4),v=(((f*ti)%1)*2-1)*env*.5;L[s0+j]+=v;R[s0+j]+=v;}
+  }
+  return buf;
+}
+
+function genChords2(sr,bpx,bars){
+  const buf=emptyBuf(sr,bpx,bars); const L=buf.getChannelData(0),R=buf.getChannelData(1);
+  const chords=[[Eb3,Gb3,Bb3],[Ab3,Eb3,Ab2],[Gb3,Bb3,Db4],[Bb3,Eb4,Gb3]];
+  const step=bpx*4;
+  for(let i=0;i<bars;i++){
+    const freqs=chords[i%4],t=i*step,sn=Math.floor(step*sr*.75),s0=Math.floor(t*sr);
+    for(let j=0;j<sn&&s0+j<L.length;j++){const ti=j/sr,env=Math.exp(-ti*2.5);let v=0;freqs.forEach(f=>v+=Math.sin(2*Math.PI*f*ti)*.06);L[s0+j]+=v*env;R[s0+j]+=v*env;}
+  }
+  return buf;
+}
+
+function genMelody2(sr,bpx,bars){
+  const buf=emptyBuf(sr,bpx,bars); const L=buf.getChannelData(0),R=buf.getChannelData(1);
+  const mel=[Eb4,0,Db4,Bb3,0,Ab3,Gb3,0,Eb3,0,Ab3,Bb3,0,Db4,Eb4,0];
+  const step=bpx/2;
+  for(let i=0;i<bars*16;i++){
+    const f=mel[i%16];if(!f)continue;
+    const t=i*step,sn=Math.floor(step*sr*.6),s0=Math.floor(t*sr);
+    for(let j=0;j<sn&&s0+j<L.length;j++){const ti=j/sr,env=Math.exp(-ti*6),v=Math.sin(2*Math.PI*f*ti)*env*.3;L[s0+j]+=v;R[s0+j]+=v;}
+  }
+  return buf;
+}
+
+function genSynth2(sr,bpx,bars){
+  // Try to load user's synth sample; fallback to synth pad
+  const buf=emptyBuf(sr,bpx,bars);
+  fetch('audio/synth_eb_minor.mp3').then(r=>r.arrayBuffer()).then(ab=>AC.decodeAudioData(ab)).then(decoded=>{LOOP_SLOTS2[3].buf=decoded;}).catch(()=>{});
+  // Fallback synth pad in Eb minor
+  const L=buf.getChannelData(0),R=buf.getChannelData(1);
+  const freqs=[Eb3,Gb3,Bb3,Eb4];
+  const totalSamples=buf.length;
+  for(let j=0;j<totalSamples;j++){
+    const ti=j/sr,env=Math.min(ti*4,1)*Math.exp(-ti*.8);
+    let v=0; freqs.forEach((f,k)=>v+=Math.sin(2*Math.PI*f*ti+k*.3)*.08);
+    L[j]+=v*env; R[j]+=v*env;
+  }
+  return buf;
+}
+
+function genDrop2(sr,bpx,bars){
+  const k=genKick2(sr,bpx,bars),s=genSnare2(sr,bpx,bars),h=genHihat2(sr,bpx,bars),b=genBass2(sr,bpx,bars);
+  const buf=emptyBuf(sr,bpx,bars);
+  [[k,.85],[s,.75],[h,.5],[b,.95]].forEach(([src,gain])=>{
+    const L=src.getChannelData(0),R=src.getChannelData(1);
+    const dL=buf.getChannelData(0),dR=buf.getChannelData(1);
+    for(let i=0;i<L.length;i++){dL[i]+=L[i]*gain;dR[i]+=R[i]*gain;}
+  });
+  return buf;
+}
+
+function generateBeat2Loops(){
+  const sr=AC.sampleRate,bpx=60/BPM,bars=4;
+  LOOP_SLOTS2[0].buf=genKick2(sr,bpx,bars);
+  LOOP_SLOTS2[1].buf=genSnare2(sr,bpx,bars);
+  LOOP_SLOTS2[2].buf=genHihat2(sr,bpx,bars);
+  LOOP_SLOTS2[3].buf=genSynth2(sr,bpx,bars);
+  LOOP_SLOTS2[4].buf=genBass2(sr,bpx,bars);
+  LOOP_SLOTS2[5].buf=genChords2(sr,bpx,bars);
+  LOOP_SLOTS2[6].buf=genMelody2(sr,bpx,bars);
+  LOOP_SLOTS2[7].buf=genDrop2(sr,bpx,bars);
+}
+
+function switchBeat(b){
+  if(b===activeBeat) return;
+  // Stop all slots in both beats
+  LOOP_SLOTS.forEach((_,i)=>{ try{if(LOOP_SLOTS[i].playing){LOOP_SLOTS[i].node.stop();}}catch(e){} LOOP_SLOTS[i].playing=false; LOOP_SLOTS[i].node=null; });
+  LOOP_SLOTS2.forEach((_,i)=>{ try{if(LOOP_SLOTS2[i].playing){LOOP_SLOTS2[i].node.stop();}}catch(e){} LOOP_SLOTS2[i].playing=false; LOOP_SLOTS2[i].node=null; });
+  activeBeat=b;
+}
+
 function startLoop(i){
-  const sl=LOOP_SLOTS[i]; if(!sl.buf||sl.playing) return;
+  const sl=activeSlots()[i]; if(!sl.buf||sl.playing) return;
   const src=AC.createBufferSource(); src.buffer=sl.buf; src.loop=true;
   src.connect(loopGain); src.start(); sl.node=src; sl.playing=true;
 }
 function stopLoop(i){
-  const sl=LOOP_SLOTS[i]; if(!sl.playing) return;
+  const sl=activeSlots()[i]; if(!sl.playing) return;
   try{sl.node.stop();}catch(e){} sl.node=null; sl.playing=false;
 }
 function toggleLoop(i){
-  if(!AC||!LOOP_SLOTS[i].unlocked) return;
-  LOOP_SLOTS[i].playing?stopLoop(i):startLoop(i);
+  if(!AC||!activeSlots()[i].unlocked) return;
+  activeSlots()[i].playing?stopLoop(i):startLoop(i);
 }
 
 // ── BGM ────────────────────────────────────────────────────────
@@ -395,7 +533,7 @@ function drawSP404Strip(){
   X.fillStyle='#1a3a1a'; rr(X,12,SP_Y+46,196,GH-SP_Y-56,4); X.fill();
   const lcdColor='#39ff14';
   X.fillStyle=lcdColor; X.font='bold 11px "Courier New"'; X.textAlign='left';
-  const active=LOOP_SLOTS.filter(s=>s.playing).map(s=>s.name);
+  const active=activeSlots().filter(s=>s.playing).map(s=>s.name);
   X.fillText(active.length?active.join(' · '):'NO LOOPS',16,SP_Y+60);
   X.fillStyle='#1d7a1d'; X.font='9px "Courier New"';
   X.fillText(`CHAINS: ${chainsCollected}  BPM: ${BPM}`,16,SP_Y+74);
@@ -403,11 +541,18 @@ function drawSP404Strip(){
   X.fillStyle='#b8960a'; X.fillText(`⊙ OB: ${obucks()}`,16,SP_Y+99);
   X.fillStyle='#1d7a1d'; X.fillText(active.length?`${active.length} LOOP${active.length>1?'S':''} ACTIVE`:'TAP PAD TO LOOP',16,SP_Y+112);
 
+  // Beat toggle pills (small, top right of LCD)
+  const b1Active=activeBeat===0, b2unlocked=pchains()>=8;
+  rr(X,14,SP_Y+44,48,14,3,b1Active?'#8b5cf6':'#111',b1Active?'#8b5cf6':'#333',1);
+  X.fillStyle=b1Active?'#fff':'#555';X.font='bold 7px "Courier New"';X.textAlign='center';X.fillText('BEAT 1',38,SP_Y+54);
+  rr(X,66,SP_Y+44,48,14,3,!b1Active?'#e879f9':'#111',b2unlocked?(!b1Active?'#e879f9':'#444'):'#222',1);
+  X.fillStyle=b2unlocked?(!b1Active?'#fff':'#888'):'#333';X.font='bold 7px "Courier New"';X.fillText(b2unlocked?'BEAT 2':'🔒 B2',90,SP_Y+54);
+
   // 8 pads (2 rows of 4)
-  LOOP_SLOTS.forEach((sl,i)=>{
+  activeSlots().forEach((sl,i)=>{
     const col=i%4, row=Math.floor(i/4);
     const px=SP_PAD_X+col*(SP_PAD_W+SP_GAP), py=SP_Y+4+row*(SP_PAD_H+SP_GAP);
-    const base=sl.unlocked?SP_PAD_COLORS[i]:'#2a2a2a';
+    const base=sl.unlocked?sl.color:'#2a2a2a';
     const locked=!sl.unlocked;
 
     // Pad body (3D effect)
@@ -560,7 +705,7 @@ function handleTap(cx,cy){
       if(cx>=GW/2-215&&cx<=GW/2-25){ gameMode='1p'; STATE='charSelect'; return; }
       if(cx>=GW/2+25&&cx<=GW/2+215){ gameMode='2p'; STATE='p2CharSelect'; return; }
     }
-    if(cy>=464&&cy<=502&&cx>=GW/2-140&&cx<=GW/2+140){ initAudio(); stopBGM(); LOOP_SLOTS.forEach((_,i)=>stopLoop(i)); ep1Vid.play(); STATE='episode'; return; }
+    if(cy>=464&&cy<=502&&cx>=GW/2-140&&cx<=GW/2+140){ initAudio(); stopBGM(); LOOP_SLOTS.forEach((_,i)=>{try{if(LOOP_SLOTS[i].playing&&LOOP_SLOTS[i].node)LOOP_SLOTS[i].node.stop();}catch(e){}LOOP_SLOTS[i].playing=false;LOOP_SLOTS[i].node=null;}); LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].playing&&LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;}); ep1Vid.play(); STATE='episode'; return; }
     return;
   }
   if(STATE==='episode'){
@@ -575,7 +720,12 @@ function handleTap(cx,cy){
 }
 
 function handleSP404Tap(cx,cy){
-  LOOP_SLOTS.forEach((sl,i)=>{
+  // Beat toggle in strip
+  if(cy>=SP_Y+44&&cy<=SP_Y+58){
+    if(cx>=14&&cx<=62) switchBeat(0);
+    if(cx>=66&&cx<=114&&pchains()>=8) switchBeat(1);
+  }
+  activeSlots().forEach((sl,i)=>{
     const col=i%4,row=Math.floor(i/4);
     const px=SP_PAD_X+col*(SP_PAD_W+SP_GAP),py=SP_Y+4+row*(SP_PAD_H+SP_GAP);
     if(cx>=px&&cx<=px+SP_PAD_W&&cy>=py&&cy<=py+SP_PAD_H) toggleLoop(i);
@@ -676,9 +826,17 @@ function updateChains(){
 function collectChain(){
   chainsCollected++;
   sfxChain();
-  // Unlock next locked loop slot
-  const next=LOOP_SLOTS.find(s=>!s.unlocked);
-  if(next){ next.unlocked=true; sfxUnlock(); unlockFlash=40; }
+  const pc=pchains();
+  if(pc<8){
+    const next=LOOP_SLOTS.find(s=>!s.unlocked);
+    if(next){next.unlocked=true;localStorage.setItem('sb_pchains',pc+1);sfxUnlock();unlockFlash=40;addNotif('🔗 BEAT 1 SLOT UNLOCKED!',GW/2,PLAY_H/2,'#f59e0b');}
+  } else {
+    const pc2=pchains2();
+    if(pc2>=8) return;
+    const next=LOOP_SLOTS2.find(s=>!s.unlocked);
+    if(next){next.unlocked=true;localStorage.setItem('sb_pchains2',pc2+1);sfxUnlock();unlockFlash=40;addNotif('🔗 BEAT 2 SLOT UNLOCKED!',GW/2,PLAY_H/2,'#818cf8');}
+    if(pc2===0) addNotif('🎵 BEAT 2 UNLOCKED!',GW/2,PLAY_H/2-30,'#e879f9');
+  }
 }
 
 let unlockFlash=0;
@@ -714,10 +872,11 @@ function makePlayer(charIdx,x,y){
 
 function launch(){
   initAudio(); startBGM();
-  score=0;gameT=0;vel=1;frame=0;eTimer=0;chainTimer=0;chains=[];chainsCollected=0;unlockFlash=0;hpItems=[];screensDestroyed=0;hpWarning=0;notifs=[];downgradeNodes=[];dnTimer=0;
+  score=0;gameT=0;vel=1;frame=0;eTimer=0;chainTimer=0;chains=[];chainsCollected=0;unlockFlash=0;hpItems=[];screensDestroyed=0;hpWarning=0;notifs=[];downgradeNodes=[];dnTimer=0;activeBeat=0;
   LOOP_SLOTS.forEach((_,i)=>{stopLoop(i);LOOP_SLOTS[i].unlocked=i<pchains();LOOP_SLOTS[i].playing=false;});
+  LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].playing&&LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].unlocked=i<pchains2();LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;});
   // Fire up pre-programmed loops from settings
-  settingsLoopsOn.forEach((on,i)=>{if(on&&i<pchains())startLoop(i);});
+  settingsLoopsOn.forEach((on,i)=>{if(on&&activeSlots()[i]&&activeSlots()[i].unlocked)startLoop(i);});
   bullets=[];eBullets=[];enemies=[];pups=[];parts=[];
   if(gameMode==='2p'){
     players=[makePlayer(0,90,PLAY_H*.33),makePlayer(1,90,PLAY_H*.67)];
@@ -836,7 +995,7 @@ function hitPlayer(pidx){
   p.lives--;p.inv=130;sfxHit();burst(p.x,p.y,'#fbbf24',22);
   if(p.lives<=0){
     p.alive=false;burst(p.x,p.y,'#ef4444',36);
-    if(players.every(pl=>!pl.alive)){penaltyMins=recordLoss();stopBGM();LOOP_SLOTS.forEach((_,i)=>stopLoop(i));elimTab='store';STATE='eliminated';}
+    if(players.every(pl=>!pl.alive)){penaltyMins=recordLoss();stopBGM();LOOP_SLOTS.forEach((_,i)=>stopLoop(i));LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].playing&&LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;});elimTab='store';STATE='eliminated';}
   }
 }
 
@@ -1020,10 +1179,13 @@ function handleSettingsTap(cx,cy){
   if(cx>=GW-192&&cx<=GW-12&&cy>=GH-54&&cy<=GH-10){ launch(); return; }
   // BACK button
   if(cx>=12&&cx<=152&&cy>=GH-54&&cy<=GH-10){ STATE=gameMode==='2p'?'p2CharSelect':'charSelect'; return; }
+  // Beat selector
+  if(cx>=GW/2-120&&cx<=GW/2+4&&cy>=164&&cy<=186) switchBeat(0);
+  if(cx>=GW/2+4&&cx<=GW/2+124&&cy>=164&&cy<=186&&pchains()>=8) switchBeat(1);
   // Pads
-  LOOP_SLOTS.forEach((_,i)=>{
+  activeSlots().forEach((_,i)=>{
     const b=getSettingsPadBounds(i);
-    if(i>=pchains()) return; // locked
+    if(!activeSlots()[i].unlocked) return; // locked
     if(cx>=b.x&&cx<=b.x+SP_PAD_BIG_W&&cy>=b.y&&cy<=b.y+SP_PAD_BIG_H){
       settingsLoopsOn[i]=!settingsLoopsOn[i];
       settingsLoopsOn[i]?startLoop(i):stopLoop(i);
@@ -1043,7 +1205,7 @@ function drawSpSettings(){
   // LCD info panel
   rr(X,14,54,GW-28,106,7,'#0a1a0a','#1a3a1a',1.5);
   X.textAlign='left'; X.fillStyle='#39ff14'; X.font='bold 10px "Courier New"';
-  const activeNames=settingsLoopsOn.map((on,i)=>on&&i<pchains()?LOOP_SLOTS[i].name:null).filter(Boolean);
+  const activeNames=settingsLoopsOn.map((on,i)=>on&&activeSlots()[i]&&activeSlots()[i].unlocked?activeSlots()[i].name:null).filter(Boolean);
   X.fillText('PLAYING:',24,74); X.fillStyle='#1d7a1d';
   X.fillText(activeNames.length?activeNames.join(' · '):'NONE',90,74);
   X.fillStyle='#1a6a1a'; X.font='9px "Courier New"';
@@ -1053,10 +1215,20 @@ function drawSpSettings(){
   X.fillText(`Buy 1 chain with QUAD blaster: new blaster added!  Blast ${activeNames.length>0?'with beats':'screens'} to earn OB.`,24,136);
   X.fillStyle='#0d4a0d'; X.fillText('Tap a pad to preview the loop. Tap again to stop.',24,152);
 
+  // Beat selector
+  const bsel_y=164;
+  [['BEAT 1',0,'#8b5cf6'],['BEAT 2',1,'#e879f9']].forEach(([label,b,col],i)=>{
+    const bx=GW/2-120+i*124, active=activeBeat===b, unlk=b===0||pchains()>=8;
+    rr(X,bx,bsel_y,116,22,5,active?col+'33':'#111',active?col:unlk?'#333':'#1a1a1a',active?2:1);
+    X.fillStyle=active?'#fff':unlk?col:'#333';X.font='bold 10px "Courier New"';X.textAlign='center';
+    X.fillText(unlk?label:'🔒 '+label,bx+58,bsel_y+15);
+    if(active&&unlk){X.shadowColor=col;X.shadowBlur=8;rr(X,bx,bsel_y,116,22,5,'',col,2);X.shadowBlur=0;}
+  });
+
   // Pad grid
-  LOOP_SLOTS.forEach((sl,i)=>{
+  activeSlots().forEach((sl,i)=>{
     const b=getSettingsPadBounds(i);
-    const col=SP_PAD_COLORS[i], locked=i>=pchains(), on=settingsLoopsOn[i]&&!locked;
+    const col=sl.color, locked=!sl.unlocked, on=settingsLoopsOn[i]&&!locked;
     // Shadow base
     rr(X,b.x,b.y,SP_PAD_BIG_W,SP_PAD_BIG_H,9,'#0d0d0d');
     // Inner pad
@@ -1140,7 +1312,7 @@ function drawGame(){
 }
 
 function drawEliminatedStore(y){
-  const ob=obucks(),pc=pchains(),canBuy=ob>=50&&pc<8;
+  const ob=obucks(),pc=pchains(),pc2=pchains2(),canBuy=ob>=50&&(pc<8||pc2<8);
   rr(X,10,y,GW/2-16,80,7,'#0a150a','#22c55e',1);
   X.fillStyle='#2a6a2a';X.font='9px "Courier New"';X.textAlign='left';X.fillText('OLYMPIC BUCKS',18,y+16);
   X.shadowColor='#fbbf24';X.shadowBlur=6;X.fillStyle='#fbbf24';X.font='bold 28px "Courier New"';X.fillText(`⊙ ${ob}`,18,y+50);X.shadowBlur=0;
@@ -1149,7 +1321,7 @@ function drawEliminatedStore(y){
   rr(X,GW/2+6,y,GW/2-16,80,7,canBuy?'rgba(245,158,11,.18)':'rgba(30,30,30,.5)',canBuy?'#f59e0b':'#333',canBuy?2:1);
   X.fillStyle=canBuy?'#fbbf24':'#444';X.font='bold 13px "Courier New"';X.textAlign='center';X.fillText('🔗 BUY CHAIN',GW*3/4,y+22);
   X.fillStyle=canBuy?'#f97316':'#555';X.font='bold 18px "Courier New"';X.fillText('50 OB',GW*3/4,y+46);
-  X.fillStyle=pc>=8?'#39ff14':canBuy?'#a3e635':'#555';X.font='9px "Courier New"';X.fillText(pc>=8?'ALL 8 UNLOCKED':canBuy?`${8-pc} slot${8-pc===1?'':'s'} left`:`need ${50-ob} more OB`,GW*3/4,y+66);
+  X.fillStyle=pc>=8&&pc2>=8?'#39ff14':canBuy?'#a3e635':'#555';X.font='9px "Courier New"';X.fillText(pc>=8&&pc2>=8?'ALL SLOTS UNLOCKED':pc<8?`Beat1: ${8-pc} left`:canBuy?`Beat2: ${8-pc2} left`:`need ${50-ob} more OB`,GW*3/4,y+66);
   // Slot strip
   const sy=y+90;
   X.fillStyle='#445';X.font='8px "Courier New"';X.textAlign='left';X.fillText('LOOP CHAIN SLOTS:',12,sy+12);
@@ -1161,6 +1333,16 @@ function drawEliminatedStore(y){
   });
   X.fillStyle='#2a3a4a';X.font='8px "Courier New"';X.textAlign='center';
   X.fillText('Blast screens to earn OB  ·  every 10 kills = HP boost',GW/2,sy+72);
+  if(pchains()>=8){
+    const sy2=sy+76;
+    X.fillStyle='#e879f9';X.font='8px "Courier New"';X.textAlign='left';X.fillText('BEAT 2 — Eb MINOR (unlock all 8 chains to fill):',12,sy2+12);
+    LOOP_SLOTS2.forEach((sl,i)=>{
+      const sw=(GW-24)/8-3,sx=12+i*(sw+3),unlocked=i<pchains2();
+      rr(X,sx,sy2+16,sw,30,3,unlocked?sl.color+'18':'#0d0d0d',unlocked?sl.color:'#1e1e1e',1);
+      X.fillStyle=unlocked?sl.color:'#2a2a2a';X.font='bold 7px "Courier New"';X.textAlign='center';X.fillText(sl.name,sx+sw/2,sy2+28);
+      X.fillStyle=unlocked?'#39ff14':'#333';X.font='8px serif';X.fillText(unlocked?'✓':'🔒',sx+sw/2,sy2+38);
+    });
+  }
 }
 
 function drawEliminatedSampler(y){
