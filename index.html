@@ -1531,7 +1531,7 @@ function tickNotifs(){
 // BOSS & BLACK HOLE
 // ═══════════════════════════════════════════════════════════
 function spawnBoss(){
-  const mhp=300+currentLevel*120;
+  const mhp=4500+currentLevel*700;
   boss={x:GW+160,y:PLAY_H/2,hp:mhp,mhp,phase:0,shootTimer:0,dnodeTimer:0,cracked:false,alive:true,shards:[]};
   bossWarning=0;
 }
@@ -1581,6 +1581,17 @@ function drawBoss(){
     X.shadowColor='#ef4444';X.shadowBlur=22;
     rr(X,-42,-78,84,156,10,'','#ef444466',2);X.shadowBlur=0;
   }
+  // Blue shield while entering — bullets deflect
+  if(boss.x>Math.round(GW*.48)+8){
+    const sa=.5+Math.sin(boss.phase*5)*.3;
+    X.shadowColor='#60a5fa';X.shadowBlur=22;
+    X.strokeStyle=`rgba(96,165,250,${sa})`;X.lineWidth=2.5;
+    rr(X,-56,-92,112,184,24,'',`rgba(96,165,250,${sa})`,2.5);
+    X.fillStyle=`rgba(96,165,250,.07)`;rr(X,-56,-92,112,184,24);X.fill();
+    X.shadowBlur=0;
+    X.fillStyle='#93c5fd';X.font='bold 7px "Courier New"';X.textAlign='center';
+    X.fillText('◈ SHIELDED',0,-102);
+  }
   X.restore();
 }
 
@@ -1615,12 +1626,17 @@ function updateBoss(){
     }
   }
   boss.cracked=boss.hp<boss.mhp*.6;
-  // Hit detection sized for 1.35x boss
+  // Hit detection — shielded while entering, vulnerable once landed
+  const bossLanded=boss.x<=Math.round(GW*.48)+8;
   bullets.forEach(b=>{
     if(b.x>boss.x-70&&b.x<boss.x+70&&b.y>boss.y-118&&b.y<boss.y+118){
-      boss.hp-=b.dmg;b.x=GW+9999;
-      burst(b.x,b.y,b.col,6);
-      if(boss.hp<=0) defeatBoss();
+      if(bossLanded){
+        boss.hp-=b.dmg;b.x=GW+9999;
+        burst(b.x,b.y,b.col,6);
+        if(boss.hp<=0) defeatBoss();
+      } else {
+        b.x=GW+9999;burst(b.x,b.y,'#60a5fa',3);
+      }
     }
   });
 }
@@ -1642,6 +1658,8 @@ function drawBlackHole(){
   if(!blackHole) return;
   blackHole.r=Math.min(blackHole.r+.55,55);
   blackHole.pulse+=.07;
+  // Drift left into the player's zone — works wherever the boss died
+  if(blackHole.r>8) blackHole.x=Math.max(blackHole.x-1.8,GW*.28);
   const bx=blackHole.x,by=blackHole.y,r=blackHole.r;
   // Outer glow ring
   X.shadowColor='#7c3aed';X.shadowBlur=35;
@@ -1657,10 +1675,22 @@ function drawBlackHole(){
   X.lineWidth=3+Math.sin(blackHole.pulse)*1.5;
   X.beginPath();X.arc(bx,by,r,0,Math.PI*2);X.stroke();
   X.shadowBlur=0;
-  // Animated text
-  if(Math.floor(frame/18)%2){
-    X.fillStyle='#e9d5ff';X.font='bold 10px "Courier New"';X.textAlign='center';
-    X.fillText('FLY IN →',bx,by-r-12);
+  // Beacon text + arrow guide
+  X.shadowColor='#a78bfa';X.shadowBlur=16+Math.sin(blackHole.pulse*3)*6;
+  X.fillStyle='#e9d5ff';X.font='bold 14px "Courier New"';X.textAlign='center';
+  X.fillText('▶▶ FLY IN ▶▶',bx,by-r-16);
+  X.fillStyle='#a78bfa';X.font='bold 10px "Courier New"';
+  X.fillText('NEXT LEVEL',bx,by-r-3);
+  X.shadowBlur=0;
+  if(r>18){
+    const arrowStart=120,arrowEnd=bx-r-8;
+    if(arrowEnd>arrowStart){
+      X.strokeStyle='rgba(196,181,253,.5)';X.lineWidth=2;X.setLineDash([8,5]);
+      X.beginPath();X.moveTo(arrowStart,by);X.lineTo(arrowEnd,by);X.stroke();
+      X.setLineDash([]);
+      X.fillStyle='rgba(196,181,253,.7)';
+      X.beginPath();X.moveTo(arrowEnd,by-6);X.lineTo(arrowEnd+10,by);X.lineTo(arrowEnd,by+6);X.fill();
+    }
   }
 }
 
@@ -1700,7 +1730,7 @@ function update(){
     if(inp.up)    p.y=Math.max(35,p.y-p.spd);
     if(inp.down)  p.y=Math.min(PLAY_H-35,p.y+p.spd);
     if(inp.left)  p.x=Math.max(50,p.x-p.spd*.8);
-    if(inp.right) p.x=Math.min(GW*.55,p.x+p.spd*.8);
+    if(inp.right) p.x=Math.min(blackHole&&blackHole.r>5?GW*.78:GW*.55,p.x+p.spd*.8);
     if(p.inv>0) p.inv--;
     const bl=BLASTERS[p.blvl],rate=bl.rate*p.rateM;
     if(Date.now()-p.lastShot>rate){
@@ -1715,7 +1745,7 @@ function update(){
     const rect=C.getBoundingClientRect();
     const p=players[0];
     if(touchY!==null){ const cy=(touchY-rect.top)*(GH/rect.height)-70; p.y=Math.max(35,Math.min(PLAY_H-35,cy)); }
-    if(touchX!==null){ const cx=(touchX-rect.left)*(GW/rect.width); p.x=Math.max(50,Math.min(GW*.55,cx)); }
+    if(touchX!==null){ const cx=(touchX-rect.left)*(GW/rect.width); p.x=Math.max(50,Math.min(blackHole&&blackHole.r>5?GW*.78:GW*.55,cx)); }
   }
 
   bullets=bullets.filter(b=>b.x<GW+30);bullets.forEach(b=>b.x+=b.spd);
