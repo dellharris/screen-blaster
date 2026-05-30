@@ -891,6 +891,8 @@ const BLASTERS=[
 let STATE='boot',frame=0,score=0,gameT=0,vel=1,penaltyMins=0;
 let eTimer=0,gameMode='1p',elimTab='store';
 let currentLevel=parseInt(localStorage.getItem('sb_level')||'1');
+const maxLevel=()=>Math.max(currentLevel,parseInt(localStorage.getItem('sb_maxlevel')||'1'));
+let selectedLevel=currentLevel;
 let bossSpawned=false,boss=null,blackHole=null,bossWarning=0,levelCompleteTab='next';
 let players=[],bullets,eBullets,enemies,pups,parts;
 let settingsLoopsOn=Array(8).fill(false);
@@ -1102,6 +1104,8 @@ function checkBlackHole(){
     if(Math.hypot(p.x-blackHole.x,p.y-blackHole.y)<blackHole.r+10){
       currentLevel++;
       localStorage.setItem('sb_level',currentLevel);
+      localStorage.setItem('sb_maxlevel',Math.max(currentLevel,maxLevel()));
+      selectedLevel=currentLevel;
       stopBGM();
       LOOP_SLOTS.forEach((_,i)=>stopLoop(i));
       LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].playing&&LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;});
@@ -1639,18 +1643,34 @@ function drawLevelComplete(){
   });
   // Tab content
   if(levelCompleteTab==='next'){
-    rr(X,GW/2-200,118,400,200,14,'rgba(34,197,94,.1)','#22c55e',2);
-    X.fillStyle='#4ade80';X.font='bold 14px "Courier New"';X.textAlign='center';
-    X.fillText(`LEVEL ${currentLevel} — ${currentLevel>1?'ENEMIES ARE TOUGHER':'WELCOME BACK'}`,GW/2,148);
-    X.fillStyle='#64748b';X.font='10px "Courier New"';
-    X.fillText(`Screens now take ${currentLevel}x more hits to destroy`,GW/2,170);
-    X.fillText(`Boss health scales · downgrade nodes faster · keep climbing`,GW/2,188);
-    X.fillStyle='#39ff14';X.font='8px "Courier New"';X.fillText(`Current chains: Beat 1 — ${pchains()}/8   Beat 2 — ${pchains2()}/8`,GW/2,208);
-    // Big launch button
-    const btnBlink=Math.floor(Date.now()/500)%2;
-    rr(X,GW/2-140,232,280,60,12,btnBlink?'rgba(34,197,94,.3)':'rgba(34,197,94,.15)','#22c55e',2.5);
+    // Level selector
+    X.fillStyle='#94a3b8';X.font='9px "Courier New"';X.textAlign='center';X.fillText('SELECT LEVEL TO PLAY:',GW/2,132);
+    const ml=maxLevel(),cols=Math.min(ml,10),btnW=Math.min(54,(GW-24)/cols-4);
+    const startX=(GW-(cols*(btnW+4)-4))/2;
+    for(let lv=1;lv<=ml;lv++){
+      const col=(lv-1)%10, row=Math.floor((lv-1)/10);
+      const bx=startX+col*(btnW+4), by=138+row*42;
+      const sel=selectedLevel===lv, isNext=lv===currentLevel;
+      const col_=isNext?'#22c55e':lv<currentLevel?'#a78bfa':'#64748b';
+      rr(X,bx,by,btnW,32,6,sel?col_+'44':'rgba(0,0,0,.4)',sel?col_:'#333',sel?2:1);
+      if(sel){X.shadowColor=col_;X.shadowBlur=12;}
+      X.fillStyle=sel?'#fff':col_;X.font=`bold ${btnW>40?'12':'10'}px "Courier New"`;X.textAlign='center';
+      X.fillText(`LV ${lv}`,bx+btnW/2,by+21);X.shadowBlur=0;
+      if(isNext){X.fillStyle='#39ff14';X.font='7px "Courier New"';X.fillText('NEW',bx+btnW/2,by+31);}
+    }
+    // Info for selected level
+    const infoY=138+Math.ceil(ml/10)*42+8;
+    rr(X,GW/2-200,infoY,400,52,8,'rgba(0,0,0,.4)','#334155',1);
+    X.fillStyle='#cbd5e1';X.font='bold 11px "Courier New"';X.textAlign='center';
+    X.fillText(`LEVEL ${selectedLevel} — Screens take ${selectedLevel}x hits · ${selectedLevel===currentLevel?'NEW LEVEL':'REVISIT'}`,GW/2,infoY+18);
+    X.fillStyle='#475569';X.font='9px "Courier New"';
+    X.fillText(selectedLevel<currentLevel?'Going back to an easier level — a good way to grind chains & OB':'Boss health and downgrade nodes scale with level',GW/2,infoY+36);
+    // Play button
+    const playY=infoY+62, btnBlink=Math.floor(Date.now()/500)%2;
+    rr(X,GW/2-140,playY,280,52,12,btnBlink?'rgba(34,197,94,.3)':'rgba(34,197,94,.15)','#22c55e',2.5);
     if(btnBlink){X.shadowColor='#22c55e';X.shadowBlur=18;}
-    X.fillStyle='#22c55e';X.font='bold 20px "Courier New"';X.textAlign='center';X.fillText(`▶  PLAY LEVEL ${currentLevel}`,GW/2,270);X.shadowBlur=0;
+    X.fillStyle='#22c55e';X.font='bold 18px "Courier New"';X.textAlign='center';
+    X.fillText(`▶  PLAY LEVEL ${selectedLevel}`,GW/2,playY+33);X.shadowBlur=0;
   } else if(levelCompleteTab==='store'){
     drawEliminatedStore(118);
   } else {
@@ -1666,7 +1686,23 @@ function handleLevelCompleteTap(cx,cy){
     const tx=10+i*(tw+4);
     if(cx>=tx&&cx<=tx+tw&&cy>=82&&cy<=110) levelCompleteTab=id;
   });
-  if(levelCompleteTab==='next'&&cx>=GW/2-140&&cx<=GW/2+140&&cy>=232&&cy<=292) launch();
+  if(levelCompleteTab==='next'){
+    // Level selector buttons
+    const ml=maxLevel(),cols=Math.min(ml,10),btnW=Math.min(54,(GW-24)/cols-4);
+    const startX=(GW-(cols*(btnW+4)-4))/2;
+    for(let lv=1;lv<=ml;lv++){
+      const col=(lv-1)%10,row=Math.floor((lv-1)/10);
+      const bx=startX+col*(btnW+4),by=138+row*42;
+      if(cx>=bx&&cx<=bx+btnW&&cy>=by&&cy<=by+32){ selectedLevel=lv; return; }
+    }
+    // Play button — dynamic Y based on rows
+    const infoY=138+Math.ceil(ml/10)*42+8, playY=infoY+62;
+    if(cx>=GW/2-140&&cx<=GW/2+140&&cy>=playY&&cy<=playY+52){
+      currentLevel=selectedLevel;
+      localStorage.setItem('sb_level',currentLevel);
+      launch();
+    }
+  }
   if(levelCompleteTab==='store'){
     if(cx>=GW/2+6&&cx<=GW-10&&cy>=218&&cy<=298){
       if(buyChain()){sfxPowerup();burst(GW*3/4,258,'#f59e0b',22);addNotif('🔗 CHAIN UNLOCKED!',GW/2,210,'#f59e0b');}
