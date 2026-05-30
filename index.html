@@ -1289,7 +1289,7 @@ let currentLevel=parseInt(localStorage.getItem('sb_level')||'1');
 const maxLevel=()=>Math.max(currentLevel,parseInt(localStorage.getItem('sb_maxlevel')||'1'));
 let selectedLevel=currentLevel;
 let bossSpawned=false,boss=null,blackHole=null,bossWarning=0,levelCompleteTab='next';
-let players=[],bullets,eBullets,enemies,pups,parts;
+let players=[],bullets,eBullets,enemies,pups,parts=[];
 let settingsLoopsOn=Array(8).fill(false);
 
 function makePlayer(charIdx,x,y){
@@ -1344,7 +1344,6 @@ function burst(x,y,col,n=12){for(let i=0;i<n;i++){const a=(i/n)*Math.PI*2,s=Math
 function tickParts(){parts=parts.filter(p=>p.life>0);parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=.06;p.life--;X.globalAlpha=p.life/p.max;X.fillStyle=p.col;X.beginPath();X.arc(p.x,p.y,p.r*(p.life/p.max),0,Math.PI*2);X.fill();});X.globalAlpha=1;}
 
 let notifs=[];
-let parts=[];  // init early so YT button bursts work on title screen
 
 // ── YouTube engagement buttons ─────────────────────────────
 const ytLiked  = ()=>localStorage.getItem('sb_ytlike')==='1';
