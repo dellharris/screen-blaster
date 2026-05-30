@@ -456,9 +456,11 @@ const zenImg=new Image();   zenImg.src='characters/zen_spacesuit.png';
 const judeImg=new Image();  judeImg.src='characters/jude_spacesuit.png';
 const introImg=new Image(); introImg.src='episode1/intro_cinematic.png';
 // Optional: drop intro_cinematic.mp4 in episode1/ for full video intro
-const introVid=Object.assign(document.createElement('video'),{src:'episode1/intro_cinematic.m4v',muted:true,playsInline:true,preload:'metadata'});
+const introVid=Object.assign(document.createElement('video'),{src:'episode1/intro_cinematic.m4v',muted:true,playsInline:true,preload:'auto'});
+introVid.style.cssText='position:fixed;top:-2px;left:-2px;width:1px;height:1px;opacity:0;pointer-events:none;';
+document.body.appendChild(introVid);
 let introVidOK=false;
-introVid.addEventListener('canplay',()=>{introVidOK=true;},{once:true});
+introVid.addEventListener('canplay',()=>{introVidOK=true;if(STATE==='intro')introT=0;},{once:true});
 introVid.addEventListener('error',()=>{introVidOK=false;});
 let introT=0;
 
@@ -1873,12 +1875,12 @@ function drawIntro(){
     X.fillStyle='rgba(255,255,255,.35)'; X.font='10px "Courier New"'; X.textAlign='center';
     X.fillText('tap to skip',GW/2,GH-14);
   }
-  // Fade out at end
-  if(t>DUR-1.2){
+  // Fade out at end — only on Ken Burns fallback; video controls its own ending
+  if(!introVidOK&&t>DUR-1.2){
     const fa=Math.min((t-(DUR-1.2))/1.2,1);
     X.fillStyle=`rgba(0,0,0,${fa})`; X.fillRect(0,0,GW,GH);
   }
-  if(t>=DUR) STATE='start';
+  if(t>=DUR&&!introVidOK) STATE='start';
 }
 
 function drawTitle(){
