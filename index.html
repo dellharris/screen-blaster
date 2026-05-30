@@ -725,12 +725,12 @@ function update(){
     }
   });
 
-  // Touch follows P1 — offset so ship appears above finger
+  // Touch follows P1 — snap directly to finger (instant response on all screen sizes)
   if(touchActive&&players[0]?.alive){
     const rect=C.getBoundingClientRect();
     const p=players[0];
-    if(touchY!==null){ const cy=(touchY-rect.top)*(GH/rect.height)-70; if(cy<p.y-12) p.y=Math.max(35,p.y-p.spd); if(cy>p.y+12) p.y=Math.min(PLAY_H-35,p.y+p.spd); }
-    if(touchX!==null){ const cx=(touchX-rect.left)*(GW/rect.width); if(cx<p.x-12) p.x=Math.max(50,p.x-p.spd*.8); if(cx>p.x+12) p.x=Math.min(GW*.55,p.x+p.spd*.8); }
+    if(touchY!==null){ const cy=(touchY-rect.top)*(GH/rect.height)-70; p.y=Math.max(35,Math.min(PLAY_H-35,cy)); }
+    if(touchX!==null){ const cx=(touchX-rect.left)*(GW/rect.width); p.x=Math.max(50,Math.min(GW*.55,cx)); }
   }
 
   bullets=bullets.filter(b=>b.x<GW+30);bullets.forEach(b=>b.x+=b.spd);
