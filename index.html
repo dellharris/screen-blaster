@@ -973,11 +973,13 @@ function handleKPTap(cx,cy){
     const tx=10+i*(tw+4);
     if(cx>=tx&&cx<=tx+tw&&cy>=66&&cy<=94) elimTab=id;
   });
-  // Store: buy chain
+  // Store: buy chain + YT buttons
   if(elimTab==='store'){
     if(cx>=GW/2+6&&cx<=GW-10&&cy>=100&&cy<=180){
       if(buyChain()){sfxPowerup();burst(GW*3/4,140,'#f59e0b',22);addNotif('🔗 CHAIN UNLOCKED!',GW/2,90,'#f59e0b');}
     }
+    // YT buttons in store (y offset matches drawEliminatedStore sy+94)
+    handleYTButtonTap(cx,cy,GW/2,291,0.95);
   }
   // Sampler: beat toggle + pad taps
   if(elimTab==='sampler'){
@@ -1048,7 +1050,10 @@ function handleTap(cx,cy){
       if(cx>=GW/2-215&&cx<=GW/2-25){ gameMode='1p'; STATE='charSelect'; return; }
       if(cx>=GW/2+25&&cx<=GW/2+215){ gameMode='2p'; STATE='p2CharSelect'; return; }
     }
-    if(cy>=464&&cy<=502&&cx>=GW/2-140&&cx<=GW/2+140){ initAudio(); showYouTubeEmbed(); return; }
+    if(cy>=464&&cy<=500){
+      if(cx>=GW/2-215&&cx<=GW/2-45){ initAudio(); showYouTubeEmbed(); return; }
+      if(handleYTButtonTap(cx,cy,GW/2+10,464,1)) return;
+    }
     return;
   }
   if(STATE==='episode'){ return; } // handled by HTML overlay + yt-back button
@@ -1339,6 +1344,57 @@ function burst(x,y,col,n=12){for(let i=0;i<n;i++){const a=(i/n)*Math.PI*2,s=Math
 function tickParts(){parts=parts.filter(p=>p.life>0);parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=.06;p.life--;X.globalAlpha=p.life/p.max;X.fillStyle=p.col;X.beginPath();X.arc(p.x,p.y,p.r*(p.life/p.max),0,Math.PI*2);X.fill();});X.globalAlpha=1;}
 
 let notifs=[];
+let parts=[];  // init early so YT button bursts work on title screen
+
+// ── YouTube engagement buttons ─────────────────────────────
+const ytLiked  = ()=>localStorage.getItem('sb_ytlike')==='1';
+const ytSubbed = ()=>localStorage.getItem('sb_ytsub')==='1';
+
+function drawYTButtons(cx, y, scale=1){
+  const s=scale, liked=ytLiked(), subbed=ytSubbed();
+  // LIKE
+  const lw=88*s,lh=32*s,lx=cx-lw-5;
+  const lbg=liked?'rgba(59,130,246,.35)':'rgba(0,0,0,.55)';
+  const lbord=liked?'#60a5fa':'#444';
+  rr(X,lx,y,lw,lh,7*s,lbg,lbord,liked?2:1);
+  if(liked){X.shadowColor='#60a5fa';X.shadowBlur=10;}
+  X.fillStyle=liked?'#93c5fd':'#888';
+  X.font=`bold ${Math.round(11*s)}px "Courier New"`;X.textAlign='center';
+  X.fillText(liked?'👍  LIKED':'👍  LIKE',lx+lw/2,y+lh/2+4*s);
+  X.shadowBlur=0;
+  // SUBSCRIBE
+  const sw=110*s,sh=32*s,sx=cx+5;
+  const sbg=subbed?'rgba(34,197,94,.3)':'rgba(239,68,68,.2)';
+  const sbord=subbed?'#22c55e':'#ef4444';
+  rr(X,sx,y,sw,sh,7*s,sbg,sbord,subbed?2:1.5);
+  if(subbed){X.shadowColor='#22c55e';X.shadowBlur=10;}
+  else if(Math.floor(Date.now()/600)%2){X.shadowColor='#ef4444';X.shadowBlur=6;}
+  X.fillStyle=subbed?'#86efac':'#fca5a5';
+  X.font=`bold ${Math.round(11*s)}px "Courier New"`;X.textAlign='center';
+  X.fillText(subbed?'🔔  SUBSCRIBED':'🔔  SUBSCRIBE',sx+sw/2,y+sh/2+4*s);
+  X.shadowBlur=0;
+}
+
+function handleYTButtonTap(cx,cy,btnCx,btnY,scale=1){
+  const s=scale;
+  const lw=88*s,lh=32*s,lx=btnCx-lw-5;
+  const sw=110*s,sh=32*s,sx=btnCx+5;
+  if(cx>=lx&&cx<=lx+lw&&cy>=btnY&&cy<=btnY+lh){
+    localStorage.setItem('sb_ytlike','1');
+    window.open('https://youtu.be/LjPjHN7uyO0','_blank');
+    parts.push(...Array.from({length:22},(_,i)=>{const a=i/22*Math.PI*2,sp=Math.random()*5+2;return{x:cx,y:cy+lh/2,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:45,max:45,col:'#60a5fa',r:Math.random()*4+2};}));
+    addNotif('👍  Thanks for the like!',GW/2,btnY-20,'#60a5fa');
+    return true;
+  }
+  if(cx>=sx&&cx<=sx+sw&&cy>=btnY&&cy<=btnY+sh){
+    localStorage.setItem('sb_ytsub','1');
+    window.open('https://youtu.be/LjPjHN7uyO0','_blank');
+    parts.push(...Array.from({length:28},(_,i)=>{const a=i/28*Math.PI*2,sp=Math.random()*6+2;return{x:cx,y:cy+sh/2,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:55,max:55,col:i%2?'#ef4444':'#fff',r:Math.random()*4+2};}));
+    addNotif('🔔  Subscribed! You rock!',GW/2,btnY-20,'#22c55e');
+    return true;
+  }
+  return false;
+}
 function addNotif(text,x,y,col='#fbbf24'){notifs.push({text,x,y,col,life:85,max:85});}
 function tickNotifs(){
   notifs=notifs.filter(n=>n.life>0);
@@ -1723,10 +1779,13 @@ function drawTitle(){
   rr(X,GW/2+25,388,190,52,10,blink?'rgba(56,189,248,.25)':'rgba(56,189,248,.12)','#38bdf8',2);
   X.fillStyle='#38bdf8';X.font='bold 18px "Courier New"';X.fillText('2 PLAYERS',GW/2+120,420);
   X.fillStyle='rgba(255,255,255,.3)';X.font='9px "Courier New"';X.fillText('P1: WASD / CTRL 1   ·   P2: ARROWS / CTRL 2',GW/2,454);
-  // Watch Episode 1 button
+  // Watch + Like + Subscribe row
   const epBlink=Math.floor(Date.now()/700)%2;
-  rr(X,GW/2-140,464,280,38,9,epBlink?'rgba(251,191,36,.18)':'rgba(251,191,36,.08)','#fbbf24',1.5);
-  X.fillStyle='#fbbf24';X.font='bold 14px "Courier New"';X.textAlign='center';X.fillText('▶  WATCH EPISODE 1',GW/2,488);
+  rr(X,GW/2-215,464,170,36,9,epBlink?'rgba(251,191,36,.2)':'rgba(251,191,36,.08)','#fbbf24',1.5);
+  X.fillStyle='#fbbf24';X.font='bold 12px "Courier New"';X.textAlign='center';X.fillText('▶  WATCH EP.1',GW/2-130,486);
+  drawYTButtons(GW/2+10,464,1);
+  // Particle burst from notifs/parts on title screen
+  tickParts(); tickNotifs();
 }
 
 function drawP2CharSelect(){
@@ -1938,6 +1997,9 @@ function drawEliminatedStore(y){
   });
   X.fillStyle='#2a3a4a';X.font='8px "Courier New"';X.textAlign='center';
   X.fillText('Blast screens to earn OB  ·  every 10 kills = HP boost',GW/2,sy+72);
+  // Like & Subscribe
+  X.fillStyle='#334155';X.font='8px "Courier New"';X.textAlign='center';X.fillText('Enjoying Harris Adventures?',GW/2,sy+88);
+  drawYTButtons(GW/2,sy+94,0.95);
   if(pchains()>=8){
     const sy2=sy+82;
     X.fillStyle='#e879f9';X.font='bold 9px "Courier New"';X.textAlign='left';X.fillText('BEAT 2 CHAINS — Eb MINOR:',12,sy2+12);
