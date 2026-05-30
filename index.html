@@ -35,7 +35,7 @@ function rr(c,x,y,w,h,r,fill,stroke,lw){
 // ═══════════════════════════════════════════════════════════
 // PENALTY SYSTEM
 // ═══════════════════════════════════════════════════════════
-const PMINS=[15,30,60];
+const PMINS=[5,5,5];
 const losses=()=>parseInt(localStorage.getItem('sb_losses')||'0');
 const lockedUntil=()=>parseInt(localStorage.getItem('sb_until')||'0');
 function recordLoss(){ const n=losses(),m=PMINS[Math.min(n,PMINS.length-1)]; localStorage.setItem('sb_until',Date.now()+m*60000); localStorage.setItem('sb_losses',n+1); return m; }
@@ -1318,7 +1318,7 @@ function drawTitle(){
   X.fillStyle='#f59e0b';X.fillText('⛓ Catch gold chains to unlock SP-404 beat loops',GW/2,292);
   X.fillStyle='#34d399';X.fillText('Layer loops on your sampler while you play',GW/2,312);
   X.fillStyle='#ef4444';X.fillText('ELIMINATED = device goes down',GW/2,332);
-  X.fillStyle='#9ca3af';X.font='11px "Courier New"';X.fillText('15 min  ·  30 min  ·  1 hour   |   losses: '+losses(),GW/2,352);X.fillText('chains appear after ~5 min of play',GW/2,368);
+  X.fillStyle='#9ca3af';X.font='11px "Courier New"';X.fillText('5 min cooldown  ·  make beats & shop during cooldown   |   losses: '+losses(),GW/2,352);X.fillText('chains appear after ~5 min of play',GW/2,368);
   // 1P / 2P buttons
   const blink=Math.floor(Date.now()/500)%2;
   rr(X,GW/2-215,388,190,52,10,blink?'rgba(239,68,68,.25)':'rgba(239,68,68,.12)','#ef4444',2);
