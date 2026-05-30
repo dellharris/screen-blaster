@@ -31,6 +31,15 @@ canvas { display:block; touch-action:none; }
 <body>
 <canvas id="c"></canvas>
 <input id="ni" type="text" maxlength="16" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" style="position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none;width:1px;height:1px;">
+
+<!-- YouTube episode overlay -->
+<div id="yt-overlay" style="display:none;position:fixed;z-index:50;background:#000;"></div>
+<iframe id="yt-frame" src="" frameborder="0" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen
+  style="display:none;position:fixed;z-index:51;border:none;"></iframe>
+<button id="yt-back" onclick="exitEpisode()"
+  style="display:none;position:fixed;z-index:52;background:rgba(0,0,0,.85);color:#aaa;border:1px solid #555;border-radius:7px;padding:9px 18px;font-family:'Courier New',monospace;font-size:13px;font-weight:bold;cursor:pointer;letter-spacing:1px;">
+  ◀ BACK
+</button>
 <script>
 // ═══════════════════════════════════════════════════════════
 // CANVAS & UTILS
@@ -333,7 +342,36 @@ introVid.addEventListener('error',()=>{introVidOK=false;});
 let introT=0;
 
 // Episode 1 video
-const ep1Vid=Object.assign(document.createElement('video'),{src:'episode1/harris_adventures_ep1.m4v',playsInline:true,preload:'none'});
+// Episode 1 now streams from YouTube
+function positionYTOverlay(){
+  const r=C.getBoundingClientRect();
+  ['yt-overlay','yt-frame'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.style.left=r.left+'px'; el.style.top=r.top+'px';
+    el.style.width=r.width+'px'; el.style.height=r.height+'px';
+  });
+  const btn=document.getElementById('yt-back');
+  btn.style.left=(r.left+12)+'px'; btn.style.top=(r.top+12)+'px';
+}
+function showYouTubeEmbed(){
+  stopBGM();
+  LOOP_SLOTS.forEach((_,i)=>{try{if(LOOP_SLOTS[i].node)LOOP_SLOTS[i].node.stop();}catch(e){}LOOP_SLOTS[i].playing=false;LOOP_SLOTS[i].node=null;});
+  LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;});
+  positionYTOverlay();
+  document.getElementById('yt-overlay').style.display='block';
+  document.getElementById('yt-frame').style.display='block';
+  document.getElementById('yt-frame').src='https://www.youtube.com/embed/LjPjHN7uyO0?autoplay=1&rel=0&modestbranding=1&playsinline=1';
+  document.getElementById('yt-back').style.display='block';
+  STATE='episode';
+}
+function exitEpisode(){
+  document.getElementById('yt-overlay').style.display='none';
+  document.getElementById('yt-frame').style.display='none';
+  document.getElementById('yt-frame').src='';
+  document.getElementById('yt-back').style.display='none';
+  startBGM(); STATE='start';
+}
+addEventListener('resize',()=>{ resize(); if(STATE==='episode') positionYTOverlay(); });
 
 // ═══════════════════════════════════════════════════════════
 // NEBULA BACKGROUND
@@ -993,7 +1031,7 @@ function playerInput(pidx){
   }
   return {up:K['arrowup']||gp.up,down:K['arrowdown']||gp.down,left:K['arrowleft']||gp.left,right:K['arrowright']||gp.right};
 }
-addEventListener('keydown',e=>{ K[e.key.toLowerCase()]=1; handleCodeKey(e.key); initAudio(); if(e.key==='Escape'&&STATE==='episode'){ep1Vid.pause();ep1Vid.currentTime=0;startBGM();STATE='start';} });
+addEventListener('keydown',e=>{ K[e.key.toLowerCase()]=1; handleCodeKey(e.key); initAudio(); if(e.key==='Escape'&&STATE==='episode') exitEpisode(); });
 addEventListener('keyup',e=>{ K[e.key.toLowerCase()]=0; });
 C.addEventListener('touchstart',e=>{ e.preventDefault(); initAudio(); const rect=C.getBoundingClientRect(),s=GW/rect.width; const cx=(e.touches[0].clientX-rect.left)*s,cy=(e.touches[0].clientY-rect.top)*s; touchY=e.touches[0].clientY; touchX=e.touches[0].clientX; touchActive=true; handleTap(cx,cy); });
 C.addEventListener('touchmove',e=>{ e.preventDefault(); touchY=e.touches[0].clientY; touchX=e.touches[0].clientX; });
@@ -1010,13 +1048,10 @@ function handleTap(cx,cy){
       if(cx>=GW/2-215&&cx<=GW/2-25){ gameMode='1p'; STATE='charSelect'; return; }
       if(cx>=GW/2+25&&cx<=GW/2+215){ gameMode='2p'; STATE='p2CharSelect'; return; }
     }
-    if(cy>=464&&cy<=502&&cx>=GW/2-140&&cx<=GW/2+140){ initAudio(); stopBGM(); LOOP_SLOTS.forEach((_,i)=>{try{if(LOOP_SLOTS[i].playing&&LOOP_SLOTS[i].node)LOOP_SLOTS[i].node.stop();}catch(e){}LOOP_SLOTS[i].playing=false;LOOP_SLOTS[i].node=null;}); LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].playing&&LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;}); ep1Vid.play(); STATE='episode'; return; }
+    if(cy>=464&&cy<=502&&cx>=GW/2-140&&cx<=GW/2+140){ initAudio(); showYouTubeEmbed(); return; }
     return;
   }
-  if(STATE==='episode'){
-    if(cx>=8&&cx<=108&&cy>=8&&cy<=40){ ep1Vid.pause();ep1Vid.currentTime=0;startBGM();STATE='start'; return; }
-    ep1Vid.paused?ep1Vid.play():ep1Vid.pause(); return;
-  }
+  if(STATE==='episode'){ return; } // handled by HTML overlay + yt-back button
   if(STATE==='p2CharSelect') { STATE='spSettings'; return; }
   if(STATE==='charSelect')   { if(cx<GW/2&&cy>100&&cy<GH-40){selectedChar=0;STATE='spSettings';} if(cx>=GW/2&&cy>100&&cy<GH-40){selectedChar=1;STATE='spSettings';} return; }
   if(STATE==='spSettings')   { handleSettingsTap(cx,cy); return; }
@@ -1978,25 +2013,8 @@ function drawEliminatedBase(){
 // MAIN LOOP
 // ═══════════════════════════════════════════════════════════
 function drawEpisode(){
-  X.fillStyle='#000';X.fillRect(0,0,GW,GH);
-  if(ep1Vid.readyState>=2){
-    const ar=ep1Vid.videoWidth/ep1Vid.videoHeight||16/9;
-    let dw=GW,dh=GW/ar;
-    if(dh>GH){dh=GH;dw=dh*ar;}
-    X.drawImage(ep1Vid,(GW-dw)/2,(GH-dh)/2,dw,dh);
-  } else {
-    X.fillStyle='#222';X.font='bold 14px "Courier New"';X.textAlign='center';X.fillText('Loading episode...',GW/2,GH/2);
-  }
-  // Pause overlay
-  if(ep1Vid.paused&&!ep1Vid.ended){
-    X.fillStyle='rgba(0,0,0,.45)';X.fillRect(0,0,GW,GH);
-    X.fillStyle='rgba(255,255,255,.85)';X.font='bold 60px Arial';X.textAlign='center';X.fillText('▶',GW/2,GH/2+20);
-  }
-  // Back button
-  rr(X,8,8,100,30,5,'rgba(0,0,0,.75)','#555',1);
-  X.fillStyle='#aaa';X.font='bold 11px "Courier New"';X.textAlign='center';X.fillText('◀ BACK',58,28);
-  // End of video → back to menu
-  if(ep1Vid.ended){ep1Vid.currentTime=0;startBGM();STATE='start';}
+  // YouTube iframe overlay handles rendering — canvas just shows black underneath
+  X.fillStyle='#000'; X.fillRect(0,0,GW,GH);
 }
 
 function drawLevelComplete(){
