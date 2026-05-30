@@ -113,6 +113,12 @@ const MEL=[12,0,10,0,7,0,10,12,15,0,17,0,15,12,10,0];
 const BAS=[-12,0,-12,0,-7,0,-12,-5];
 const HAT=[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0];
 const KCK=[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0];
+// Beat 2 arpeggiator: Eb minor (semitone offsets from A4)
+// Eb5=+6, Gb5=+9, Ab5=+10, Bb5=+13, Db5=+4
+const MEL2=[6,0,9,0,6,0,4,6,10,0,13,0,10,6,4,0];
+// Eb3=-18, Bb3=-11, Ab3=-13
+const BAS2=[-18,0,-18,0,-11,0,-18,-13];
+let arpOn=true;
 
 // SP-404 loop slots
 const LOOP_SLOTS=[
@@ -402,10 +408,14 @@ function toggleLoop(i){
 function bgmTick(){
   if(!AC||!bgmRunning) return;
   const s=bgmStep%16;
-  if(MEL[s]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain); o.type='square';o.frequency.value=st(MEL[s]);g.gain.setValueAtTime(.035,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+STEP_MS*.38/1000);o.start();o.stop(AC.currentTime+STEP_MS*.38/1000); }
-  if(s%2===0&&BAS[s/2|0]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain);o.type='sawtooth';o.frequency.value=st(BAS[s/2|0]);g.gain.setValueAtTime(.05,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+STEP_MS*.85/1000);o.start();o.stop(AC.currentTime+STEP_MS*.85/1000); }
-  if(HAT[s]){ const buf=AC.createBuffer(1,Math.ceil(AC.sampleRate*.04),AC.sampleRate),d=buf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; const src=AC.createBufferSource(),g=AC.createGain(); src.buffer=buf;src.connect(g);g.connect(masterGain);g.gain.setValueAtTime(.02,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.04);src.start(); }
-  if(KCK[s]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain);o.type='sine';o.frequency.setValueAtTime(100,AC.currentTime);o.frequency.exponentialRampToValueAtTime(40,AC.currentTime+.1);g.gain.setValueAtTime(.12,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.12);o.start();o.stop(AC.currentTime+.12); }
+  if(arpOn){
+    const mel=activeBeat===1?MEL2:MEL, bas=activeBeat===1?BAS2:BAS;
+    const melType=activeBeat===1?'sine':'square';
+    if(mel[s]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain); o.type=melType;o.frequency.value=st(mel[s]);g.gain.setValueAtTime(.035,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+STEP_MS*.38/1000);o.start();o.stop(AC.currentTime+STEP_MS*.38/1000); }
+    if(s%2===0&&bas[s/2|0]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain);o.type='sawtooth';o.frequency.value=st(bas[s/2|0]);g.gain.setValueAtTime(.05,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+STEP_MS*.85/1000);o.start();o.stop(AC.currentTime+STEP_MS*.85/1000); }
+    if(HAT[s]){ const buf=AC.createBuffer(1,Math.ceil(AC.sampleRate*.04),AC.sampleRate),d=buf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; const src=AC.createBufferSource(),g=AC.createGain(); src.buffer=buf;src.connect(g);g.connect(masterGain);g.gain.setValueAtTime(.02,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.04);src.start(); }
+    if(KCK[s]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain);o.type='sine';o.frequency.setValueAtTime(100,AC.currentTime);o.frequency.exponentialRampToValueAtTime(40,AC.currentTime+.1);g.gain.setValueAtTime(.12,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.12);o.start();o.stop(AC.currentTime+.12); }
+  }
   bgmStep++; setTimeout(bgmTick,STEP_MS);
 }
 function startBGM(){ if(!bgmRunning){bgmRunning=true;bgmTick();} }
@@ -567,6 +577,9 @@ function drawSP404Strip(){
   X.fillText(`SCORE: ${score}`,16,SP_Y+86);
   X.fillStyle='#b8960a'; X.fillText(`⊙ OB: ${obucks()}`,16,SP_Y+99);
   X.fillStyle='#1d7a1d'; X.fillText(active.length?`${active.length} LOOP${active.length>1?'S':''} ACTIVE`:'TAP PAD TO LOOP',16,SP_Y+112);
+  // ARP toggle button
+  rr(X,14,SP_Y+118,90,12,3,arpOn?'rgba(251,191,36,.22)':'rgba(40,40,40,.4)',arpOn?'#fbbf24':'#333',1);
+  X.fillStyle=arpOn?'#fbbf24':'#555';X.font='bold 7px "Courier New"';X.textAlign='center';X.fillText(`♪ ARP ${arpOn?'ON':'OFF'}`,59,SP_Y+127);
 
   // Beat toggle pills (small, top right of LCD)
   const b1Active=activeBeat===0, b2unlocked=pchains()>=8;
@@ -748,6 +761,8 @@ function handleTap(cx,cy){
 }
 
 function handleSP404Tap(cx,cy){
+  // ARP toggle
+  if(cy>=SP_Y+118&&cy<=SP_Y+130&&cx>=14&&cx<=104){ arpOn=!arpOn; return; }
   // Beat toggle in strip
   if(cy>=SP_Y+44&&cy<=SP_Y+58){
     if(cx>=14&&cx<=62) switchBeat(0);
@@ -1204,8 +1219,9 @@ function hitPlayer(pidx){
 // SCREENS
 // ═══════════════════════════════════════════════════════════
 function drawHUD(){
-  // Score
-  X.textAlign='left';rr(X,8,8,155,26,4,'rgba(0,0,0,.5)');X.fillStyle='#a78bfa';X.font='bold 13px "Courier New"';X.fillText(`SCORE  ${score}`,14,26);
+  // Score + level (top left)
+  X.textAlign='left';rr(X,8,8,155,36,4,'rgba(0,0,0,.5)');X.fillStyle='#a78bfa';X.font='bold 13px "Courier New"';X.fillText(`SCORE  ${score}`,14,26);
+  X.fillStyle='#7c3aed';X.font='8px "Courier New"';X.fillText(`LVL ${currentLevel}`,14,40);
   if(gameMode==='2p'){
     // P1 lives + blaster (left)
     const p0=players[0],bl0=BLASTERS[p0?.blvl||0];
@@ -1235,8 +1251,7 @@ function drawHUD(){
   if(dnClose&&Math.floor(frame/10)%2){X.shadowColor='#f87171';X.shadowBlur=16;X.fillStyle='#f87171';X.font='bold 12px "Courier New"';X.textAlign='center';X.fillText('⚠  DOWNGRADE NODE — DODGE IT!',GW/2,PLAY_H-62);X.shadowBlur=0;}
   // Boss incoming warning
   if(bossWarning>0&&Math.floor(frame/8)%2){X.shadowColor='#f59e0b';X.shadowBlur=22;X.fillStyle='#fbbf24';X.font='bold 14px "Courier New"';X.textAlign='center';X.fillText('⚠  CASE-BUSTER INCOMING  ⚠',GW/2,PLAY_H/2-20);X.shadowBlur=0;}
-  // Level indicator
-  rr(X,GW-80,8,72,20,3,'rgba(0,0,0,.5)');X.fillStyle='#a78bfa';X.font='bold 10px "Courier New"';X.textAlign='center';X.fillText(`LEVEL ${currentLevel}`,GW-44,23);
+  // Level indicator removed from top-right (now in score box)
   // Kill counter (next HP in N screens)
   const toHP=10-screensDestroyed%10;
   rr(X,GW-118,PLAY_H-22,110,14,3,'rgba(0,0,0,.5)');X.fillStyle=toHP<=3?'#ef4444':'#94a3b8';X.font='8px "Courier New"';X.textAlign='right';X.fillText(`♥ HP in ${toHP} blast${toHP===1?'':'s'}`,GW-8,PLAY_H-22+9);
