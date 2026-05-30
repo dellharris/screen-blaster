@@ -924,13 +924,20 @@ function handleKPTap(cx,cy){
       if(buyChain()){sfxPowerup();burst(GW*3/4,140,'#f59e0b',22);addNotif('🔗 CHAIN UNLOCKED!',GW/2,90,'#f59e0b');}
     }
   }
-  // Sampler: toggle loops
+  // Sampler: beat toggle + pad taps
   if(elimTab==='sampler'){
+    // Beat toggle buttons (y=100 to y=122)
+    const tw=(GW-20)/2-4;
+    if(cy>=100&&cy<=122){
+      if(cx>=10&&cx<=10+tw) switchBeat(0);
+      if(cx>=10+tw+4&&cx<=GW-10&&pchains()>=8) switchBeat(1);
+    }
+    // Pad taps (y offset shifted down by 22px for toggle)
     const PW=88,PH=66,PG=5,PX0=(GW-(4*(PW+PG)-PG))/2;
     activeSlots().forEach((sl,i)=>{
       if(!sl.unlocked) return;
       const col=i%4,row=Math.floor(i/4);
-      const px=PX0+col*(PW+PG),py=118+row*(PH+PG);
+      const px=PX0+col*(PW+PG),py=138+row*(PH+PG);
       if(cx>=px&&cx<=px+PW&&cy>=py&&cy<=py+PH) toggleLoop(i);
     });
   }
@@ -1895,10 +1902,19 @@ function drawEliminatedStore(y){
 function drawEliminatedSampler(y){
   initAudio();
   const PW=88,PH=66,PG=5,PX0=(GW-(4*(PW+PG)-PG))/2;
-  X.fillStyle='#334155';X.font='8px "Courier New"';X.textAlign='center';X.fillText('TAP PADS TO JAM DURING COOLDOWN',GW/2,y+10);
-  LOOP_SLOTS.forEach((sl,i)=>{
+  // Beat toggle
+  const b2unlocked=pchains()>=8;
+  const tw=(GW-20)/2-4;
+  [['BEAT 1',0,'#8b5cf6'],['BEAT 2',1,'#e879f9']].forEach(([label,b,col],i)=>{
+    const tx=10+i*(tw+4),active=activeBeat===b,unlk=b===0||b2unlocked;
+    rr(X,tx,y,tw,22,5,active?col+'33':'rgba(0,0,0,.4)',active?col:unlk?'#333':'#1a1a1a',active?2:1);
+    X.fillStyle=active?'#fff':unlk?col:'#333';X.font='bold 10px "Courier New"';X.textAlign='center';
+    X.fillText(unlk?label:'🔒 '+label,tx+tw/2,y+15);
+  });
+  X.fillStyle='#334155';X.font='8px "Courier New"';X.textAlign='center';X.fillText('TAP PADS TO JAM DURING COOLDOWN',GW/2,y+32);
+  activeSlots().forEach((sl,i)=>{
     const col=i%4,row=Math.floor(i/4);
-    const px=PX0+col*(PW+PG),py=y+16+row*(PH+PG);
+    const px=PX0+col*(PW+PG),py=y+38+row*(PH+PG);
     const color=SP_PAD_COLORS[i],locked=!sl.unlocked,on=sl.playing;
     rr(X,px,py,PW,PH,7,'#0d0d0d');
     rr(X,px+2,py+2,PW-4,PH-4,6,locked?'#161616':on?color+'cc':color+'22');
