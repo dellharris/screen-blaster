@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -40,6 +40,70 @@ canvas { display:block; touch-action:none; }
   style="display:none;position:fixed;z-index:52;background:rgba(0,0,0,.85);color:#aaa;border:1px solid #555;border-radius:7px;padding:9px 18px;font-family:'Courier New',monospace;font-size:13px;font-weight:bold;cursor:pointer;letter-spacing:1px;">
   ◀ BACK
 </button>
+
+<!-- Mobile-first login overlay — uses real HTML inputs so keyboard works on iPhone -->
+<div id="ne-overlay" style="display:none;position:fixed;inset:0;z-index:200;background:#04021a;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+  <div style="min-height:100%;display:flex;align-items:flex-start;justify-content:center;">
+  <div style="width:100%;max-width:480px;padding:36px 22px 56px;box-sizing:border-box;font-family:'Courier New',monospace;">
+
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-size:42px;font-weight:900;font-family:'Arial Black',Arial,sans-serif;color:#fef08a;text-shadow:0 0 30px #f59e0b;letter-spacing:3px;">HARRIS</div>
+      <div style="font-size:42px;font-weight:900;font-family:'Arial Black',Arial,sans-serif;color:#c4b5fd;text-shadow:0 0 22px #8b5cf6;letter-spacing:3px;">ADVENTURES</div>
+      <div style="color:#374151;font-size:12px;letter-spacing:3px;margin-top:8px;">SCREEN BLASTER</div>
+    </div>
+
+    <div style="background:rgba(139,92,246,.12);border:1.5px solid rgba(139,92,246,.35);border-radius:14px;padding:18px 20px;margin-bottom:28px;text-align:center;">
+      <div style="color:#a78bfa;font-size:16px;font-weight:bold;margin-bottom:8px;">Pick a name to get started!</div>
+      <div style="color:#64748b;font-size:13px;line-height:1.7;">Save your hi-score · unlock beat loops · hit the leaderboard<br>No password — your device remembers you automatically</div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:28px;" id="ne-tabs">
+      <button id="ne-tab-new" onclick="neSetMode('create')" style="flex:1;padding:16px 10px;border-radius:10px;border:2.5px solid #8b5cf6;background:rgba(139,92,246,.22);color:#e9d5ff;font-family:'Courier New',monospace;font-size:14px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;">NEW PLAYER</button>
+      <button id="ne-tab-ret" onclick="neSetMode('recover')" style="flex:1;padding:16px 10px;border-radius:10px;border:1.5px solid #1e293b;background:rgba(0,0,0,.35);color:#475569;font-family:'Courier New',monospace;font-size:14px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;">RETURNING</button>
+    </div>
+
+    <div id="ne-form">
+      <div style="color:#64748b;font-size:11px;letter-spacing:1.5px;margin-bottom:8px;">PLAYER NAME</div>
+      <input id="ne-name" type="text" maxlength="16" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+        placeholder="Enter your name..."
+        style="display:block;width:100%;box-sizing:border-box;padding:18px;border-radius:12px;border:2px solid #1e3a5f;background:rgba(0,0,20,.8);color:#fff;font-family:'Courier New',monospace;font-size:20px;font-weight:bold;margin-bottom:22px;-webkit-appearance:none;outline:none;"
+        oninput="nameInputStr=this.value.slice(0,16)"
+        onfocus="this.style.borderColor='#8b5cf6';this.style.boxShadow='0 0 0 3px rgba(139,92,246,.2)'"
+        onblur="this.style.borderColor='#1e3a5f';this.style.boxShadow='none'">
+
+      <div id="ne-code-section" style="display:none;">
+        <div style="color:#64748b;font-size:11px;letter-spacing:1.5px;margin-bottom:8px;">RECOVERY CODE</div>
+        <input id="ne-code-inp" type="text" maxlength="6" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+          placeholder="XXXXXX"
+          style="display:block;width:100%;box-sizing:border-box;padding:18px;border-radius:12px;border:2px solid #1e3a5f;background:rgba(0,0,20,.8);color:#fbbf24;font-family:'Courier New',monospace;font-size:26px;font-weight:bold;letter-spacing:8px;margin-bottom:22px;-webkit-appearance:none;outline:none;"
+          oninput="codeInputStr=this.value.toUpperCase().slice(0,6);this.value=codeInputStr"
+          onfocus="this.style.borderColor='#f59e0b';this.style.boxShadow='0 0 0 3px rgba(245,158,11,.2)'"
+          onblur="this.style.borderColor='#1e3a5f';this.style.boxShadow='none'">
+      </div>
+
+      <div id="ne-error-msg" style="display:none;color:#f87171;font-size:13px;text-align:center;padding:12px 16px;background:rgba(239,68,68,.1);border-radius:10px;border:1.5px solid rgba(239,68,68,.3);margin-bottom:18px;line-height:1.5;"></div>
+
+      <button id="ne-btn" onclick="neSubmit()"
+        style="display:block;width:100%;padding:22px;border-radius:14px;border:2.5px solid #8b5cf6;background:rgba(139,92,246,.2);color:#e9d5ff;font-family:'Courier New',monospace;font-size:18px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;letter-spacing:1px;">
+        ▶&nbsp;&nbsp;CREATE ACCOUNT</button>
+    </div>
+
+    <div id="ne-reveal" style="display:none;text-align:center;padding-top:8px;">
+      <div style="color:#4ade80;font-size:18px;font-weight:bold;margin-bottom:18px;" id="ne-welcome-msg"></div>
+      <div style="background:rgba(0,0,0,.55);border:2px solid #22c55e;border-radius:14px;padding:28px 20px;margin-bottom:24px;">
+        <div style="color:#475569;font-size:11px;letter-spacing:2px;margin-bottom:16px;">YOUR RECOVERY CODE — SAVE THIS!</div>
+        <div style="color:#fef08a;font-size:44px;font-weight:bold;letter-spacing:10px;text-shadow:0 0 24px #f59e0b;margin-bottom:20px;" id="ne-code-val"></div>
+        <div style="color:#475569;font-size:12px;line-height:1.8;">Use your name + this code to log back in on any device.<br>You will <span style="color:#f87171;font-weight:bold;">NOT</span> see this code again — screenshot it now.</div>
+      </div>
+      <button onclick="neGotIt()"
+        style="display:block;width:100%;padding:22px;border-radius:14px;border:2.5px solid #22c55e;background:rgba(34,197,94,.18);color:#4ade80;font-family:'Courier New',monospace;font-size:18px;font-weight:bold;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+        ✓&nbsp;&nbsp;GOT IT — LET'S PLAY!</button>
+    </div>
+
+  </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════
 // CANVAS & UTILS
@@ -304,6 +368,63 @@ function handleLeaderboardTap(cx,cy){
 
 // ── Sync triggers ──────────────────────────────────────────
 function triggerSync(){ if(playerId&&db) setTimeout(syncScore,200); }
+
+// ── HTML name entry overlay (mobile-first — real inputs = keyboard works) ──
+let _neMode='create';
+function showNEOverlay(){
+  const ov=document.getElementById('ne-overlay');
+  ov.style.display='block';
+  ov.scrollTop=0;
+  document.getElementById('ne-form').style.display='block';
+  document.getElementById('ne-reveal').style.display='none';
+  document.getElementById('ne-tabs').style.display='flex';
+  document.getElementById('ne-error-msg').style.display='none';
+  neSetMode('create');
+}
+function hideNEOverlay(){ document.getElementById('ne-overlay').style.display='none'; }
+function neSetMode(mode){
+  _neMode=mode; const isNew=mode==='create';
+  const nb=document.getElementById('ne-tab-new'),rb=document.getElementById('ne-tab-ret');
+  nb.style.border=isNew?'2.5px solid #8b5cf6':'1.5px solid #1e293b';
+  nb.style.background=isNew?'rgba(139,92,246,.22)':'rgba(0,0,0,.35)';
+  nb.style.color=isNew?'#e9d5ff':'#475569';
+  rb.style.border=!isNew?'2.5px solid #f59e0b':'1.5px solid #1e293b';
+  rb.style.background=!isNew?'rgba(245,158,11,.2)':'rgba(0,0,0,.35)';
+  rb.style.color=!isNew?'#fef08a':'#475569';
+  document.getElementById('ne-code-section').style.display=isNew?'none':'block';
+  const btn=document.getElementById('ne-btn');
+  btn.textContent=isNew?'▶  CREATE ACCOUNT':'▶  LOG IN';
+  btn.style.borderColor=isNew?'#8b5cf6':'#f59e0b';
+  btn.style.color=isNew?'#e9d5ff':'#fef08a';
+  document.getElementById('ne-error-msg').style.display='none';
+}
+async function neSubmit(){
+  const btn=document.getElementById('ne-btn'),errEl=document.getElementById('ne-error-msg');
+  errEl.style.display='none';
+  const origText=btn.textContent;
+  btn.disabled=true; btn.style.opacity='.5'; btn.textContent='PLEASE WAIT...';
+  if(_neMode==='create'){
+    if(!nameInputStr||nameInputStr.trim().length<2){
+      errEl.textContent='Name needs at least 2 characters'; errEl.style.display='block';
+      btn.disabled=false; btn.style.opacity='1'; btn.textContent=origText; return;
+    }
+    await createAccount(nameInputStr);
+    document.getElementById('ne-welcome-msg').textContent='WELCOME, '+playerName+'!';
+    document.getElementById('ne-code-val').textContent=newCodeStr;
+    document.getElementById('ne-form').style.display='none';
+    document.getElementById('ne-tabs').style.display='none';
+    document.getElementById('ne-reveal').style.display='block';
+  } else {
+    if(!nameInputStr||nameInputStr.trim().length<2||!codeInputStr||codeInputStr.length<6){
+      errEl.textContent='Enter your name and the full 6-character recovery code'; errEl.style.display='block';
+      btn.disabled=false; btn.style.opacity='1'; btn.textContent=origText; return;
+    }
+    const ok=await loginWithCode(nameInputStr,codeInputStr);
+    if(ok){ hideNEOverlay(); STATE='intro'; }
+    else{ errEl.textContent='Not found — double-check your name and code exactly'; errEl.style.display='block'; btn.disabled=false; btn.style.opacity='1'; btn.textContent=origText; }
+  }
+}
+function neGotIt(){ hideNEOverlay(); STATE='intro'; }
 
 // ═══════════════════════════════════════════════════════════
 // OLYMPIC BUCKS
@@ -1408,15 +1529,15 @@ function tickNotifs(){
 // BOSS & BLACK HOLE
 // ═══════════════════════════════════════════════════════════
 function spawnBoss(){
-  const mhp=150+currentLevel*80;
-  boss={x:GW+100,y:PLAY_H/2,hp:mhp,mhp,phase:0,shootTimer:0,cracked:false,alive:true,shards:[]};
+  const mhp=300+currentLevel*120;
+  boss={x:GW+160,y:PLAY_H/2,hp:mhp,mhp,phase:0,shootTimer:0,dnodeTimer:0,cracked:false,alive:true,shards:[]};
   bossWarning=0;
 }
 
 function drawBoss(){
   if(!boss||!boss.alive) return;
   const bx=boss.x,by=boss.y+Math.sin(boss.phase*.6)*18;
-  X.save();X.translate(bx,by);
+  X.save();X.translate(bx,by);X.scale(1.35,1.35);
   // Phone case (outer shell)
   const caseCol=`hsl(${frame*1.2%360},70%,35%)`;
   X.shadowColor=caseCol;X.shadowBlur=28;
@@ -1458,44 +1579,43 @@ function drawBoss(){
     X.shadowColor='#ef4444';X.shadowBlur=22;
     rr(X,-42,-78,84,156,10,'','#ef444466',2);X.shadowBlur=0;
   }
-  // HP bar
-  const bw=120,bh=10,bx2=-60,by2=-105;
-  rr(X,bx2,by2,bw,bh,3,'rgba(0,0,0,.7)');
-  const pct=Math.max(0,boss.hp/boss.mhp);
-  const barCol=pct>.5?'#22c55e':pct>.25?'#fbbf24':'#ef4444';
-  rr(X,bx2,by2,bw*pct,bh,3,barCol);
-  X.strokeStyle='#555';X.lineWidth=1;rr(X,bx2,by2,bw,bh,3,'','#555',1);
-  X.fillStyle='#fff';X.font='bold 8px "Courier New"';X.textAlign='center';
-  X.fillText(`CASE-BUSTER  LVL ${currentLevel}`,0,by2-4);
   X.restore();
 }
 
 function updateBoss(){
   if(!boss||!boss.alive) return;
   boss.phase+=0.035;
-  boss.x=Math.max(boss.x-1.2,GW*.58);
-  boss.y=PLAY_H/2+Math.sin(boss.phase*.7)*75;
+  boss.x=Math.max(boss.x-2,Math.round(GW*.48));
+  boss.y=PLAY_H/2+Math.sin(boss.phase*.7)*70;
+  // Spawn downgrade nodes from boss
+  boss.dnodeTimer++;
+  const dnRate=Math.max(90,240-Math.floor(gameT/15)*10);
+  if(boss.dnodeTimer>=dnRate){ boss.dnodeTimer=0; spawnDowngradeNode(); if(boss.hp<boss.mhp*.6) spawnDowngradeNode(); }
   // Shoot mini-screens at players
   boss.shootTimer++;
-  const rate=Math.max(30,60-Math.floor(gameT/30)*3);
+  const rate=Math.max(18,48-Math.floor(gameT/25)*3);
   if(boss.shootTimer>=rate){
     boss.shootTimer=0;
     const alive=players.filter(p=>p.alive);
     if(alive.length){
       const tgt=alive[Math.floor(Math.random()*alive.length)];
       const dx=tgt.x-boss.x,dy=tgt.y-boss.y,d=Math.sqrt(dx*dx+dy*dy)||1;
-      const spd=4+currentLevel*.5;
-      eBullets.push({x:boss.x-50,y:boss.y,vx:dx/d*spd,vy:dy/d*spd,isBoss:true});
-      if(boss.hp<boss.mhp*.5){// spread shot at half HP
-        eBullets.push({x:boss.x-50,y:boss.y,vx:dx/d*spd+1.5,vy:dy/d*spd-1.5,isBoss:true});
-        eBullets.push({x:boss.x-50,y:boss.y,vx:dx/d*spd-1.5,vy:dy/d*spd+1.5,isBoss:true});
+      const spd=4.5+currentLevel*.5;
+      eBullets.push({x:boss.x-70,y:boss.y,vx:dx/d*spd,vy:dy/d*spd,isBoss:true});
+      if(boss.hp<boss.mhp*.75){
+        eBullets.push({x:boss.x-70,y:boss.y-18,vx:dx/d*spd+1,vy:dy/d*spd-1.5,isBoss:true});
+        eBullets.push({x:boss.x-70,y:boss.y+18,vx:dx/d*spd-1,vy:dy/d*spd+1.5,isBoss:true});
+      }
+      if(boss.hp<boss.mhp*.4){
+        eBullets.push({x:boss.x-70,y:boss.y,vx:dx/d*spd+2.5,vy:dy/d*spd-2,isBoss:true});
+        eBullets.push({x:boss.x-70,y:boss.y,vx:dx/d*spd-2.5,vy:dy/d*spd+2,isBoss:true});
       }
     }
   }
   boss.cracked=boss.hp<boss.mhp*.6;
-  // Hit detection
+  // Hit detection sized for 1.35x boss
   bullets.forEach(b=>{
-    if(b.x>boss.x-55&&b.x<boss.x+55&&b.y>boss.y-92&&b.y<boss.y+92){
+    if(b.x>boss.x-70&&b.x<boss.x+70&&b.y>boss.y-118&&b.y<boss.y+118){
       boss.hp-=b.dmg;b.x=GW+9999;
       burst(b.x,b.y,b.col,6);
       if(boss.hp<=0) defeatBoss();
@@ -1622,15 +1742,14 @@ function update(){
   updateDowngradeNodes();
   // Boss spawn: around 220s, player must have blvl>2 and not already spawned
   if(!bossSpawned&&gameT>220){
-    const maxBlvl=Math.max(...players.map(p=>p.blvl));
-    if(maxBlvl>2){bossSpawned=true;bossWarning=180;setTimeout(spawnBoss,3000);}
+    bossSpawned=true;bossWarning=240;setTimeout(spawnBoss,4000);
   }
   if(bossWarning>0) bossWarning--;
   if(boss&&boss.alive) updateBoss();
   if(blackHole) checkBlackHole();
   players.forEach((p,pi)=>{
     if(!p.alive||p.inv>0) return;
-    eBullets.forEach(b=>{if(Math.abs(b.x-p.x)<26&&Math.abs(b.y-p.y)<30){b.x=-9999;hitPlayer(pi);}});
+    eBullets.forEach(b=>{const hr=b.isBoss?32:26,vr=b.isBoss?32:30;if(Math.abs(b.x-p.x)<hr&&Math.abs(b.y-p.y)<vr){b.x=-9999;hitPlayer(pi);}});
     enemies.forEach(e=>{if(Math.abs(e.x-p.x)<40&&Math.abs(e.y-p.y)<40){e.hp=-9999;hitPlayer(pi);}});
   });
   if(unlockFlash>0)unlockFlash--;
@@ -1652,6 +1771,17 @@ function drawHUD(){
   // Score + level (top left)
   X.textAlign='left';rr(X,8,8,155,36,4,'rgba(0,0,0,.5)');X.fillStyle='#a78bfa';X.font='bold 13px "Courier New"';X.fillText(`SCORE  ${score}`,14,26);
   X.fillStyle='#7c3aed';X.font='8px "Courier New"';X.fillText(`LVL ${currentLevel}`,14,40);
+  // Boss HP bar — full-width prominent bar when boss is alive
+  if(boss&&boss.alive){
+    const pct=Math.max(0,boss.hp/boss.mhp);
+    rr(X,8,46,GW-16,16,3,'rgba(0,0,0,.8)','#440000',1);
+    const barCol=pct>.5?'#ef4444':pct>.25?'#f97316':'#fbbf24';
+    if(pct>0) rr(X,8,46,(GW-16)*pct,16,3,barCol);
+    if(Math.floor(frame/8)%2){X.shadowColor='#ef4444';X.shadowBlur=14;}
+    rr(X,8,46,GW-16,16,3,'','rgba(239,68,68,.55)',1.5);X.shadowBlur=0;
+    X.fillStyle='#fff';X.font='bold 10px "Courier New"';X.textAlign='center';
+    X.fillText(`⚠  CASE-BUSTER  LV${currentLevel}  ·  ${Math.ceil(boss.hp)} / ${boss.mhp} HP`,GW/2,57);
+  }
   if(gameMode==='2p'){
     // P1 lives + blaster (left)
     const p0=players[0],bl0=BLASTERS[p0?.blvl||0];
@@ -1680,7 +1810,7 @@ function drawHUD(){
   const dnClose=downgradeNodes.some(d=>d.x<GW*.6);
   if(dnClose&&Math.floor(frame/10)%2){X.shadowColor='#f87171';X.shadowBlur=16;X.fillStyle='#f87171';X.font='bold 12px "Courier New"';X.textAlign='center';X.fillText('⚠  DOWNGRADE NODE — DODGE IT!',GW/2,PLAY_H-62);X.shadowBlur=0;}
   // Boss incoming warning
-  if(bossWarning>0&&Math.floor(frame/8)%2){X.shadowColor='#f59e0b';X.shadowBlur=22;X.fillStyle='#fbbf24';X.font='bold 14px "Courier New"';X.textAlign='center';X.fillText('⚠  CASE-BUSTER INCOMING  ⚠',GW/2,PLAY_H/2-20);X.shadowBlur=0;}
+  if(bossWarning>0){if(Math.floor(frame/6)%2){X.fillStyle='rgba(239,68,68,.09)';X.fillRect(0,0,GW,PLAY_H);}X.shadowColor='#ef4444';X.shadowBlur=30;X.fillStyle='#fef08a';X.font='bold 22px Arial Black';X.textAlign='center';X.fillText('⚠  CASE-BUSTER INCOMING  ⚠',GW/2,PLAY_H/2-12);X.shadowBlur=0;X.fillStyle='#f87171';X.font='bold 11px "Courier New"';X.fillText('GIANT PHONE BOSS — BLAST THE SCREEN TO DESTROY IT!',GW/2,PLAY_H/2+14);}
   // Level indicator removed from top-right (now in score box)
   // Kill counter (next HP in N screens)
   const toHP=10-screensDestroyed%10;
@@ -1934,7 +2064,7 @@ function drawGame(){
   // Separator line
   X.fillStyle='#1a1a1a';X.fillRect(0,PLAY_H,GW,GH-PLAY_H);
   X.strokeStyle='#333';X.lineWidth=1;X.beginPath();X.moveTo(0,PLAY_H+4);X.lineTo(GW,PLAY_H+4);X.stroke();
-  eBullets.forEach(b=>{X.fillStyle='#ef4444';X.shadowColor='#ef4444';X.shadowBlur=8;X.beginPath();X.arc(b.x,b.y,4,0,Math.PI*2);X.fill();X.shadowBlur=0;});
+  eBullets.forEach(b=>{const r=b.isBoss?9:4,col=b.isBoss?'#ff3300':'#ef4444';X.fillStyle=col;X.shadowColor=col;X.shadowBlur=b.isBoss?22:8;X.beginPath();X.arc(b.x,b.y,r,0,Math.PI*2);X.fill();if(b.isBoss){X.fillStyle='rgba(255,200,50,.65)';X.beginPath();X.arc(b.x,b.y,r*.4,0,Math.PI*2);X.fill();}X.shadowBlur=0;});
   pups.forEach(drawPup);
   chains.forEach(drawChain);
   downgradeNodes.forEach(drawDowngradeNode);
@@ -2173,8 +2303,8 @@ function handleLevelCompleteTap(cx,cy){
 
 function loop(){
   X.textAlign='center';
-  if(STATE==='boot'){ initDB(); if(!playerId){nameInputStr='';codeInputStr='';nameMode='create';nameField='name';STATE='nameEntry';setTimeout(focusNameInput,200);}else if(lockedUntil()>Date.now())STATE='lockout';else STATE='intro'; }
-  else if(STATE==='nameEntry')     drawNameEntry();
+  if(STATE==='boot'){ initDB(); if(!playerId){nameInputStr='';codeInputStr='';STATE='nameEntry';showNEOverlay();}else if(lockedUntil()>Date.now())STATE='lockout';else STATE='intro'; }
+  else if(STATE==='nameEntry') { X.fillStyle='#04021a';X.fillRect(0,0,GW,GH);drawBG(.15);frame++; }
   else if(STATE==='leaderboard')   drawLeaderboard();
   else if(STATE==='intro')         drawIntro();
   else if(STATE==='start')         drawTitle();
