@@ -63,6 +63,9 @@ introVid.addEventListener('canplay',()=>{introVidOK=true;},{once:true});
 introVid.addEventListener('error',()=>{introVidOK=false;});
 let introT=0;
 
+// Episode 1 video
+const ep1Vid=Object.assign(document.createElement('video'),{src:'episode1/harris_adventures_ep1.m4v',playsInline:true,preload:'none'});
+
 // ═══════════════════════════════════════════════════════════
 // NEBULA BACKGROUND
 // ═══════════════════════════════════════════════════════════
@@ -485,7 +488,7 @@ function playerInput(pidx){
   }
   return {up:K['arrowup']||gp.up,down:K['arrowdown']||gp.down,left:K['arrowleft']||gp.left,right:K['arrowright']||gp.right};
 }
-addEventListener('keydown',e=>{ K[e.key.toLowerCase()]=1; handleCodeKey(e.key); initAudio(); });
+addEventListener('keydown',e=>{ K[e.key.toLowerCase()]=1; handleCodeKey(e.key); initAudio(); if(e.key==='Escape'&&STATE==='episode'){ep1Vid.pause();ep1Vid.currentTime=0;STATE='start';} });
 addEventListener('keyup',e=>{ K[e.key.toLowerCase()]=0; });
 C.addEventListener('touchstart',e=>{ e.preventDefault(); initAudio(); const rect=C.getBoundingClientRect(),s=GW/rect.width; const cx=(e.touches[0].clientX-rect.left)*s,cy=(e.touches[0].clientY-rect.top)*s; touchY=e.touches[0].clientY; touchX=e.touches[0].clientX; touchActive=true; handleTap(cx,cy); });
 C.addEventListener('touchmove',e=>{ e.preventDefault(); touchY=e.touches[0].clientY; touchX=e.touches[0].clientX; });
@@ -495,12 +498,16 @@ C.addEventListener('click',e=>{ initAudio(); const rect=C.getBoundingClientRect(
 function handleTap(cx,cy){
   if(STATE==='intro')       { STATE='start'; return; }
   if(STATE==='start'){
-    // 1P button: cx 5–215 relative to GW/2 → GW/2-215 to GW/2-25, y 388–440
     if(cy>=388&&cy<=440){
       if(cx>=GW/2-215&&cx<=GW/2-25){ gameMode='1p'; STATE='charSelect'; return; }
       if(cx>=GW/2+25&&cx<=GW/2+215){ gameMode='2p'; STATE='p2CharSelect'; return; }
     }
+    if(cy>=464&&cy<=502&&cx>=GW/2-140&&cx<=GW/2+140){ initAudio(); ep1Vid.play(); STATE='episode'; return; }
     return;
+  }
+  if(STATE==='episode'){
+    if(cx>=8&&cx<=108&&cy>=8&&cy<=40){ ep1Vid.pause();ep1Vid.currentTime=0;STATE='start'; return; }
+    ep1Vid.paused?ep1Vid.play():ep1Vid.pause(); return;
   }
   if(STATE==='p2CharSelect') { STATE='spSettings'; return; }
   if(STATE==='charSelect')   { if(cx<GW/2&&cy>100&&cy<GH-40){selectedChar=0;STATE='spSettings';} if(cx>=GW/2&&cy>100&&cy<GH-40){selectedChar=1;STATE='spSettings';} return; }
@@ -892,6 +899,10 @@ function drawTitle(){
   rr(X,GW/2+25,388,190,52,10,blink?'rgba(56,189,248,.25)':'rgba(56,189,248,.12)','#38bdf8',2);
   X.fillStyle='#38bdf8';X.font='bold 18px "Courier New"';X.fillText('2 PLAYERS',GW/2+120,420);
   X.fillStyle='rgba(255,255,255,.3)';X.font='9px "Courier New"';X.fillText('P1: WASD / CTRL 1   ·   P2: ARROWS / CTRL 2',GW/2,454);
+  // Watch Episode 1 button
+  const epBlink=Math.floor(Date.now()/700)%2;
+  rr(X,GW/2-140,464,280,38,9,epBlink?'rgba(251,191,36,.18)':'rgba(251,191,36,.08)','#fbbf24',1.5);
+  X.fillStyle='#fbbf24';X.font='bold 14px "Courier New"';X.textAlign='center';X.fillText('▶  WATCH EPISODE 1',GW/2,488);
 }
 
 function drawP2CharSelect(){
@@ -1140,6 +1151,28 @@ function drawEliminatedBase(){
 // ═══════════════════════════════════════════════════════════
 // MAIN LOOP
 // ═══════════════════════════════════════════════════════════
+function drawEpisode(){
+  X.fillStyle='#000';X.fillRect(0,0,GW,GH);
+  if(ep1Vid.readyState>=2){
+    const ar=ep1Vid.videoWidth/ep1Vid.videoHeight||16/9;
+    let dw=GW,dh=GW/ar;
+    if(dh>GH){dh=GH;dw=dh*ar;}
+    X.drawImage(ep1Vid,(GW-dw)/2,(GH-dh)/2,dw,dh);
+  } else {
+    X.fillStyle='#222';X.font='bold 14px "Courier New"';X.textAlign='center';X.fillText('Loading episode...',GW/2,GH/2);
+  }
+  // Pause overlay
+  if(ep1Vid.paused&&!ep1Vid.ended){
+    X.fillStyle='rgba(0,0,0,.45)';X.fillRect(0,0,GW,GH);
+    X.fillStyle='rgba(255,255,255,.85)';X.font='bold 60px Arial';X.textAlign='center';X.fillText('▶',GW/2,GH/2+20);
+  }
+  // Back button
+  rr(X,8,8,100,30,5,'rgba(0,0,0,.75)','#555',1);
+  X.fillStyle='#aaa';X.font='bold 11px "Courier New"';X.textAlign='center';X.fillText('◀ BACK',58,28);
+  // End of video → back to menu
+  if(ep1Vid.ended){ep1Vid.currentTime=0;STATE='start';}
+}
+
 function loop(){
   X.textAlign='center';
   if(STATE==='boot')        STATE=lockedUntil()>Date.now()?'lockout':'intro';
@@ -1149,6 +1182,7 @@ function loop(){
   else if(STATE==='p2CharSelect')  drawP2CharSelect();
   else if(STATE==='spSettings')    drawSpSettings();
   else if(STATE==='playing')    {update();drawGame();}
+  else if(STATE==='episode')        drawEpisode();
   else if(STATE==='eliminated'||STATE==='lockout') drawEliminatedBase();
   requestAnimationFrame(loop);
 }
