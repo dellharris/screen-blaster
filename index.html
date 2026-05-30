@@ -160,7 +160,7 @@ function generateAllLoops(){
   LOOP_SLOTS[5].buf=genMelody(sr,bpx,bars);
   LOOP_SLOTS[6].buf=genVocal(sr,bpx,bars);
   LOOP_SLOTS[7].buf=genDrop(sr,bpx,bars);
-  generateBeat2Loops();
+  // Beat 2 generated lazily on first switch — not here
 }
 
 function emptyBuf(sr,bpx,bars){ return AC.createBuffer(2,Math.ceil(sr*bars*4*bpx),sr); }
@@ -349,16 +349,18 @@ function genSynth2(sr,bpx,bars){
 }
 
 function genDrop2(sr,bpx,bars){
-  const k=genKick2(sr,bpx,bars),s=genSnare2(sr,bpx,bars),h=genHihat2(sr,bpx,bars),b=genBass2(sr,bpx,bars);
+  // Reuse already-generated buffers instead of regenerating
   const buf=emptyBuf(sr,bpx,bars);
-  [[k,.85],[s,.75],[h,.5],[b,.95]].forEach(([src,gain])=>{
+  [[LOOP_SLOTS2[0].buf,.85],[LOOP_SLOTS2[1].buf,.75],[LOOP_SLOTS2[2].buf,.5],[LOOP_SLOTS2[4].buf,.95]].forEach(([src,gain])=>{
+    if(!src) return;
     const L=src.getChannelData(0),R=src.getChannelData(1);
     const dL=buf.getChannelData(0),dR=buf.getChannelData(1);
-    for(let i=0;i<L.length;i++){dL[i]+=L[i]*gain;dR[i]+=R[i]*gain;}
+    for(let i=0;i<L.length&&i<dL.length;i++){dL[i]+=L[i]*gain;dR[i]+=R[i]*gain;}
   });
   return buf;
 }
 
+let beat2Ready=false;
 function generateBeat2Loops(){
   const sr=AC.sampleRate,bpx=60/BPM,bars=4;
   LOOP_SLOTS2[0].buf=genKick2(sr,bpx,bars);
@@ -369,14 +371,17 @@ function generateBeat2Loops(){
   LOOP_SLOTS2[5].buf=genChords2(sr,bpx,bars);
   LOOP_SLOTS2[6].buf=genMelody2(sr,bpx,bars);
   LOOP_SLOTS2[7].buf=genDrop2(sr,bpx,bars);
+  beat2Ready=true;
 }
 
 function switchBeat(b){
   if(b===activeBeat) return;
-  // Stop all slots in both beats
+  // Stop all playing loops in both beats
   LOOP_SLOTS.forEach((_,i)=>{ try{if(LOOP_SLOTS[i].playing){LOOP_SLOTS[i].node.stop();}}catch(e){} LOOP_SLOTS[i].playing=false; LOOP_SLOTS[i].node=null; });
   LOOP_SLOTS2.forEach((_,i)=>{ try{if(LOOP_SLOTS2[i].playing){LOOP_SLOTS2[i].node.stop();}}catch(e){} LOOP_SLOTS2[i].playing=false; LOOP_SLOTS2[i].node=null; });
   activeBeat=b;
+  // Generate Beat 2 on first use
+  if(b===1&&!beat2Ready) generateBeat2Loops();
 }
 
 function startLoop(i){
@@ -649,7 +654,7 @@ function handleKPTap(cx,cy){
   // Sampler: toggle loops
   if(elimTab==='sampler'){
     const PW=88,PH=66,PG=5,PX0=(GW-(4*(PW+PG)-PG))/2;
-    LOOP_SLOTS.forEach((sl,i)=>{
+    activeSlots().forEach((sl,i)=>{
       if(!sl.unlocked) return;
       const col=i%4,row=Math.floor(i/4);
       const px=PX0+col*(PW+PG),py=118+row*(PH+PG);
@@ -1365,7 +1370,7 @@ function drawEliminatedSampler(y){
     else{X.fillStyle=on?'#fff':color;X.font='bold 9px "Courier New"';X.fillText(sl.name,px+PW/2,py+PH/2-4);rr(X,px+PW/2-18,py+PH/2+4,36,14,3,on?color+'44':'#1a1a1a');X.fillStyle=on?color:'#444';X.font='bold 8px "Courier New"';X.fillText(on?'● ON':'○ OFF',px+PW/2,py+PH/2+14);}
     if(on&&Math.floor(frame/10)%2===0){X.shadowColor=color;X.shadowBlur=6;rr(X,px+1,py+1,PW-2,PH-2,7,'',color,1.5);X.shadowBlur=0;}
   });
-  const active=LOOP_SLOTS.filter(s=>s.playing).map(s=>s.name);
+  const active=activeSlots().filter(s=>s.playing).map(s=>s.name);
   X.fillStyle=active.length?'#39ff14':'#3a3a4a';X.font='9px "Courier New"';X.textAlign='center';
   X.fillText(active.length?`♪  ${active.join(' · ')}`:'No loops active — tap a pad to start',GW/2,y+16+2*(PH+PG)+PH+12);
 }
