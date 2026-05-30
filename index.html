@@ -420,6 +420,28 @@ function sfxChain(){ if(!AC)return; [0,7,12,19].forEach((s,i)=>setTimeout(()=>{ 
 function sfxUnlock(){ if(!AC)return; [0,4,7,12,16,19].forEach((s,i)=>setTimeout(()=>{ const o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(masterGain);o.type='square';o.frequency.value=st(s+7);g.gain.setValueAtTime(.06,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.15);o.start();o.stop(AC.currentTime+.15); },i*55)); }
 function sfxHP(){ if(!AC)return; [0,7,12,16,24].forEach((s,i)=>setTimeout(()=>{ const o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(masterGain);o.type='sine';o.frequency.value=st(s+5);g.gain.setValueAtTime(.12,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.22);o.start();o.stop(AC.currentTime+.22); },i*55)); }
 
+function sfxGlassShatter(){
+  if(!AC)return;
+  const dur=1.1,buf=AC.createBuffer(1,Math.ceil(AC.sampleRate*dur),AC.sampleRate),d=buf.getChannelData(0);
+  const freqs=[1800,2600,3900,5400,7200,9800];
+  for(let i=0;i<d.length;i++){
+    const t=i/AC.sampleRate,env=Math.exp(-t*7);
+    let v=(Math.random()*2-1)*.35;
+    freqs.forEach(f=>v+=Math.sin(2*Math.PI*f*t)*Math.exp(-t*14)*.08);
+    d[i]=v*env;
+  }
+  const src=AC.createBufferSource(),g=AC.createGain(),flt=AC.createBiquadFilter();
+  src.buffer=buf;src.connect(flt);flt.connect(g);g.connect(masterGain);
+  flt.type='highpass';flt.frequency.value=1200;
+  g.gain.setValueAtTime(.55,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+dur);
+  src.start();
+}
+
+function sfxLevelUp(){
+  if(!AC)return;
+  [0,4,7,12,16,19,24].forEach((s,i)=>setTimeout(()=>{const o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(masterGain);o.type='sine';o.frequency.value=st(s+12);g.gain.setValueAtTime(.09,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.3);o.start();o.stop(AC.currentTime+.3);},i*80));
+}
+
 // ═══════════════════════════════════════════════════════════
 // HP ITEMS
 // ═══════════════════════════════════════════════════════════
@@ -721,6 +743,7 @@ function handleTap(cx,cy){
   if(STATE==='charSelect')   { if(cx<GW/2&&cy>100&&cy<GH-40){selectedChar=0;STATE='spSettings';} if(cx>=GW/2&&cy>100&&cy<GH-40){selectedChar=1;STATE='spSettings';} return; }
   if(STATE==='spSettings')   { handleSettingsTap(cx,cy); return; }
   if(STATE==='playing')      { if(cy>=SP_Y) handleSP404Tap(cx,cy); return; }
+  if(STATE==='levelComplete')         { handleLevelCompleteTap(cx,cy); return; }
   if(STATE==='eliminated'||STATE==='lockout') { handleKPTap(cx,cy); return; }
 }
 
@@ -867,6 +890,8 @@ const BLASTERS=[
 
 let STATE='boot',frame=0,score=0,gameT=0,vel=1,penaltyMins=0;
 let eTimer=0,gameMode='1p',elimTab='store';
+let currentLevel=parseInt(localStorage.getItem('sb_level')||'1');
+let bossSpawned=false,boss=null,blackHole=null,bossWarning=0,levelCompleteTab='next';
 let players=[],bullets,eBullets,enemies,pups,parts;
 let settingsLoopsOn=Array(8).fill(false);
 
@@ -877,7 +902,7 @@ function makePlayer(charIdx,x,y){
 
 function launch(){
   initAudio(); startBGM();
-  score=0;gameT=0;vel=1;frame=0;eTimer=0;chainTimer=0;chains=[];chainsCollected=0;unlockFlash=0;hpItems=[];screensDestroyed=0;hpWarning=0;notifs=[];downgradeNodes=[];dnTimer=0;activeBeat=0;
+  score=0;gameT=0;vel=1;frame=0;eTimer=0;chainTimer=0;chains=[];chainsCollected=0;unlockFlash=0;hpItems=[];screensDestroyed=0;hpWarning=0;notifs=[];downgradeNodes=[];dnTimer=0;activeBeat=0;bossSpawned=false;boss=null;blackHole=null;bossWarning=0;
   LOOP_SLOTS.forEach((_,i)=>{stopLoop(i);LOOP_SLOTS[i].unlocked=i<pchains();LOOP_SLOTS[i].playing=false;});
   LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].playing&&LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].unlocked=i<pchains2();LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;});
   // Fire up pre-programmed loops from settings
@@ -932,7 +957,166 @@ function tickNotifs(){
 // ═══════════════════════════════════════════════════════════
 // UPDATE
 // ═══════════════════════════════════════════════════════════
-function spawnEnemy(){const type=Math.floor(Math.random()*3),y=50+Math.random()*(PLAY_H-110),hp=Math.max(1,Math.floor(vel*1.1));enemies.push({x:GW+70,y,type,hp,mhp:hp,spd:Math.min(1.6+vel*.5,12)+Math.random()*2,sT:80+Math.random()*80,phase:Math.random()*Math.PI*2});}
+// ═══════════════════════════════════════════════════════════
+// BOSS & BLACK HOLE
+// ═══════════════════════════════════════════════════════════
+function spawnBoss(){
+  const mhp=150+currentLevel*80;
+  boss={x:GW+100,y:PLAY_H/2,hp:mhp,mhp,phase:0,shootTimer:0,cracked:false,alive:true,shards:[]};
+  bossWarning=0;
+}
+
+function drawBoss(){
+  if(!boss||!boss.alive) return;
+  const bx=boss.x,by=boss.y+Math.sin(boss.phase*.6)*18;
+  X.save();X.translate(bx,by);
+  // Phone case (outer shell)
+  const caseCol=`hsl(${frame*1.2%360},70%,35%)`;
+  X.shadowColor=caseCol;X.shadowBlur=28;
+  rr(X,-52,-88,104,176,18,caseCol,'#fff',1.5);
+  X.shadowBlur=0;
+  // Screen body
+  rr(X,-42,-78,84,156,10,'#0a0a0a','#333',1);
+  // Screen content (animated UI)
+  const glassCol=boss.cracked?'rgba(180,220,255,.12)':'rgba(160,210,255,.22)';
+  rr(X,-38,-74,76,148,8,glassCol);
+  // Animated app icons
+  for(let row=0;row<4;row++){for(let col=0;col<3;col++){
+    const ix=-26+col*26,iy=-62+row*36;
+    const hue=(row*3+col)*40+frame*2;
+    rr(X,ix-9,iy-9,18,18,4,`hsla(${hue},80%,55%,.9)`);
+  }}
+  // Camera bump
+  X.fillStyle='#1a1a1a';X.beginPath();X.arc(22,-68,9,0,Math.PI*2);X.fill();
+  X.fillStyle='#2a2a3a';X.beginPath();X.arc(22,-68,6,0,Math.PI*2);X.fill();
+  X.fillStyle='rgba(255,255,255,.3)';X.beginPath();X.arc(20,-70,2,0,Math.PI*2);X.fill();
+  // Screen protector sheen
+  rr(X,-38,-74,76,148,8,'','rgba(255,255,255,.08)',1);
+  X.strokeStyle='rgba(255,255,255,.15)';X.lineWidth=1;
+  X.beginPath();X.moveTo(-30,-72);X.lineTo(-30,70);X.stroke();
+  // Cracks when hp < 60%
+  if(boss.hp<boss.mhp*.6){
+    X.strokeStyle='rgba(255,255,255,.7)';X.lineWidth=1.5;
+    X.beginPath();X.moveTo(-10,-40);X.lineTo(20,10);X.lineTo(0,50);X.stroke();
+    X.beginPath();X.moveTo(20,10);X.lineTo(36,30);X.stroke();
+    X.beginPath();X.moveTo(-5,-20);X.lineTo(-28,20);X.stroke();
+  }
+  // More cracks when hp < 30%
+  if(boss.hp<boss.mhp*.3){
+    X.strokeStyle='rgba(255,200,200,.85)';X.lineWidth=1;
+    X.beginPath();X.moveTo(-30,-60);X.lineTo(-5,0);X.lineTo(30,40);X.stroke();
+    X.beginPath();X.moveTo(10,-70);X.lineTo(-15,-30);X.lineTo(0,20);X.stroke();
+    X.beginPath();X.moveTo(-38,30);X.lineTo(-10,60);X.stroke();
+    // Red glow
+    X.shadowColor='#ef4444';X.shadowBlur=22;
+    rr(X,-42,-78,84,156,10,'','#ef444466',2);X.shadowBlur=0;
+  }
+  // HP bar
+  const bw=120,bh=10,bx2=-60,by2=-105;
+  rr(X,bx2,by2,bw,bh,3,'rgba(0,0,0,.7)');
+  const pct=Math.max(0,boss.hp/boss.mhp);
+  const barCol=pct>.5?'#22c55e':pct>.25?'#fbbf24':'#ef4444';
+  rr(X,bx2,by2,bw*pct,bh,3,barCol);
+  X.strokeStyle='#555';X.lineWidth=1;rr(X,bx2,by2,bw,bh,3,'','#555',1);
+  X.fillStyle='#fff';X.font='bold 8px "Courier New"';X.textAlign='center';
+  X.fillText(`CASE-BUSTER  LVL ${currentLevel}`,0,by2-4);
+  X.restore();
+}
+
+function updateBoss(){
+  if(!boss||!boss.alive) return;
+  boss.phase+=0.035;
+  boss.x=Math.max(boss.x-1.2,GW*.58);
+  boss.y=PLAY_H/2+Math.sin(boss.phase*.7)*75;
+  // Shoot mini-screens at players
+  boss.shootTimer++;
+  const rate=Math.max(30,60-Math.floor(gameT/30)*3);
+  if(boss.shootTimer>=rate){
+    boss.shootTimer=0;
+    const alive=players.filter(p=>p.alive);
+    if(alive.length){
+      const tgt=alive[Math.floor(Math.random()*alive.length)];
+      const dx=tgt.x-boss.x,dy=tgt.y-boss.y,d=Math.sqrt(dx*dx+dy*dy)||1;
+      const spd=4+currentLevel*.5;
+      eBullets.push({x:boss.x-50,y:boss.y,vx:dx/d*spd,vy:dy/d*spd,isBoss:true});
+      if(boss.hp<boss.mhp*.5){// spread shot at half HP
+        eBullets.push({x:boss.x-50,y:boss.y,vx:dx/d*spd+1.5,vy:dy/d*spd-1.5,isBoss:true});
+        eBullets.push({x:boss.x-50,y:boss.y,vx:dx/d*spd-1.5,vy:dy/d*spd+1.5,isBoss:true});
+      }
+    }
+  }
+  boss.cracked=boss.hp<boss.mhp*.6;
+  // Hit detection
+  bullets.forEach(b=>{
+    if(b.x>boss.x-55&&b.x<boss.x+55&&b.y>boss.y-92&&b.y<boss.y+92){
+      boss.hp-=b.dmg;b.x=GW+9999;
+      burst(b.x,b.y,b.col,6);
+      if(boss.hp<=0) defeatBoss();
+    }
+  });
+}
+
+function defeatBoss(){
+  boss.alive=false;
+  sfxGlassShatter();
+  // Shard burst
+  for(let i=0;i<40;i++){
+    const a=Math.random()*Math.PI*2,s=Math.random()*8+2;
+    parts.push({x:boss.x,y:boss.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:70,max:70,col:i%3===0?'#fff':i%3===1?'#60a5fa':'#a78bfa',r:Math.random()*5+1});
+  }
+  addNotif('💥 SCREEN SHATTERED!',boss.x,boss.y-50,'#fff');
+  // Spawn black hole
+  setTimeout(()=>{blackHole={x:boss.x,y:boss.y,r:4,pulse:0,active:true};},600);
+}
+
+function drawBlackHole(){
+  if(!blackHole) return;
+  blackHole.r=Math.min(blackHole.r+.55,55);
+  blackHole.pulse+=.07;
+  const bx=blackHole.x,by=blackHole.y,r=blackHole.r;
+  // Outer glow ring
+  X.shadowColor='#7c3aed';X.shadowBlur=35;
+  const grd=X.createRadialGradient(bx,by,r*.3,bx,by,r*2.2);
+  grd.addColorStop(0,'rgba(0,0,0,0)');
+  grd.addColorStop(.5,'rgba(88,28,220,.35)');
+  grd.addColorStop(1,'rgba(0,0,0,0)');
+  X.fillStyle=grd;X.beginPath();X.arc(bx,by,r*2.2,0,Math.PI*2);X.fill();
+  // Black core
+  X.fillStyle='#000';X.beginPath();X.arc(bx,by,r,0,Math.PI*2);X.fill();
+  // Purple/blue event horizon ring
+  X.strokeStyle=`hsla(${270+Math.sin(blackHole.pulse)*20},80%,65%,.9)`;
+  X.lineWidth=3+Math.sin(blackHole.pulse)*1.5;
+  X.beginPath();X.arc(bx,by,r,0,Math.PI*2);X.stroke();
+  X.shadowBlur=0;
+  // Animated text
+  if(Math.floor(frame/18)%2){
+    X.fillStyle='#e9d5ff';X.font='bold 10px "Courier New"';X.textAlign='center';
+    X.fillText('FLY IN →',bx,by-r-12);
+  }
+}
+
+function checkBlackHole(){
+  if(!blackHole||blackHole.r<20) return;
+  players.forEach(p=>{
+    if(!p.alive) return;
+    if(Math.hypot(p.x-blackHole.x,p.y-blackHole.y)<blackHole.r+10){
+      currentLevel++;
+      localStorage.setItem('sb_level',currentLevel);
+      stopBGM();
+      LOOP_SLOTS.forEach((_,i)=>stopLoop(i));
+      LOOP_SLOTS2.forEach((_,i)=>{try{if(LOOP_SLOTS2[i].playing&&LOOP_SLOTS2[i].node)LOOP_SLOTS2[i].node.stop();}catch(e){}LOOP_SLOTS2[i].playing=false;LOOP_SLOTS2[i].node=null;});
+      sfxLevelUp();
+      levelCompleteTab='next';
+      STATE='levelComplete';
+    }
+  });
+}
+
+function spawnEnemy(){
+  const type=Math.floor(Math.random()*3),y=50+Math.random()*(PLAY_H-110);
+  const hp=Math.max(1,Math.floor(vel*1.1)*currentLevel);
+  enemies.push({x:GW+70,y,type,hp,mhp:hp,spd:Math.min(1.6+vel*.5,12)+Math.random()*2,sT:80+Math.random()*80,phase:Math.random()*Math.PI*2});
+}
 
 function update(){
   frame++;gameT=frame/60;vel=1+gameT/25;
@@ -987,6 +1171,14 @@ function update(){
   updateChains();
   updateHPItems();
   updateDowngradeNodes();
+  // Boss spawn: around 220s, player must have blvl>2 and not already spawned
+  if(!bossSpawned&&gameT>220){
+    const maxBlvl=Math.max(...players.map(p=>p.blvl));
+    if(maxBlvl>2){bossSpawned=true;bossWarning=180;setTimeout(spawnBoss,3000);}
+  }
+  if(bossWarning>0) bossWarning--;
+  if(boss&&boss.alive) updateBoss();
+  if(blackHole) checkBlackHole();
   players.forEach((p,pi)=>{
     if(!p.alive||p.inv>0) return;
     eBullets.forEach(b=>{if(Math.abs(b.x-p.x)<26&&Math.abs(b.y-p.y)<30){b.x=-9999;hitPlayer(pi);}});
@@ -1037,6 +1229,10 @@ function drawHUD(){
   // Downgrade node proximity warning
   const dnClose=downgradeNodes.some(d=>d.x<GW*.6);
   if(dnClose&&Math.floor(frame/10)%2){X.shadowColor='#f87171';X.shadowBlur=16;X.fillStyle='#f87171';X.font='bold 12px "Courier New"';X.textAlign='center';X.fillText('⚠  DOWNGRADE NODE — DODGE IT!',GW/2,PLAY_H-62);X.shadowBlur=0;}
+  // Boss incoming warning
+  if(bossWarning>0&&Math.floor(frame/8)%2){X.shadowColor='#f59e0b';X.shadowBlur=22;X.fillStyle='#fbbf24';X.font='bold 14px "Courier New"';X.textAlign='center';X.fillText('⚠  CASE-BUSTER INCOMING  ⚠',GW/2,PLAY_H/2-20);X.shadowBlur=0;}
+  // Level indicator
+  rr(X,GW-80,8,72,20,3,'rgba(0,0,0,.5)');X.fillStyle='#a78bfa';X.font='bold 10px "Courier New"';X.textAlign='center';X.fillText(`LEVEL ${currentLevel}`,GW-44,23);
   // Kill counter (next HP in N screens)
   const toHP=10-screensDestroyed%10;
   rr(X,GW-118,PLAY_H-22,110,14,3,'rgba(0,0,0,.5)');X.fillStyle=toHP<=3?'#ef4444':'#94a3b8';X.font='8px "Courier New"';X.textAlign='right';X.fillText(`♥ HP in ${toHP} blast${toHP===1?'':'s'}`,GW-8,PLAY_H-22+9);
@@ -1284,6 +1480,8 @@ function drawGame(){
   chains.forEach(drawChain);
   downgradeNodes.forEach(drawDowngradeNode);
   hpItems.forEach(drawHPItem);
+  if(boss&&boss.alive) drawBoss();
+  if(blackHole) drawBlackHole();
   enemies.forEach(drawEnemy);
   bullets.forEach(b=>{
     X.shadowColor=b.col; X.shadowBlur=b.sz>8?32:16;
@@ -1424,6 +1622,67 @@ function drawEpisode(){
   if(ep1Vid.ended){ep1Vid.currentTime=0;startBGM();STATE='start';}
 }
 
+function drawLevelComplete(){
+  X.fillStyle='#02000a';X.fillRect(0,0,GW,GH);drawBG(0);frame++;
+  X.fillStyle='rgba(124,58,237,.08)';X.fillRect(0,0,GW,GH);
+  // Header
+  X.textAlign='center';
+  X.shadowColor='#fbbf24';X.shadowBlur=30;X.fillStyle='#fef08a';X.font='bold 34px Arial Black';X.fillText(`LEVEL ${currentLevel-1} COMPLETE`,GW/2,36);X.shadowBlur=0;
+  X.shadowColor='#7c3aed';X.shadowBlur=14;X.fillStyle='#c4b5fd';X.font='bold 16px "Courier New"';X.fillText(`▸  ENTERING LEVEL ${currentLevel}`,GW/2,60);X.shadowBlur=0;
+  X.fillStyle='#475569';X.font='9px "Courier New"';X.fillText(`FINAL SCORE: ${score}  ·  CHAINS: ${chainsCollected}  ·  OB: ${obucks()}`,GW/2,76);
+  // Tabs
+  const tw=(GW-20)/3-4;
+  [['next','NEXT LEVEL','#22c55e'],['store','STORE','#f59e0b'],['sampler','SAMPLER','#8b5cf6']].forEach(([id,label,col],i)=>{
+    const tx=10+i*(tw+4),active=levelCompleteTab===id;
+    rr(X,tx,82,tw,28,5,active?col+'33':'rgba(0,0,0,.4)',active?col:'#2a2a2a',active?2:1);
+    X.fillStyle=active?'#fff':'#666';X.font='bold 11px "Courier New"';X.textAlign='center';X.fillText(label,tx+tw/2,101);
+  });
+  // Tab content
+  if(levelCompleteTab==='next'){
+    rr(X,GW/2-200,118,400,200,14,'rgba(34,197,94,.1)','#22c55e',2);
+    X.fillStyle='#4ade80';X.font='bold 14px "Courier New"';X.textAlign='center';
+    X.fillText(`LEVEL ${currentLevel} — ${currentLevel>1?'ENEMIES ARE TOUGHER':'WELCOME BACK'}`,GW/2,148);
+    X.fillStyle='#64748b';X.font='10px "Courier New"';
+    X.fillText(`Screens now take ${currentLevel}x more hits to destroy`,GW/2,170);
+    X.fillText(`Boss health scales · downgrade nodes faster · keep climbing`,GW/2,188);
+    X.fillStyle='#39ff14';X.font='8px "Courier New"';X.fillText(`Current chains: Beat 1 — ${pchains()}/8   Beat 2 — ${pchains2()}/8`,GW/2,208);
+    // Big launch button
+    const btnBlink=Math.floor(Date.now()/500)%2;
+    rr(X,GW/2-140,232,280,60,12,btnBlink?'rgba(34,197,94,.3)':'rgba(34,197,94,.15)','#22c55e',2.5);
+    if(btnBlink){X.shadowColor='#22c55e';X.shadowBlur=18;}
+    X.fillStyle='#22c55e';X.font='bold 20px "Courier New"';X.textAlign='center';X.fillText(`▶  PLAY LEVEL ${currentLevel}`,GW/2,270);X.shadowBlur=0;
+  } else if(levelCompleteTab==='store'){
+    drawEliminatedStore(118);
+  } else {
+    drawEliminatedSampler(118);
+  }
+  tickNotifs();
+}
+
+function handleLevelCompleteTap(cx,cy){
+  initAudio();
+  const tw=(GW-20)/3-4;
+  [['next',0],['store',1],['sampler',2]].forEach(([id,i])=>{
+    const tx=10+i*(tw+4);
+    if(cx>=tx&&cx<=tx+tw&&cy>=82&&cy<=110) levelCompleteTab=id;
+  });
+  if(levelCompleteTab==='next'&&cx>=GW/2-140&&cx<=GW/2+140&&cy>=232&&cy<=292) launch();
+  if(levelCompleteTab==='store'){
+    if(cx>=GW/2+6&&cx<=GW-10&&cy>=218&&cy<=298){
+      if(buyChain()){sfxPowerup();burst(GW*3/4,258,'#f59e0b',22);addNotif('🔗 CHAIN UNLOCKED!',GW/2,210,'#f59e0b');}
+    }
+  }
+  if(levelCompleteTab==='sampler'){
+    const PW=88,PH=66,PG=5,PX0=(GW-(4*(PW+PG)-PG))/2;
+    activeSlots().forEach((sl,i)=>{
+      if(!sl.unlocked) return;
+      const col=i%4,row=Math.floor(i/4);
+      const px=PX0+col*(PW+PG),py=136+row*(PH+PG);
+      if(cx>=px&&cx<=px+PW&&cy>=py&&cy<=py+PH) toggleLoop(i);
+    });
+  }
+}
+
 function loop(){
   X.textAlign='center';
   if(STATE==='boot')        STATE=lockedUntil()>Date.now()?'lockout':'intro';
@@ -1434,6 +1693,7 @@ function loop(){
   else if(STATE==='spSettings')    drawSpSettings();
   else if(STATE==='playing')    {update();drawGame();}
   else if(STATE==='episode')        drawEpisode();
+  else if(STATE==='levelComplete')    drawLevelComplete();
   else if(STATE==='eliminated'||STATE==='lockout') drawEliminatedBase();
   requestAnimationFrame(loop);
 }
