@@ -1829,9 +1829,33 @@ function tickNotifs(){
 // BOSS & BLACK HOLE
 // ═══════════════════════════════════════════════════════════
 function spawnBoss(){
-  const mhp=4500+currentLevel*700;
+  const maxBlvl = Math.max(...players.map(p=>p.blvl));
+  const maxLives = Math.max(...players.map(p=>p.lives));
+
+  // Scale boss HP down based on blaster tier — reward players who made it with upgrades
+  // blvl 0-3  (BASIC→QUAD):  full HP — you earned this fight
+  // blvl 4-6  (RAPID→LASER): 70% HP  — fast fire does real damage
+  // blvl 7-9  (STORM→NOVA):  50% HP  — automatic shredder advantage
+  // blvl 10-11 (ULTRA→OMEGA): 35% HP  — full auto, glass is fragile
+  let hpMult = 1.0;
+  if(maxBlvl >= 10)     hpMult = 0.35;
+  else if(maxBlvl >= 7) hpMult = 0.50;
+  else if(maxBlvl >= 4) hpMult = 0.70;
+
+  // Bonus: 4+ lives going in = player is clean, give a further 15% break
+  if(maxLives >= 4) hpMult *= 0.85;
+
+  const mhp = Math.round((4500 + currentLevel*700) * hpMult);
   boss={x:GW+160,y:PLAY_H/2,hp:mhp,mhp,phase:0,shootTimer:0,dnodeTimer:0,cracked:false,alive:true,shards:[]};
   bossWarning=0;
+
+  // Let the player know the screen is breakable
+  if(hpMult < 0.75){
+    const msg = maxBlvl >= 10 ? 'OMEGA ADVANTAGE — GLASS IS FRAGILE'
+              : maxBlvl >= 7  ? 'AUTOMATIC ADVANTAGE — BOSS WEAKENED'
+                               : 'RAPID FIRE — BOSS AT 70%';
+    setTimeout(()=>addNotif(msg, GW/2, PLAY_H/2-40, '#39ff14'), 4200);
+  }
 }
 
 function drawBoss(){
