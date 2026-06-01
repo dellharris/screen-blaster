@@ -604,7 +604,7 @@ function drawBG(vel){
 let AC=null, masterGain=null, loopGain=null, bgmRunning=false, bgmStep=0;
 // ── Sequencer + FX state ──────────────────────────────────────
 let seqPatterns = JSON.parse(localStorage.getItem('sb_seq')||'null') || Array.from({length:8},()=>Array(16).fill(false));
-let seqRecording=false, seqEnabled=true;
+let seqRecording=false, seqEnabled=true, seqPlaying=false;
 let _echoDelay=null,_echoFb=null,_echoOn=false;
 let _stutterIv=null,_stutterOn=false;
 let _pitchActive=false;
@@ -928,7 +928,15 @@ function bgmTick(){
   if(seqEnabled){
     const seqStep=bgmStep%16;
     activeSlots().forEach((sl,i)=>{
-      if(seqPatterns[i]&&seqPatterns[i][seqStep]&&sl.unlocked) startLoop(i);
+      const hasPattern=seqPatterns[i]&&seqPatterns[i].some(s=>s);
+      if(seqPlaying&&hasPattern){
+        // SEQ PLAY mode: fire on programmed steps, mute on unprogrammed
+        if(seqPatterns[i][seqStep]){ if(!sl.playing&&sl.unlocked) startLoop(i); }
+        else { if(sl.playing) stopLoop(i); }
+      } else if(!seqPlaying){
+        // Auto-trigger only: start on programmed step, never stop
+        if(seqPatterns[i]&&seqPatterns[i][seqStep]&&sl.unlocked) startLoop(i);
+      }
     });
   }
   setTimeout(bgmTick,STEP_MS);
@@ -1007,6 +1015,17 @@ function seqToggleRecord(){
   seqRecording=!seqRecording;
   if(seqRecording) addNotif('● REC ON — TAP PADS',GW/2,PLAY_H-50,'#ef4444');
   else { addNotif('■ REC SAVED',GW/2,PLAY_H-50,'#22c55e'); localStorage.setItem('sb_seq',JSON.stringify(seqPatterns)); }
+}
+function seqTogglePlay(){
+  seqPlaying=!seqPlaying;
+  if(seqPlaying){
+    initAudio(); startBGM();
+    addNotif('▶ SEQ PLAY',GW/2,PLAY_H-50,'#39ff14');
+  } else {
+    // Stop all sequencer-controlled pads on stop
+    activeSlots().forEach((sl,i)=>{ if(sl.playing&&seqPatterns[i]&&seqPatterns[i].some(s=>s)) stopLoop(i); });
+    addNotif('■ SEQ STOP',GW/2,PLAY_H-50,'#94a3b8');
+  }
 }
 function seqClear(){
   seqPatterns=Array.from({length:8},()=>Array(16).fill(false));
@@ -1230,13 +1249,14 @@ function drawSP404Strip(){
     }
   });
 
-  // ── FX + REC buttons ─────────────────────────────────────
-  const FX_X=530, FX_Y=SP_Y+4, FX_W=60, FX_H=46, FX_G=6;
+  // ── FX + REC + PLAY buttons ──────────────────────────────
+  const FX_X=530, FX_Y=SP_Y+4, FX_W=46, FX_H=46, FX_G=4;
   const fxDefs=[
-    {lbl:'STUT',  col:'#f97316', on:_stutterOn,  x:FX_X,       y:FX_Y},
-    {lbl:'ECHO',  col:'#38bdf8', on:_echoOn,     x:FX_X+FX_W+FX_G, y:FX_Y},
-    {lbl:'PITCH↓',col:'#a78bfa', on:_pitchActive,x:FX_X+(FX_W+FX_G)*2,y:FX_Y},
-    {lbl:'● REC', col:'#ef4444', on:seqRecording, x:FX_X+(FX_W+FX_G)*3,y:FX_Y},
+    {lbl:'STUT',  col:'#f97316', on:_stutterOn,   x:FX_X,               y:FX_Y},
+    {lbl:'ECHO',  col:'#38bdf8', on:_echoOn,      x:FX_X+(FX_W+FX_G),   y:FX_Y},
+    {lbl:'PITCH↓',col:'#a78bfa', on:_pitchActive, x:FX_X+(FX_W+FX_G)*2, y:FX_Y},
+    {lbl:seqPlaying?'■ STOP':'▶ PLAY', col:'#39ff14', on:seqPlaying, x:FX_X+(FX_W+FX_G)*3, y:FX_Y},
+    {lbl:'● REC', col:'#ef4444', on:seqRecording, x:FX_X+(FX_W+FX_G)*4, y:FX_Y},
   ];
   fxDefs.forEach(f=>{
     const pulse=f.on?(.6+Math.sin(Date.now()/180)*.3):0;
@@ -1353,13 +1373,14 @@ function handleKPTap(cx,cy){
     });
     // FX + REC + CLR button taps
     const FY2=100+16+2*(PH+PG)+PH+22;
-    const FW2=62,FH2=38,FG2=6;
-    const FX02=(GW-(4*(FW2+FG2)-FG2))/2;
+    const FW2=50,FH2=38,FG2=4;
+    const FX02=(GW-(5*(FW2+FG2)-FG2))/2;
     if(cy>=FY2&&cy<=FY2+FH2){
-      if(cx>=FX02            &&cx<=FX02+FW2)           { _stutterOn=!_stutterOn; fxStutter(_stutterOn); return; }
-      if(cx>=FX02+FW2+FG2    &&cx<=FX02+(FW2+FG2)*2)   { _echoOn=!_echoOn; fxEcho(_echoOn); return; }
-      if(cx>=FX02+(FW2+FG2)*2&&cx<=FX02+(FW2+FG2)*3)   { fxPitchDown(); return; }
-      if(cx>=FX02+(FW2+FG2)*3&&cx<=FX02+(FW2+FG2)*4)   { seqToggleRecord(); return; }
+      if(cx>=FX02              &&cx<=FX02+FW2)            { _stutterOn=!_stutterOn; fxStutter(_stutterOn); return; }
+      if(cx>=FX02+(FW2+FG2)    &&cx<=FX02+(FW2+FG2)*2)    { _echoOn=!_echoOn; fxEcho(_echoOn); return; }
+      if(cx>=FX02+(FW2+FG2)*2  &&cx<=FX02+(FW2+FG2)*3)    { fxPitchDown(); return; }
+      if(cx>=FX02+(FW2+FG2)*3  &&cx<=FX02+(FW2+FG2)*4)    { seqTogglePlay(); return; }
+      if(cx>=FX02+(FW2+FG2)*4  &&cx<=FX02+(FW2+FG2)*5)    { seqToggleRecord(); return; }
     }
     const SPY2=FY2+FH2+6;
     if(cy>=SPY2&&cy<=SPY2+18&&cx>=FX02&&cx<=FX02+80){ seqClear(); return; }
@@ -1448,12 +1469,13 @@ function handleSP404Tap(cx,cy){
     if(cx>=66&&cx<=114&&pchains()>=8) switchBeat(1);
   }
   // FX buttons
-  const FX_X=530,FX_Y=SP_Y+4,FX_W=60,FX_H=46,FX_G=6;
+  const FX_X=530,FX_Y=SP_Y+4,FX_W=46,FX_H=46,FX_G=4;
   if(cy>=FX_Y&&cy<=FX_Y+FX_H){
-    if(cx>=FX_X         &&cx<=FX_X+FX_W)         { _stutterOn=!_stutterOn; fxStutter(_stutterOn); return; }
-    if(cx>=FX_X+66      &&cx<=FX_X+126)           { _echoOn=!_echoOn; fxEcho(_echoOn); return; }
-    if(cx>=FX_X+132     &&cx<=FX_X+192)           { fxPitchDown(); return; }
-    if(cx>=FX_X+198     &&cx<=FX_X+258)           { seqToggleRecord(); return; }
+    if(cx>=FX_X                &&cx<=FX_X+FX_W)           { _stutterOn=!_stutterOn; fxStutter(_stutterOn); return; }
+    if(cx>=FX_X+(FX_W+FX_G)   &&cx<=FX_X+(FX_W+FX_G)*2)  { _echoOn=!_echoOn; fxEcho(_echoOn); return; }
+    if(cx>=FX_X+(FX_W+FX_G)*2 &&cx<=FX_X+(FX_W+FX_G)*3)  { fxPitchDown(); return; }
+    if(cx>=FX_X+(FX_W+FX_G)*3 &&cx<=FX_X+(FX_W+FX_G)*4)  { seqTogglePlay(); return; }
+    if(cx>=FX_X+(FX_W+FX_G)*4 &&cx<=FX_X+(FX_W+FX_G)*5)  { seqToggleRecord(); return; }
   }
   // CLR SEQ button
   const SEQ_Y=FX_Y+FX_H+FX_G;
@@ -2547,12 +2569,13 @@ function drawEliminatedSampler(y){
 
   // ── FX + REC buttons ───────────────────────────────────────
   const FY=y+16+2*(PH+PG)+PH+22;
-  const FW=62,FH=38,FG=6;
-  const FX0=(GW-(4*(FW+FG)-FG))/2;
+  const FW=50,FH=38,FG=4;
+  const FX0=(GW-(5*(FW+FG)-FG))/2;
   const fxDefs=[
     {lbl:'STUT',  col:'#f97316',on:_stutterOn},
     {lbl:'ECHO',  col:'#38bdf8',on:_echoOn},
     {lbl:'PITCH↓',col:'#a78bfa',on:_pitchActive},
+    {lbl:seqPlaying?'■ STOP':'▶ PLAY',col:'#39ff14',on:seqPlaying},
     {lbl:'● REC', col:'#ef4444',on:seqRecording},
   ];
   fxDefs.forEach((f,i)=>{
