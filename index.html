@@ -1384,7 +1384,16 @@ function playerInput(pidx){
   }
   return {up:K['arrowup']||gp.up,down:K['arrowdown']||gp.down,left:K['arrowleft']||gp.left,right:K['arrowright']||gp.right};
 }
-addEventListener('keydown',e=>{ K[e.key.toLowerCase()]=1; handleCodeKey(e.key); initAudio(); if(e.key==='Escape'&&STATE==='episode') exitEpisode(); });
+addEventListener('keydown',e=>{
+  K[e.key.toLowerCase()]=1; handleCodeKey(e.key); initAudio();
+  if(e.key==='Escape'&&STATE==='episode') exitEpisode();
+  // Number pad 1-8 → toggle SP-404 pads for live performance
+  const n=parseInt(e.key);
+  if(n>=1&&n<=8&&(STATE==='playing'||STATE==='eliminated'||STATE==='levelComplete')){
+    const idx=n-1;
+    if(activeSlots()[idx]&&activeSlots()[idx].unlocked) toggleLoop(idx);
+  }
+});
 addEventListener('keyup',e=>{ K[e.key.toLowerCase()]=0; });
 C.addEventListener('touchstart',e=>{ e.preventDefault(); initAudio(); const rect=C.getBoundingClientRect(),s=GW/rect.width; const cx=(e.touches[0].clientX-rect.left)*s,cy=(e.touches[0].clientY-rect.top)*s; touchY=e.touches[0].clientY; touchX=e.touches[0].clientX; touchActive=true; handleTap(cx,cy); });
 C.addEventListener('touchmove',e=>{ e.preventDefault(); touchY=e.touches[0].clientY; touchX=e.touches[0].clientX; });
