@@ -912,10 +912,16 @@ function bgmTick(){
   if(arpOn){
     const mel=activeBeat===1?MEL2:MEL, bas=activeBeat===1?BAS2:BAS;
     const melType=activeBeat===1?'sine':'square';
+    const sl=activeSlots();
+    // Suppress arp drum/bass components when loop pads already contain them
+    // slot 0=KICK, 2=HIHAT, 3=BASS, 7=DROP(has all drums+bass)
+    const kickLoop = sl[0].playing || sl[7].playing;
+    const hatLoop  = sl[2].playing || sl[7].playing;
+    const bassLoop = sl[3].playing || sl[7].playing;
     if(mel[s]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain); o.type=melType;o.frequency.value=st(mel[s]);g.gain.setValueAtTime(.035,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+STEP_MS*.38/1000);o.start();o.stop(AC.currentTime+STEP_MS*.38/1000); }
-    if(s%2===0&&bas[s/2|0]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain);o.type='sawtooth';o.frequency.value=st(bas[s/2|0]);g.gain.setValueAtTime(.05,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+STEP_MS*.85/1000);o.start();o.stop(AC.currentTime+STEP_MS*.85/1000); }
-    if(HAT[s]){ const buf=AC.createBuffer(1,Math.ceil(AC.sampleRate*.04),AC.sampleRate),d=buf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; const src=AC.createBufferSource(),g=AC.createGain(); src.buffer=buf;src.connect(g);g.connect(masterGain);g.gain.setValueAtTime(.02,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.04);src.start(); }
-    if(KCK[s]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain);o.type='sine';o.frequency.setValueAtTime(100,AC.currentTime);o.frequency.exponentialRampToValueAtTime(40,AC.currentTime+.1);g.gain.setValueAtTime(.12,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.12);o.start();o.stop(AC.currentTime+.12); }
+    if(!bassLoop&&s%2===0&&bas[s/2|0]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain);o.type='sawtooth';o.frequency.value=st(bas[s/2|0]);g.gain.setValueAtTime(.05,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+STEP_MS*.85/1000);o.start();o.stop(AC.currentTime+STEP_MS*.85/1000); }
+    if(!hatLoop&&HAT[s]){ const buf=AC.createBuffer(1,Math.ceil(AC.sampleRate*.04),AC.sampleRate),d=buf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; const src=AC.createBufferSource(),g=AC.createGain(); src.buffer=buf;src.connect(g);g.connect(masterGain);g.gain.setValueAtTime(.02,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.04);src.start(); }
+    if(!kickLoop&&KCK[s]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain);o.type='sine';o.frequency.setValueAtTime(100,AC.currentTime);o.frequency.exponentialRampToValueAtTime(40,AC.currentTime+.1);g.gain.setValueAtTime(.12,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.12);o.start();o.stop(AC.currentTime+.12); }
   }
   bgmStep++;
   // Fire sequencer — trigger pads on their recorded steps
