@@ -1346,10 +1346,24 @@ function handleKPTap(cx,cy){
       if(!sl.unlocked) return;
       const col=i%4,row=Math.floor(i/4);
       const px=PX0+col*(PW+PG),py=138+row*(PH+PG);
-      if(cx>=px&&cx<=px+PW&&cy>=py&&cy<=py+PH) toggleLoop(i);
+      if(cx>=px&&cx<=px+PW&&cy>=py&&cy<=py+PH){
+        if(seqRecording) seqRecordPad(i);
+        else toggleLoop(i);
+      }
     });
+    // FX + REC + CLR button taps
+    const FY2=100+16+2*(PH+PG)+PH+22;
+    const FW2=62,FH2=38,FG2=6;
+    const FX02=(GW-(4*(FW2+FG2)-FG2))/2;
+    if(cy>=FY2&&cy<=FY2+FH2){
+      if(cx>=FX02            &&cx<=FX02+FW2)           { _stutterOn=!_stutterOn; fxStutter(_stutterOn); return; }
+      if(cx>=FX02+FW2+FG2    &&cx<=FX02+(FW2+FG2)*2)   { _echoOn=!_echoOn; fxEcho(_echoOn); return; }
+      if(cx>=FX02+(FW2+FG2)*2&&cx<=FX02+(FW2+FG2)*3)   { fxPitchDown(); return; }
+      if(cx>=FX02+(FW2+FG2)*3&&cx<=FX02+(FW2+FG2)*4)   { seqToggleRecord(); return; }
+    }
+    const SPY2=FY2+FH2+6;
+    if(cy>=SPY2&&cy<=SPY2+18&&cx>=FX02&&cx<=FX02+80){ seqClear(); return; }
   }
-  // Unlock: passcode keypad
   if(elimTab==='unlock'){
     KP_LABELS.forEach((lbl,i)=>{const b=getKPadBounds(i);if(cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h){if(lbl==='←')codeBuffer=codeBuffer.slice(0,-1);else if(lbl==='✓'){if(codeBuffer===SECRET){unlock();codeBuffer='';STATE='start';}}else{codeBuffer+=lbl;if(codeBuffer.length>4)codeBuffer=codeBuffer.slice(-4);if(codeBuffer===SECRET){unlock();codeBuffer='';STATE='start';}}}});
   }
@@ -2515,6 +2529,56 @@ function drawEliminatedSampler(y){
   const active=activeSlots().filter(s=>s.playing).map(s=>s.name);
   X.fillStyle=active.length?'#39ff14':'#3a3a4a';X.font='9px "Courier New"';X.textAlign='center';
   X.fillText(active.length?`♪  ${active.join(' · ')}`:'No loops active — tap a pad to start',GW/2,y+16+2*(PH+PG)+PH+12);
+
+  // ── Seq step dots on each pad ──────────────────────────────
+  activeSlots().forEach((sl,i)=>{
+    if(sl.unlocked){
+      const col=i%4,row=Math.floor(i/4);
+      const px=PX0+col*(PW+PG),py=y+38+row*(PH+PG);
+      const dotW=Math.floor((PW-4)/16);
+      for(let st=0;st<16;st++){
+        const isCur=(bgmStep%16)===st;
+        const isSet=seqPatterns[i]&&seqPatterns[i][st];
+        X.fillStyle=isSet?(isCur?'#fff':SP_PAD_COLORS[i]+'cc'):(isCur?'rgba(255,255,255,.3)':'rgba(255,255,255,.05)');
+        X.fillRect(px+2+st*dotW,py+PH-5,dotW-1,3);
+      }
+    }
+  });
+
+  // ── FX + REC buttons ───────────────────────────────────────
+  const FY=y+16+2*(PH+PG)+PH+22;
+  const FW=62,FH=38,FG=6;
+  const FX0=(GW-(4*(FW+FG)-FG))/2;
+  const fxDefs=[
+    {lbl:'STUT',  col:'#f97316',on:_stutterOn},
+    {lbl:'ECHO',  col:'#38bdf8',on:_echoOn},
+    {lbl:'PITCH↓',col:'#a78bfa',on:_pitchActive},
+    {lbl:'● REC', col:'#ef4444',on:seqRecording},
+  ];
+  fxDefs.forEach((f,i)=>{
+    const fx=FX0+i*(FW+FG);
+    const pulse=f.on?(.6+Math.sin(Date.now()/180)*.3):0;
+    X.shadowColor=f.col; X.shadowBlur=f.on?14+pulse*8:0;
+    rr(X,fx,FY,FW,FH,7,f.on?f.col+'33':'#111',f.col,f.on?2:1);
+    X.shadowBlur=0;
+    X.fillStyle='rgba(255,255,255,.07)'; rr(X,fx+2,FY+2,FW-4,10,4,'rgba(255,255,255,.07)');
+    X.fillStyle=f.on?'#fff':f.col; X.font=`bold ${f.lbl==='PITCH↓'?'7':'8'}px "Courier New"`;
+    X.textAlign='center'; X.fillText(f.lbl,fx+FW/2,FY+FH/2+3);
+  });
+
+  // Step progress + CLR button
+  const SPY=FY+FH+6;
+  rr(X,FX0,SPY,80,18,4,'rgba(0,0,0,.4)','#334155',1);
+  X.fillStyle='#475569';X.font='bold 7px "Courier New"';X.textAlign='center';
+  X.fillText('CLR SEQ',FX0+40,SPY+12);
+  const BAR_X=FX0+88,BAR_W=GW-FX0-88-10;
+  const stepW=Math.floor(BAR_W/16);
+  for(let i=0;i<16;i++){
+    const isCur=(bgmStep%16)===i;
+    const anySet=seqPatterns.some(p=>p[i]);
+    X.fillStyle=isCur?'#fff':anySet?'rgba(96,165,250,.7)':'rgba(255,255,255,.08)';
+    X.fillRect(BAR_X+i*stepW,SPY,stepW-1,18);
+  }
 }
 
 function drawEliminatedBase(){
