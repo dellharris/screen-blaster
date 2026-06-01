@@ -602,6 +602,12 @@ function drawBG(vel){
 // AUDIO SYSTEM
 // ═══════════════════════════════════════════════════════════
 let AC=null, masterGain=null, loopGain=null, bgmRunning=false, bgmStep=0;
+// ── Sequencer + FX state ──────────────────────────────────────
+let seqPatterns = JSON.parse(localStorage.getItem('sb_seq')||'null') || Array.from({length:8},()=>Array(16).fill(false));
+let seqRecording=false, seqEnabled=true;
+let _echoDelay=null,_echoFb=null,_echoOn=false;
+let _stutterIv=null,_stutterOn=false;
+let _pitchActive=false;
 const BPM=150, STEP_MS=60/BPM/2*1000; // 8th note
 const A4=440; const st=n=>A4*Math.pow(2,n/12);
 const MEL=[12,0,10,0,7,0,10,12,15,0,17,0,15,12,10,0];
@@ -911,10 +917,100 @@ function bgmTick(){
     if(HAT[s]){ const buf=AC.createBuffer(1,Math.ceil(AC.sampleRate*.04),AC.sampleRate),d=buf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; const src=AC.createBufferSource(),g=AC.createGain(); src.buffer=buf;src.connect(g);g.connect(masterGain);g.gain.setValueAtTime(.02,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.04);src.start(); }
     if(KCK[s]){ const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain);o.type='sine';o.frequency.setValueAtTime(100,AC.currentTime);o.frequency.exponentialRampToValueAtTime(40,AC.currentTime+.1);g.gain.setValueAtTime(.12,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.12);o.start();o.stop(AC.currentTime+.12); }
   }
-  bgmStep++; setTimeout(bgmTick,STEP_MS);
+  bgmStep++;
+  // Fire sequencer — trigger pads on their recorded steps
+  if(seqEnabled){
+    const seqStep=bgmStep%16;
+    activeSlots().forEach((sl,i)=>{
+      if(seqPatterns[i]&&seqPatterns[i][seqStep]&&sl.unlocked) startLoop(i);
+    });
+  }
+  setTimeout(bgmTick,STEP_MS);
 }
 function startBGM(){ if(!bgmRunning){bgmRunning=true;bgmTick();} }
 function stopBGM(){ bgmRunning=false; }
+
+// ── FX: Stutter ───────────────────────────────────────────────
+function fxStutter(on){
+  if(!AC||!loopGain) return;
+  _stutterOn=on;
+  if(on){
+    let tog=true;
+    _stutterIv=setInterval(()=>{
+      tog=!tog;
+      loopGain.gain.setValueAtTime(tog?0.7:0,AC.currentTime);
+    },55);
+  } else {
+    if(_stutterIv){clearInterval(_stutterIv);_stutterIv=null;}
+    loopGain.gain.setValueAtTime(0.7,AC.currentTime);
+  }
+}
+
+// ── FX: Echo ─────────────────────────────────────────────────
+function fxEcho(on){
+  if(!AC||!loopGain) return;
+  _echoOn=on;
+  if(on&&!_echoDelay){
+    _echoDelay=AC.createDelay(1.0);
+    _echoFb=AC.createGain();
+    _echoDelay.delayTime.value=0.28;
+    _echoFb.gain.value=0.52;
+    loopGain.connect(_echoDelay);
+    _echoDelay.connect(_echoFb);
+    _echoFb.connect(_echoDelay);
+    _echoDelay.connect(masterGain);
+  } else if(!on&&_echoDelay){
+    _echoFb.gain.setValueAtTime(0.52,AC.currentTime);
+    _echoFb.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+2.5);
+    setTimeout(()=>{
+      try{loopGain.disconnect(_echoDelay);_echoDelay.disconnect();_echoFb.disconnect();}catch(e){}
+      _echoDelay=null;_echoFb=null;
+    },2600);
+  }
+}
+
+// ── FX: Pitch Down (record stop) ─────────────────────────────
+function fxPitchDown(){
+  if(!AC||_pitchActive) return;
+  _pitchActive=true;
+  const dur=1.8;
+  // Ramp down playback rate on all loops (pitch+speed drop)
+  activeSlots().forEach(sl=>{
+    if(sl.playing&&sl.node){
+      try{
+        sl.node.playbackRate.setValueAtTime(1,AC.currentTime);
+        sl.node.playbackRate.linearRampToValueAtTime(0.001,AC.currentTime+dur);
+      }catch(e){}
+    }
+  });
+  // Volume fade
+  loopGain.gain.setValueAtTime(0.7,AC.currentTime);
+  loopGain.gain.linearRampToValueAtTime(0,AC.currentTime+dur);
+  // Restart loops at normal speed after
+  setTimeout(()=>{
+    loopGain.gain.setValueAtTime(0.7,AC.currentTime);
+    activeSlots().forEach((sl,i)=>{
+      if(sl.playing){stopLoop(i);startLoop(i);}
+    });
+    _pitchActive=false;
+  },dur*1000+200);
+}
+
+// ── Sequencer ─────────────────────────────────────────────────
+function seqToggleRecord(){
+  seqRecording=!seqRecording;
+  if(seqRecording) addNotif('● REC ON — TAP PADS',GW/2,PLAY_H-50,'#ef4444');
+  else { addNotif('■ REC SAVED',GW/2,PLAY_H-50,'#22c55e'); localStorage.setItem('sb_seq',JSON.stringify(seqPatterns)); }
+}
+function seqClear(){
+  seqPatterns=Array.from({length:8},()=>Array(16).fill(false));
+  localStorage.setItem('sb_seq',JSON.stringify(seqPatterns));
+  addNotif('SEQ CLEARED',GW/2,PLAY_H-50,'#f59e0b');
+}
+function seqRecordPad(i){
+  const step=bgmStep%16;
+  seqPatterns[i][step]=!seqPatterns[i][step];
+}
 
 // ── SFX ────────────────────────────────────────────────────────
 function sfxBlast(lv){ if(!AC)return; const t=AC.currentTime,freqs=[[1200,700],[1400,900],[1700,800],[2100,1500],[350,110]],f=freqs[Math.min(lv,4)]; const o=AC.createOscillator(),g=AC.createGain(); o.connect(g);g.connect(masterGain);o.type=lv>=3?'sawtooth':'square';o.frequency.setValueAtTime(f[0],t);o.frequency.exponentialRampToValueAtTime(f[1],t+.09);g.gain.setValueAtTime(.09,t);g.gain.exponentialRampToValueAtTime(.001,t+.1);o.start(t);o.stop(t+.1); }
@@ -1115,7 +1211,53 @@ function drawSP404Strip(){
       X.strokeStyle=base; X.lineWidth=2; X.shadowColor=base; X.shadowBlur=6;
       rr(X,px+1,py+1,SP_PAD_W-2,SP_PAD_H-2,5,'',base,2); X.shadowBlur=0;
     }
+    // Seq dots — tiny step indicators on each pad
+    if(!locked){
+      const dotW=Math.floor((SP_PAD_W-4)/16);
+      for(let st=0;st<16;st++){
+        const dx=px+2+st*dotW, dy=py+SP_PAD_H-5;
+        const isCur=(bgmStep%16)===st;
+        const isSet=seqPatterns[i]&&seqPatterns[i][st];
+        X.fillStyle=isSet?(isCur?'#fff':base+'cc'):(isCur?'rgba(255,255,255,.35)':'rgba(255,255,255,.06)');
+        X.fillRect(dx,dy,dotW-1,3);
+      }
+    }
   });
+
+  // ── FX + REC buttons ─────────────────────────────────────
+  const FX_X=530, FX_Y=SP_Y+4, FX_W=60, FX_H=46, FX_G=6;
+  const fxDefs=[
+    {lbl:'STUT',  col:'#f97316', on:_stutterOn,  x:FX_X,       y:FX_Y},
+    {lbl:'ECHO',  col:'#38bdf8', on:_echoOn,     x:FX_X+FX_W+FX_G, y:FX_Y},
+    {lbl:'PITCH↓',col:'#a78bfa', on:_pitchActive,x:FX_X+(FX_W+FX_G)*2,y:FX_Y},
+    {lbl:'● REC', col:'#ef4444', on:seqRecording, x:FX_X+(FX_W+FX_G)*3,y:FX_Y},
+  ];
+  fxDefs.forEach(f=>{
+    const pulse=f.on?(.6+Math.sin(Date.now()/180)*.3):0;
+    X.shadowColor=f.col; X.shadowBlur=f.on?16+pulse*10:0;
+    rr(X,f.x,f.y,FX_W,FX_H,7,f.on?f.col+'33':'#111',f.col,f.on?2:1);
+    X.shadowBlur=0;
+    // shine
+    X.fillStyle='rgba(255,255,255,.07)'; rr(X,f.x+2,f.y+2,FX_W-4,12,5,'rgba(255,255,255,.07)');
+    X.fillStyle=f.on?'#fff':f.col; X.font=`bold ${f.lbl==='PITCH↓'?'7':'8'}px "Courier New"`;
+    X.textAlign='center'; X.fillText(f.lbl,f.x+FX_W/2,f.y+FX_H/2+3);
+  });
+
+  // Second row: CLEAR SEQ + step progress bar
+  const SEQ_Y=FX_Y+FX_H+FX_G;
+  // Clear button
+  rr(X,FX_X,SEQ_Y,120,20,4,'rgba(0,0,0,.4)','#334155',1);
+  X.fillStyle='#475569'; X.font='bold 7px "Courier New"'; X.textAlign='center';
+  X.fillText('CLR SEQ',FX_X+60,SEQ_Y+13);
+  // 16-step progress
+  const BAR_X=FX_X+128, BAR_W=GW-BAR_X-10;
+  const stepW=Math.floor(BAR_W/16);
+  for(let i=0;i<16;i++){
+    const isCur=(bgmStep%16)===i;
+    const anySet=seqPatterns.some(p=>p[i]);
+    X.fillStyle=isCur?'#fff':anySet?'rgba(96,165,250,.7)':'rgba(255,255,255,.08)';
+    X.fillRect(BAR_X+i*stepW,SEQ_Y,stepW-1,20);
+  }
 }
 
 // SP-404 keypad (full screen, passcode entry)
@@ -1276,10 +1418,25 @@ function handleSP404Tap(cx,cy){
     if(cx>=14&&cx<=62) switchBeat(0);
     if(cx>=66&&cx<=114&&pchains()>=8) switchBeat(1);
   }
+  // FX buttons
+  const FX_X=530,FX_Y=SP_Y+4,FX_W=60,FX_H=46,FX_G=6;
+  if(cy>=FX_Y&&cy<=FX_Y+FX_H){
+    if(cx>=FX_X         &&cx<=FX_X+FX_W)         { _stutterOn=!_stutterOn; fxStutter(_stutterOn); return; }
+    if(cx>=FX_X+66      &&cx<=FX_X+126)           { _echoOn=!_echoOn; fxEcho(_echoOn); return; }
+    if(cx>=FX_X+132     &&cx<=FX_X+192)           { fxPitchDown(); return; }
+    if(cx>=FX_X+198     &&cx<=FX_X+258)           { seqToggleRecord(); return; }
+  }
+  // CLR SEQ button
+  const SEQ_Y=FX_Y+FX_H+FX_G;
+  if(cy>=SEQ_Y&&cy<=SEQ_Y+20&&cx>=FX_X&&cx<=FX_X+120){ seqClear(); return; }
+  // Pads — record step if in record mode, else toggle
   activeSlots().forEach((sl,i)=>{
     const col=i%4,row=Math.floor(i/4);
     const px=SP_PAD_X+col*(SP_PAD_W+SP_GAP),py=SP_Y+4+row*(SP_PAD_H+SP_GAP);
-    if(cx>=px&&cx<=px+SP_PAD_W&&cy>=py&&cy<=py+SP_PAD_H) toggleLoop(i);
+    if(cx>=px&&cx<=px+SP_PAD_W&&cy>=py&&cy<=py+SP_PAD_H){
+      if(seqRecording) seqRecordPad(i);
+      else toggleLoop(i);
+    }
   });
 }
 
