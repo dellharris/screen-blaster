@@ -2201,9 +2201,11 @@ function drawIntro(){
   const fi=Math.max(0,1-t*1.8);
   if(fi>0){X.fillStyle=`rgba(0,0,0,${fi})`;X.fillRect(0,0,GW,GH);}
 
-  // Title reveal at t=1.5
-  if(t>1.5){
-    const ta=Math.min((t-1.5)/.9,1);
+  // Title reveal at t=1.5 — fades in over 0.6s, fades out by t=3.5
+  if(t>1.5&&t<3.5){
+    const fadeIn=Math.min((t-1.5)/.6,1);
+    const fadeOut=t>3.0?Math.max(0,1-(t-3.0)/.5):1;
+    const ta=fadeIn*fadeOut;
     X.globalAlpha=ta;
     X.textAlign='center';
     X.shadowColor='#fbbf24'; X.shadowBlur=45;
@@ -2214,9 +2216,9 @@ function drawIntro(){
     X.fillText('ADVENTURES',GW/2,GH*.42+72);
     X.shadowBlur=0; X.globalAlpha=1;
   }
-  // Episode subtitle at t=2.8
-  if(t>2.8){
-    const ta2=Math.min((t-2.8)/.7,1);
+  // Episode subtitle — appears briefly then gone
+  if(t>2.0&&t<3.5){
+    const ta2=Math.min((t-2.0)/.4,1)*Math.max(0,1-(t-3.0)/.5);
     X.globalAlpha=ta2;
     X.fillStyle='#f59e0b'; X.font='bold 13px "Courier New"'; X.textAlign='center';
     X.fillText('EPISODE 1  ·  ARE WE THERE YET?',GW/2,GH*.42+100);
