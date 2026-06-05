@@ -1419,6 +1419,47 @@ function playerInput(pidx){
   }
   return {up:K['arrowup']||gp.up,down:K['arrowdown']||gp.down,left:K['arrowleft']||gp.left,right:K['arrowright']||gp.right};
 }
+
+// ── Gamepad button polling for menus (runs every frame) ───────
+let _gpPrev=[{},{},{}]; // track previous button state to detect press
+function gpMenuPoll(){
+  if(!navigator.getGamepads) return;
+  const pads=navigator.getGamepads();
+  for(let gi=0;gi<2;gi++){
+    const gp=pads[gi]; if(!gp) continue;
+    const prev=_gpPrev[gi]||{};
+    const A      = gp.buttons[0]?.pressed;
+    const B      = gp.buttons[1]?.pressed;
+    const Start  = gp.buttons[9]?.pressed || gp.buttons[8]?.pressed;
+    const DUp    = gp.buttons[12]?.pressed || gp.axes[1]<-0.5;
+    const DDown  = gp.buttons[13]?.pressed || gp.axes[1]> 0.5;
+    const wasA   = prev.A; const wasB=prev.B; const wasStart=prev.Start;
+
+    // Only fire on NEW press (not held)
+    if(A && !wasA){
+      initAudio();
+      if(STATE==='intro')                   STATE='start';
+      else if(STATE==='start')              { gameMode='1p'; tryFullscreen(); STATE='charSelect'; }
+      else if(STATE==='charSelect')         { selectedChar=gi===0?0:1; STATE='spSettings'; }
+      else if(STATE==='p2CharSelect')       STATE='spSettings';
+      else if(STATE==='spSettings')         launch();
+      else if(STATE==='levelComplete')      { currentLevel=selectedLevel; launch(); }
+      else if(STATE==='eliminated'||STATE==='lockout'){ /* let tap handle it */ }
+    }
+    if(B && !wasB){
+      if(STATE==='charSelect')              STATE='start';
+      else if(STATE==='p2CharSelect')       STATE='start';
+      else if(STATE==='spSettings')         STATE=gameMode==='2p'?'p2CharSelect':'charSelect';
+      else if(STATE==='episode')            exitEpisode();
+    }
+    if(Start && !wasStart){
+      initAudio();
+      if(STATE==='start')                   { gameMode='1p'; tryFullscreen(); STATE='charSelect'; }
+      else if(STATE==='playing')            { /* future: pause */ }
+    }
+    _gpPrev[gi]={A,B,Start,DUp,DDown};
+  }
+}
 addEventListener('keydown',e=>{
   K[e.key.toLowerCase()]=1; handleCodeKey(e.key); initAudio();
   if(e.key==='Escape'&&STATE==='episode') exitEpisode();
@@ -2757,6 +2798,7 @@ function handleLevelCompleteTap(cx,cy){
 
 function loop(){
   X.textAlign='center';
+  gpMenuPoll();
   if(STATE==='boot'){ initDB(); if(!playerId){nameInputStr='';codeInputStr='';STATE='nameEntry';showNEOverlay();}else if(lockedUntil()>Date.now())STATE='lockout';else STATE='intro'; }
   else if(STATE==='nameEntry') { X.fillStyle='#04021a';X.fillRect(0,0,GW,GH);drawBG(.15);frame++; }
   else if(STATE==='leaderboard')   drawLeaderboard();
