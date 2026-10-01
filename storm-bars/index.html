@@ -8,6 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Storm Bars">
 <meta name="theme-color" content="#05060d">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
 <meta name="description" content="Storm Bars: a rap battle rhythm fighter starring Octavia the Great. Hit the bars, knock out the voices of doubt.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Storm Bars | Octavia the Great">
@@ -29,6 +31,8 @@
   #rotate b { display: block; font-size: 64px; color: #7fd8ff; margin-bottom: 12px; }
   #actions { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 10; display: none; gap: 8px; flex-direction: column; align-items: flex-end; max-width: 280px; }
   #actions button { background: #ffe27a; color: #05060d; border: 0; border-radius: 6px; padding: 12px 18px; font-size: 15px; font-weight: 700; font-family: inherit; }
+  #topbtns { position: fixed; left: calc(12px + env(safe-area-inset-left)); bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 10; display: none; gap: 8px; }
+  #topbtns button { background: rgba(5,6,13,0.8); color: #e8e6ff; border: 1px solid #7fd8ff; border-radius: 6px; padding: 10px 14px; font-size: 14px; font-weight: 700; font-family: inherit; display: none; }
   #a2hs { display: none; background: rgba(5,6,13,0.85); border: 1px solid #2a2f5a; color: #cfd2ff; border-radius: 6px; padding: 8px 10px; font-size: 12px; text-align: right; }
   @media (pointer: coarse) {
     body { padding: 0; gap: 0; min-height: 100dvh; align-content: center; background: #000; }
@@ -41,6 +45,7 @@
 <body>
 <canvas id="g"></canvas>
 <div id="rotate"><div><b>&#8635;</b>Rotate your phone sideways to play</div></div>
+<div id="topbtns"><button id="fs" type="button">Full screen</button><button id="install" type="button">Install app</button></div>
 <div id="actions"><button id="share" type="button">Share my score</button><div id="a2hs">Tip: tap the Share icon in Safari, then Add to Home Screen, for full screen.</div></div>
 <div class="bar">
   <span>Keys: D F J K for the four lanes, Space for the Chant. On a phone, tap the bottom half in four columns and tap the top half for the Chant.</span>
@@ -247,9 +252,11 @@ function playStep(i, t) {
 function startMusic() {
   stopMusic();
   if (!ac) return;
-  let stepI = 0;
-  const base = G.t0 + audioOff;
+  let stepI = 0, wasSuspended = ac.state !== 'running';
   musicTimer = setInterval(() => {
+    if (ac.state !== 'running') { wasSuspended = true; return; }
+    if (wasSuspended) { audioOff = ac.currentTime - tnow(); wasSuspended = false; }
+    const base = G.t0 + audioOff;
     while (base + stepTime(stepI) < ac.currentTime + 0.25) { playStep(stepI, Math.max(base + stepTime(stepI), ac.currentTime)); stepI++; }
   }, 25);
 }
@@ -471,6 +478,40 @@ function drawIntro(tt) {
   ctx.globalAlpha = 1; ctx.font = '500 12px ' + F_UI; ctx.fillStyle = 'rgba(160,165,205,0.6)'; ctx.fillText('Prototype by IDU House', W / 2, H - 14);
 }
 
+/* ---------- fullscreen and install ---------- */
+const fsBtn = document.getElementById('fs'), installBtn = document.getElementById('install'), topEl = document.getElementById('topbtns');
+const STANDALONE = (typeof matchMedia === 'function' && (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches)) || navigator.standalone;
+const docEl = document.documentElement || {};
+const CAN_FS = !!(docEl.requestFullscreen || docEl.webkitRequestFullscreen);
+let deferredInstall = null, fsTried = false;
+function inFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+function goFullscreen() {
+  if (!CAN_FS || inFullscreen()) return;
+  try {
+    const rq = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
+    const r = rq.call(docEl, { navigationUI: 'hide' });
+    const lock = () => { try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) {} };
+    if (r && r.then) r.then(lock).catch(() => {}); else lock();
+  } catch (e) {}
+}
+function refreshTop() {
+  if (!topEl) return;
+  const showFs = TOUCH && CAN_FS && !STANDALONE && !inFullscreen(), showInst = TOUCH && !!deferredInstall && !STANDALONE;
+  fsBtn.style.display = showFs ? 'block' : 'none'; installBtn.style.display = showInst ? 'block' : 'none';
+  topEl.style.display = (G.mode !== 'play' && (showFs || showInst)) ? 'flex' : 'none';
+}
+if (fsBtn) fsBtn.addEventListener('click', e => { e.stopPropagation(); goFullscreen(); });
+if (installBtn) installBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (deferredInstall) { deferredInstall.prompt(); deferredInstall.userChoice.finally(() => { deferredInstall = null; }); }
+});
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; });
+addEventListener('pointerup', () => {
+  if (ac && ac.state === 'suspended') ac.resume();
+  if (TOUCH && !fsTried && G.mode !== 'title') { fsTried = true; goFullscreen(); }
+});
+if (typeof location !== 'undefined' && /^https?:/.test(location.protocol) && navigator.serviceWorker) navigator.serviceWorker.register('sw.js').catch(() => {});
+
 /* ---------- update ---------- */
 let lastFrame = tnow();
 function update() {
@@ -479,6 +520,7 @@ function update() {
   G.shake = Math.max(0, G.shake - 40 * dt); G.flash = Math.max(0, G.flash - 2.2 * dt);
   G.bgFlash = Math.max(0, G.bgFlash - 3 * dt);
   if (G.mode === 'title') updateIntro();
+  refreshTop();
   if (G.mode !== 'title' && now > G.nextBgFlash) { G.bgFlash = 1; G.nextBgFlash = now + 3 + Math.random() * 5; }
   for (let i = 0; i < 4; i++) G.lanePulse[i] = Math.max(0, G.lanePulse[i] - 5 * dt);
   G.popups = G.popups.filter(p => now - p.born < p.life);

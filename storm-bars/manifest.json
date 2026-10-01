@@ -1,0 +1,17 @@
+{
+  "name": "Storm Bars | Octavia the Great",
+  "short_name": "Storm Bars",
+  "description": "A rap battle rhythm fighter. Hit the bars on the beat and knock out the voices of doubt.",
+  "start_url": "/storm-bars/",
+  "scope": "/storm-bars/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#05060d",
+  "theme_color": "#05060d",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
