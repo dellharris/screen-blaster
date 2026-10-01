@@ -27,8 +27,6 @@
   .bar { width: min(100%, 960px); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; color: #9aa0d0; }
   a { color: #7fd8ff; }
   html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-  #rotate { display: none; position: fixed; inset: 0; z-index: 20; background: #05060d; color: #e8e6ff; place-items: center; text-align: center; font-size: 20px; padding: 24px; }
-  #rotate b { display: block; font-size: 64px; color: #7fd8ff; margin-bottom: 12px; }
   #actions { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 10; display: none; gap: 8px; flex-direction: column; align-items: flex-end; max-width: 280px; }
   #actions button { background: #ffe27a; color: #05060d; border: 0; border-radius: 6px; padding: 12px 18px; font-size: 15px; font-weight: 700; font-family: inherit; }
   #topbtns { position: fixed; left: calc(12px + env(safe-area-inset-left)); bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 10; display: none; gap: 8px; }
@@ -36,15 +34,13 @@
   #a2hs { display: none; background: rgba(5,6,13,0.85); border: 1px solid #2a2f5a; color: #cfd2ff; border-radius: 6px; padding: 8px 10px; font-size: 12px; text-align: right; }
   @media (pointer: coarse) {
     body { padding: 0; gap: 0; min-height: 100dvh; align-content: center; background: #000; }
-    canvas { width: min(100vw, calc(100dvh * 16 / 9)); border: 0; border-radius: 0; }
+    canvas { border: 0; border-radius: 0; }
     .bar { display: none; }
   }
-  @media (pointer: coarse) and (orientation: portrait) { #rotate { display: grid; } }
 </style>
 </head>
 <body>
 <canvas id="g"></canvas>
-<div id="rotate"><div><b>&#8635;</b>Rotate your phone sideways to play</div></div>
 <div id="topbtns"><button id="fs" type="button">Full screen</button><button id="install" type="button">Install app</button></div>
 <div id="actions"><button id="share" type="button">Share my score</button><div id="a2hs">Tip: tap the Share icon in Safari, then Add to Home Screen, for full screen.</div></div>
 <div class="bar">
@@ -53,7 +49,7 @@
 </div>
 
 <script>
-const W = 960, H = 540;
+let W = 960, H = 540;
 const F_TITLE = '"Dela Gothic One", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif';
 const F_BRUSH = '"Potta One", "Yuji Boku", "Hiragino Mincho ProN", "Yu Mincho", serif';
 const F_UI = '"Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif';
@@ -65,17 +61,17 @@ if (document.fonts && document.fonts.load) {
 const cv = document.getElementById('g');
 const ctx = cv.getContext('2d');
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
-cv.width = W * DPR; cv.height = H * DPR;
 
 const DEMO = new URLSearchParams(location.search).has('demo');
 const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-const LANES = 4, LW = TOUCH ? 96 : 64, LEFT = (W - LANES * LW) / 2, HITY = 478, TOPY = 80, FALL = 1.5;
+const LANES = 4, FALL = 1.5;
+let LW = 64, LEFT = 0, HITY = 478, TOPY = 80;
 const KEYS = { d: 0, f: 1, j: 2, k: 3, ArrowLeft: 0, ArrowDown: 1, ArrowUp: 2, ArrowRight: 3 };
 const KEY_LABELS = ['D', 'F', 'J', 'K'];
 const LANE_COLORS = ['#7fd8ff', '#b794ff', '#ff7ad9', '#ffe27a'];
 const BPM = 92, BEAT = 60 / BPM, STEP = BEAT / 2, SWING = 0.16;
 const stepTime = i => i * STEP + (i % 2 ? STEP * SWING : 0);
-const HERO_X = 150, OPP_X = 790, GROUND = 440;
+let HERO_X = 150, OPP_X = 790, GROUND = 440, CS = 1, PORTRAIT = false;
 const heroImg = new Image(); heroImg.src = 'assets/octavia-hero.jpg';
 
 const OPPS = [
@@ -99,7 +95,20 @@ const G = {
   shake: 0, flash: 0, heroAtk: -9, heroHurt: -9, oppAtk: -9, oppHurt: -9, t0: 0, endAt: 0,
   opp: OPPS[0], result: '', unlocked: [], bgFlash: 0, nextBgFlash: 3, barIdx: 0, lastLine: -9
 };
-for (let i = 0; i < 140; i++) G.rain.push({ x: Math.random() * W, y: Math.random() * H, s: 600 + Math.random() * 500 });
+function layout() {
+  PORTRAIT = TOUCH && window.innerHeight > window.innerWidth;
+  W = PORTRAIT ? 540 : 960; H = PORTRAIT ? 960 : 540;
+  cv.width = W * DPR; cv.height = H * DPR;
+  cv.style.aspectRatio = W + ' / ' + H;
+  if (TOUCH) cv.style.width = 'min(100vw, calc(100dvh * ' + W + ' / ' + H + '))';
+  if (PORTRAIT) { LW = 120; HITY = 880; TOPY = 560; GROUND = 500; HERO_X = 140; OPP_X = 400; CS = 0.7; }
+  else { LW = TOUCH ? 96 : 64; HITY = 478; TOPY = 80; GROUND = 440; HERO_X = 150; OPP_X = 790; CS = 1; }
+  LEFT = (W - LANES * LW) / 2;
+  G.rain = [];
+  for (let i = 0; i < 140; i++) G.rain.push({ x: Math.random() * W, y: Math.random() * H, s: 600 + Math.random() * 500 });
+}
+layout();
+addEventListener('resize', layout);
 
 const tnow = () => performance.now() / 1000;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -265,10 +274,12 @@ function stopMusic() { if (musicTimer) { clearInterval(musicTimer); musicTimer =
 /* ---------- game flow ---------- */
 const actionsEl = document.getElementById('actions'), shareBtn = document.getElementById('share'), a2hsEl = document.getElementById('a2hs');
 const IOS_BROWSER = /iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone;
+const IG_BROWSER = /Instagram/i.test(navigator.userAgent);
+if (a2hsEl && IG_BROWSER) a2hsEl.textContent = 'Tip: tap the three dots, then Open in Safari, to add Storm Bars to your Home Screen.';
 function showActions(win) {
   if (!actionsEl) return;
   actionsEl.style.display = 'flex'; shareBtn.style.display = win ? 'block' : 'none';
-  a2hsEl.style.display = IOS_BROWSER ? 'block' : 'none';
+  a2hsEl.style.display = (IOS_BROWSER || IG_BROWSER) ? 'block' : 'none';
 }
 function hideActions() { if (actionsEl) actionsEl.style.display = 'none'; }
 if (shareBtn) shareBtn.addEventListener('click', e => {
@@ -344,19 +355,19 @@ function hit(perfect, l) {
   G.power = Math.min(100, G.power + (perfect ? 9 : 5));
   G.score += (perfect ? 300 : 150) * (1 + Math.floor(G.combo / 10));
   G.heroAtk = now; G.oppHurt = now; G.shake = Math.max(G.shake, perfect ? 6 : 3);
-  bolt(HERO_X + 175, GROUND - 205, OPP_X - 60, GROUND - 150, LANE_COLORS[l]);
+  bolt(HERO_X + 175 * CS, GROUND - 205 * CS, OPP_X - 60 * CS, GROUND - 150 * CS, LANE_COLORS[l]);
   popup(LEFT + l * LW + LW / 2, HITY - 40, perfect ? 'PERFECT' : 'GOOD', LANE_COLORS[l], 18, 0.6);
   blip(perfect ? 660 : 520, 0.08, 0.12);
-  if (G.combo % 6 === 0) { popup(HERO_X + 40, GROUND - 335, HERO_BARS[G.barIdx++ % HERO_BARS.length], '#e8e6ff', 20, 1.8); }
+  if (G.combo % 6 === 0) { popup(PORTRAIT ? W / 2 : HERO_X + 40, GROUND - 335 * CS, HERO_BARS[G.barIdx++ % HERO_BARS.length], '#e8e6ff', PORTRAIT ? 16 : 20, 1.8); }
   if (G.ohp <= 0) endFight('win');
 }
 function miss() {
   const now = tnow();
   G.combo = 0; G.hp = Math.max(0, G.hp - G.opp.missDmg);
   G.oppAtk = now; G.heroHurt = now; G.shake = Math.max(G.shake, 7);
-  bolt(OPP_X - 120, GROUND - 160, HERO_X + 70, GROUND - 170, G.opp.color);
-  popup(HERO_X, GROUND - 120, 'MISS', G.opp.color, 20, 0.7);
-  if (now - G.lastLine > 2.5) { G.lastLine = now; popup(OPP_X, GROUND - 300, G.opp.lines[Math.floor(Math.random() * G.opp.lines.length)], G.opp.color, 20, 1.8); }
+  bolt(OPP_X - 120 * CS, GROUND - 160 * CS, HERO_X + 70 * CS, GROUND - 170 * CS, G.opp.color);
+  popup(HERO_X, GROUND - 120 * CS, 'MISS', G.opp.color, 20, 0.7);
+  if (now - G.lastLine > 2.5) { G.lastLine = now; popup(PORTRAIT ? W / 2 : OPP_X, PORTRAIT ? GROUND - 160 : GROUND - 300, G.opp.lines[Math.floor(Math.random() * G.opp.lines.length)], G.opp.color, PORTRAIT ? 16 : 20, 1.8); }
   blip(120, 0.15, 0.15);
   if (G.hp <= 0) endFight('lose');
 }
@@ -364,8 +375,9 @@ function ultimate() {
   if (G.mode !== 'play' || G.power < 100) return;
   const now = tnow();
   G.power = 0; G.ohp = Math.max(0, G.ohp - 25); G.flash = 1; G.shake = 18; G.heroAtk = now; G.oppHurt = now;
-  for (let i = 0; i < 4; i++) bolt(HERO_X + 175, GROUND - 205, OPP_X - 40 + i * 6, GROUND - 90 - i * 40, '#ffffff');
-  popup(W / 2, 220, 'EVERYTHING IS POSSIBLE FOR ME', '#ffe27a', 26, 1.6);
+  for (let i = 0; i < 4; i++) bolt(HERO_X + 175 * CS, GROUND - 205 * CS, OPP_X - 40 * CS + i * 6, GROUND - (90 + i * 40) * CS, '#ffffff');
+  if (PORTRAIT) { popup(W / 2, 250, 'EVERYTHING IS', '#ffe27a', 28, 1.6); popup(W / 2, 286, 'POSSIBLE FOR ME', '#ffe27a', 28, 1.6); }
+  else popup(W / 2, 220, 'EVERYTHING IS POSSIBLE FOR ME', '#ffe27a', 26, 1.6);
   thunder();
   if (G.ohp <= 0) endFight('win');
 }
@@ -395,7 +407,7 @@ function boltPath(x1, y1, x2, y2, segs, spread) {
   return pts;
 }
 function newStrike(big) {
-  const x = big ? W * 0.5 : 120 + Math.random() * (W - 240);
+  const m = Math.min(120, W * 0.15), x = big ? W * 0.5 : m + Math.random() * (W - 2 * m);
   const x2 = x + (Math.random() - 0.5) * 160;
   const main = boltPath(x, -10, x2, GROUND + 30, 16, 70);
   const branches = [];
@@ -449,32 +461,35 @@ function drawIntro(tt) {
   }
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, 38); ctx.fillRect(0, H - 38, W, 38);
   ctx.textAlign = 'center';
+  const P = PORTRAIT;
   const p = clamp((ti - 4.8) / 0.35, 0, 1);
   if (p > 0) {
-    ctx.save(); ctx.globalAlpha = p * 0.16; ctx.font = '400 330px ' + F_BRUSH; ctx.fillStyle = '#7fd8ff'; ctx.shadowColor = '#7fd8ff'; ctx.shadowBlur = 40;
-    ctx.fillText('雷', W / 2, 330); ctx.restore();
-    ctx.save(); ctx.globalAlpha = clamp((ti - 5.2) / 0.5, 0, 1); ctx.font = '400 30px ' + F_BRUSH; ctx.fillStyle = '#ff5d73'; ctx.shadowColor = '#ff5d73'; ctx.shadowBlur = 12;
-    ctx.fillText('ストームバーズ', W / 2, 150); ctx.restore();
-    ctx.save(); ctx.translate(W / 2, 244); ctx.scale(1 + (1 - p) * 0.5, 1 + (1 - p) * 0.5); ctx.transform(1, 0, -0.14, 1, 0, 0); ctx.globalAlpha = p;
-    ctx.font = '400 84px ' + F_TITLE; ctx.lineJoin = 'round'; ctx.lineWidth = 14; ctx.strokeStyle = '#05060f'; ctx.strokeText('STORM BARS', 0, 0);
-    const tg = ctx.createLinearGradient(0, -70, 0, 10); tg.addColorStop(0, '#ffffff'); tg.addColorStop(0.55, '#cfe9ff'); tg.addColorStop(1, '#7fd8ff');
-    ctx.fillStyle = tg; ctx.shadowColor = '#7fd8ff'; ctx.shadowBlur = 24 + light * 40; ctx.fillText('STORM BARS', 0, 0);
-    ctx.shadowBlur = 0; ctx.lineWidth = 2; ctx.strokeStyle = '#ff5d73'; ctx.beginPath(); ctx.moveTo(-340, 26); ctx.lineTo(340, 26); ctx.stroke();
+    ctx.save(); ctx.globalAlpha = p * 0.16; ctx.font = '400 ' + (P ? 420 : 330) + 'px ' + F_BRUSH; ctx.fillStyle = '#7fd8ff'; ctx.shadowColor = '#7fd8ff'; ctx.shadowBlur = 40;
+    ctx.fillText('雷', W / 2, P ? 560 : 330); ctx.restore();
+    ctx.save(); ctx.globalAlpha = clamp((ti - 5.2) / 0.5, 0, 1); ctx.font = '400 ' + (P ? 26 : 30) + 'px ' + F_BRUSH; ctx.fillStyle = '#ff5d73'; ctx.shadowColor = '#ff5d73'; ctx.shadowBlur = 12;
+    ctx.fillText('ストームバーズ', W / 2, P ? 300 : 150); ctx.restore();
+    ctx.save(); ctx.translate(W / 2, P ? 396 : 244); ctx.scale(1 + (1 - p) * 0.5, 1 + (1 - p) * 0.5); ctx.transform(1, 0, -0.14, 1, 0, 0); ctx.globalAlpha = p;
+    ctx.font = '400 ' + (P ? 100 : 84) + 'px ' + F_TITLE; ctx.lineJoin = 'round'; ctx.lineWidth = 14; ctx.strokeStyle = '#05060f';
+    const tg = ctx.createLinearGradient(0, -70, 0, P ? 100 : 10); tg.addColorStop(0, '#ffffff'); tg.addColorStop(0.55, '#cfe9ff'); tg.addColorStop(1, '#7fd8ff');
+    const lines = P ? [['STORM', 0], ['BARS', 104]] : [['STORM BARS', 0]];
+    for (const [s, dy] of lines) { ctx.shadowBlur = 0; ctx.strokeText(s, 0, dy); ctx.fillStyle = tg; ctx.shadowColor = '#7fd8ff'; ctx.shadowBlur = 24 + light * 40; ctx.fillText(s, 0, dy); }
+    ctx.shadowBlur = 0; ctx.lineWidth = 2; ctx.strokeStyle = '#ff5d73'; ctx.beginPath();
+    ctx.moveTo(P ? -210 : -340, P ? 134 : 26); ctx.lineTo(P ? 210 : 340, P ? 134 : 26); ctx.stroke();
     ctx.restore();
     const hp = clamp((ti - 5.4) / 0.4, 0, 1);
     if (hp > 0) {
-      ctx.save(); ctx.globalAlpha = hp; ctx.translate(W / 2 + 392, 120); ctx.rotate(0.07);
+      ctx.save(); ctx.globalAlpha = hp; ctx.translate(P ? W - 56 : W / 2 + 392, P ? 256 : 120); ctx.rotate(0.07);
       ctx.fillStyle = '#d6293f'; roundRect(-30, -30, 60, 60, 6); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = '400 40px ' + F_BRUSH; ctx.textAlign = 'center'; ctx.fillText('嵐', 0, 14); ctx.restore();
     }
   }
   const a2 = clamp((ti - 5.6) / 0.8, 0, 1), a3 = clamp((ti - 6.6) / 0.8, 0, 1), a4 = clamp((ti - 7.6) / 0.6, 0, 1);
-  ctx.globalAlpha = a2; ctx.font = '400 22px ' + F_TITLE; ctx.fillStyle = '#7fd8ff'; ctx.fillText('OCTAVIA THE GREAT', W / 2, 300);
-  ctx.font = '400 20px ' + F_BRUSH; ctx.fillStyle = '#ffe27a'; ctx.fillText('オクタヴィア・ザ・グレート', W / 2, 330);
+  ctx.globalAlpha = a2; ctx.font = '400 22px ' + F_TITLE; ctx.fillStyle = '#7fd8ff'; ctx.fillText('OCTAVIA THE GREAT', W / 2, P ? 596 : 300);
+  ctx.font = '400 20px ' + F_BRUSH; ctx.fillStyle = '#ffe27a'; ctx.fillText('オクタヴィア・ザ・グレート', W / 2, P ? 628 : 330);
   ctx.globalAlpha = a3; ctx.font = '500 17px ' + F_UI; ctx.fillStyle = '#cfd2ff';
-  ctx.fillText('Hit the bars on the beat. Knock out the voices of doubt.', W / 2, 376);
-  ctx.font = '500 14px ' + F_UI; ctx.fillStyle = '#9aa0d0'; ctx.fillText(TOUCH ? 'Tap the lanes on the beat. Tap the top of the screen for the Chant. Sound on.' : 'D F J K for the lanes. Space for the Chant. Headphones recommended.', W / 2, 402);
-  ctx.globalAlpha = a4 * (0.55 + 0.45 * Math.sin(tt * 4)); ctx.font = '700 18px ' + F_UI; ctx.fillStyle = '#ffe27a'; ctx.fillText(TOUCH ? '◆ TAP TO START ◆' : '◆ CLICK OR PRESS ENTER ◆', W / 2, 452);
+  ctx.fillText('Hit the bars on the beat. Knock out the voices of doubt.', W / 2, P ? 690 : 376);
+  ctx.font = '500 14px ' + F_UI; ctx.fillStyle = '#9aa0d0'; ctx.fillText(TOUCH ? 'Tap the lanes on the beat. Tap up top for the Chant.' : 'D F J K for the lanes. Space for the Chant. Headphones recommended.', W / 2, P ? 722 : 402);
+  ctx.globalAlpha = a4 * (0.55 + 0.45 * Math.sin(tt * 4)); ctx.font = '700 18px ' + F_UI; ctx.fillStyle = '#ffe27a'; ctx.fillText(TOUCH ? '◆ TAP TO START ◆' : '◆ CLICK OR PRESS ENTER ◆', W / 2, P ? 810 : 452);
   ctx.globalAlpha = 1; ctx.font = '500 12px ' + F_UI; ctx.fillStyle = 'rgba(160,165,205,0.6)'; ctx.fillText('Prototype by IDU House', W / 2, H - 14);
 }
 
@@ -556,7 +571,7 @@ function drawBg(tt) {
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = 'rgba(10,8,30,0.7)';
   for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.ellipse((i * 190 + tt * 6) % (W + 200) - 100, 60 + (i % 3) * 30, 150, 38, 0, 0, 7); ctx.fill(); }
-  pagoda(250, GROUND - 6, 1.1, '#0b0a1e'); pagoda(720, GROUND - 6, 1.4, '#09081a');
+  pagoda(W * 0.26, GROUND - 6, PORTRAIT ? 0.8 : 1.1, '#0b0a1e'); pagoda(W * 0.75, GROUND - 6, PORTRAIT ? 1.0 : 1.4, '#09081a');
   const f = ctx.createLinearGradient(0, GROUND, 0, H);
   f.addColorStop(0, '#171836'); f.addColorStop(1, '#05060e');
   ctx.fillStyle = f; ctx.fillRect(0, GROUND, W, H - GROUND);
@@ -564,7 +579,7 @@ function drawBg(tt) {
   for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.moveTo(0, GROUND + i * i * 3); ctx.lineTo(W, GROUND + i * i * 3); ctx.stroke(); }
   if (G.bgFlash > 0) {
     ctx.fillStyle = 'rgba(200,210,255,' + (0.22 * G.bgFlash) + ')'; ctx.fillRect(0, 0, W, H);
-    jag(W * 0.45, 0, W * 0.5, 230, 'rgba(255,255,255,' + G.bgFlash + ')', 3, 7);
+    jag(W * 0.45, 0, W * 0.5, GROUND * 0.52, 'rgba(255,255,255,' + G.bgFlash + ')', 3, 7);
   }
 }
 function drawRain() {
@@ -599,7 +614,7 @@ function drawHero(tt) {
   const atk = clamp(1 - (now - G.heroAtk) / 0.25, 0, 1), hurt = clamp(1 - (now - G.heroHurt) / 0.3, 0, 1);
   const bob = Math.sin(tt * 3) * 2.5, x = HERO_X - (hurt * 10);
   const cloth = hurt > 0.5 ? '#2c1219' : '#0f1417', edge = '#7fd8ff', skin = '#7a4e36', skinDk = '#4d3023';
-  ctx.save(); ctx.translate(x, GROUND);
+  ctx.save(); ctx.translate(x, GROUND); ctx.scale(CS, CS);
   ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(0, 4, 118, 13, 0, 0, 7); ctx.fill();
   const aura = ctx.createRadialGradient(0, -150, 10, 0, -150, 190);
   aura.addColorStop(0, hurt > 0 ? 'rgba(255,90,110,' + 0.35 * hurt + ')' : 'rgba(127,216,255,0.2)'); aura.addColorStop(1, 'rgba(127,216,255,0)');
@@ -666,7 +681,7 @@ function drawOpp(tt) {
   const now = tnow(), o = G.opp;
   const atk = clamp(1 - (now - G.oppAtk) / 0.25, 0, 1), hurt = clamp(1 - (now - G.oppHurt) / 0.3, 0, 1);
   const bob = Math.sin(tt * 2.2 + 1) * 8, x = OPP_X + hurt * 14;
-  ctx.save(); ctx.translate(x, GROUND);
+  ctx.save(); ctx.translate(x, GROUND); ctx.scale(CS, CS);
   ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(0, 4, 70, 11, 0, 0, 7); ctx.fill();
   const aura = ctx.createRadialGradient(0, -130, 10, 0, -130, 150);
   aura.addColorStop(0, hurt > 0 ? 'rgba(255,255,255,' + 0.5 * hurt + ')' : o.color + '55'); aura.addColorStop(1, o.color + '00');
@@ -719,29 +734,31 @@ function portrait(cx, cy, r, draw) {
   ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke();
 }
 function drawHud(tt) {
-  portrait(58, 46, 28, () => {
-    ctx.fillStyle = '#10102a'; ctx.fillRect(28, 18, 60, 60);
-    if (heroImg.complete && heroImg.naturalWidth) ctx.drawImage(heroImg, 330, 110, 380, 380, 28, 18, 60, 60);
+  const P = PORTRAIT, pr = P ? 24 : 28, py = P ? 44 : 46, px = P ? 38 : 58, bx = P ? 74 : 100, bw = P ? 160 : 268, bh = P ? 16 : 20;
+  portrait(px, py, pr, () => {
+    ctx.fillStyle = '#10102a'; ctx.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+    if (heroImg.complete && heroImg.naturalWidth) ctx.drawImage(heroImg, 330, 110, 380, 380, px - pr, py - pr, pr * 2, pr * 2);
   });
-  portrait(W - 58, 46, 28, () => {
-    ctx.fillStyle = '#0a0a14'; ctx.fillRect(W - 88, 18, 60, 60);
-    ctx.fillStyle = G.opp.color; ctx.font = '400 30px ' + F_TITLE; ctx.textAlign = 'center'; ctx.fillText(G.opp.name.replace('THE ', '')[0], W - 58, 57);
+  portrait(W - px, py, pr, () => {
+    ctx.fillStyle = '#0a0a14'; ctx.fillRect(W - px - pr, py - pr, pr * 2, pr * 2);
+    ctx.fillStyle = G.opp.color; ctx.font = '400 ' + (P ? 26 : 30) + 'px ' + F_TITLE; ctx.textAlign = 'center'; ctx.fillText(G.opp.name.replace('THE ', '')[0], W - px, py + (P ? 9 : 11));
   });
-  ctx.textAlign = 'left'; ctx.fillStyle = '#e8e6ff'; ctx.font = '400 15px ' + F_TITLE;
-  ctx.fillText('OCTAVIA THE GREAT', 100, 24);
-  ctx.textAlign = 'right'; ctx.fillStyle = G.opp.color; ctx.fillText(G.opp.name, W - 100, 24);
-  bar(100, 30, 268, 20, G.hp, '#ff5d73', '#ffe27a', false);
-  bar(W - 368, 30, 268, 20, G.ohp, '#ffe27a', G.opp.color, true);
-  bar(100, 56, 180, 9, G.power, '#b794ff', '#ffe27a', false);
-  ctx.textAlign = 'left'; ctx.font = '700 11px ' + F_UI; ctx.fillStyle = G.power >= 100 && Math.sin(tt * 12) > 0 ? '#ffe27a' : '#9aa0d0';
-  ctx.fillText(G.power >= 100 ? (TOUCH ? 'CHANT READY: TAP THE TOP' : 'CHANT READY: SPACE') : 'CHANT', 288, 65);
-  ctx.textAlign = 'center'; ctx.fillStyle = '#e8e6ff'; ctx.font = '400 22px ' + F_TITLE; ctx.fillText('VS', W / 2, 44);
-  ctx.font = '700 13px ' + F_UI; ctx.fillStyle = '#9aa0d0'; ctx.fillText('SCORE ' + G.score, W / 2, 66);
-  if (G.combo >= 3) { ctx.font = '400 26px ' + F_TITLE; ctx.fillStyle = '#ffe27a'; ctx.fillText(G.combo + ' COMBO', W / 2, 124); }
+  ctx.textAlign = 'left'; ctx.fillStyle = '#e8e6ff'; ctx.font = '400 ' + (P ? 11 : 15) + 'px ' + F_TITLE;
+  ctx.fillText(P ? 'OCTAVIA' : 'OCTAVIA THE GREAT', bx, 24);
+  ctx.textAlign = 'right'; ctx.fillStyle = G.opp.color; ctx.fillText(G.opp.name, W - bx, 24);
+  bar(bx, 30, bw, bh, G.hp, '#ff5d73', '#ffe27a', false);
+  bar(W - bx - bw, 30, bw, bh, G.ohp, '#ffe27a', G.opp.color, true);
+  bar(bx, P ? 52 : 56, P ? 110 : 180, 8, G.power, '#b794ff', '#ffe27a', false);
+  ctx.textAlign = 'left'; ctx.font = '700 ' + (P ? 9 : 11) + 'px ' + F_UI; ctx.fillStyle = G.power >= 100 && Math.sin(tt * 12) > 0 ? '#ffe27a' : '#9aa0d0';
+  ctx.fillText(G.power >= 100 ? (TOUCH ? (P ? 'TAP UP TOP' : 'CHANT READY: TAP THE TOP') : 'CHANT READY: SPACE') : 'CHANT', bx + (P ? 116 : 188), P ? 60 : 65);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#e8e6ff'; ctx.font = '400 ' + (P ? 18 : 22) + 'px ' + F_TITLE; ctx.fillText('VS', W / 2, P ? 50 : 44);
+  ctx.font = '700 ' + (P ? 12 : 13) + 'px ' + F_UI; ctx.fillStyle = '#9aa0d0'; ctx.fillText('SCORE ' + G.score, W / 2, P ? 90 : 66);
+  if (G.combo >= 3) { ctx.font = '400 26px ' + F_TITLE; ctx.fillStyle = '#ffe27a'; ctx.fillText(G.combo + ' COMBO', W / 2, P ? 160 : 124); }
   if (G.mode === 'play' && tnow() < G.t0 + 1.4) {
-    ctx.fillStyle = '#9aa0d0'; ctx.font = '400 30px ' + F_TITLE; ctx.fillText('ROUND ' + (G.level % 3 + 1), W / 2, 214);
-    ctx.save(); ctx.shadowColor = '#ff5d73'; ctx.shadowBlur = 24; ctx.fillStyle = '#fff'; ctx.font = '400 78px ' + F_TITLE; ctx.fillText('FIGHT', W / 2, 292); ctx.restore();
-    ctx.fillStyle = '#ffe27a'; ctx.font = '400 34px ' + F_BRUSH; ctx.fillText('戦え', W / 2, 336);
+    const oy = P ? 100 : 0;
+    ctx.fillStyle = '#9aa0d0'; ctx.font = '400 30px ' + F_TITLE; ctx.fillText('ROUND ' + (G.level % 3 + 1), W / 2, 214 + oy);
+    ctx.save(); ctx.shadowColor = '#ff5d73'; ctx.shadowBlur = 24; ctx.fillStyle = '#fff'; ctx.font = '400 78px ' + F_TITLE; ctx.fillText('FIGHT', W / 2, 292 + oy); ctx.restore();
+    ctx.fillStyle = '#ffe27a'; ctx.font = '400 34px ' + F_BRUSH; ctx.fillText('戦え', W / 2, 336 + oy);
   }
 }
 function drawPopups() {
@@ -750,7 +767,8 @@ function drawPopups() {
     const k = (now - p.born) / p.life;
     ctx.globalAlpha = 1 - k * k; ctx.textAlign = 'center'; ctx.fillStyle = p.color;
     ctx.font = p.size > 24 ? '400 ' + p.size + 'px ' + F_TITLE : '700 ' + p.size + 'px ' + F_UI; ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
-    ctx.fillText(p.text, p.x, p.y - k * 30); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    const hw = ctx.measureText(p.text).width / 2;
+    ctx.fillText(p.text, clamp(p.x, hw + 8, W - hw - 8), p.y - k * 30); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
   }
 }
 function drawBolts() {
@@ -759,7 +777,12 @@ function drawBolts() {
 function overlay(lines) {
   ctx.fillStyle = G.mode === 'title' ? 'rgba(3,4,12,0.55)' : 'rgba(3,4,12,0.78)'; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center';
-  lines.forEach(l => { ctx.font = l.font; ctx.fillStyle = l.color; ctx.fillText(l.text, W / 2, l.y); });
+  lines.forEach(l => {
+    let f = l.font; ctx.font = f;
+    const m = /(\d+)px/.exec(f), w = ctx.measureText(l.text).width, mw = W - 30;
+    if (m && w > mw) { f = f.replace(m[0], Math.max(10, Math.floor(m[1] * mw / w)) + 'px'); ctx.font = f; }
+    ctx.fillStyle = l.color; ctx.fillText(l.text, W / 2, PORTRAIT ? l.y * 1.55 : l.y);
+  });
 }
 function draw() {
   const tt = tnow();
@@ -778,8 +801,9 @@ function draw() {
       { text: win ? '勝利' : 'もう一度', font: '400 38px ' + F_BRUSH, color: win ? '#ff5d73' : '#9aa0d0', y: 112 },
       { text: win ? 'K.O.' : 'TRY AGAIN', font: '400 76px ' + F_TITLE, color: win ? '#ffe27a' : '#ff5d73', y: 196 },
       { text: 'Score ' + G.score + '   Best combo ' + G.best, font: '600 20px ' + F_UI, color: '#e8e6ff', y: 240 },
-      win ? { text: 'UNLOCKED: ' + G.lastUnlock + ' (placeholder for her real download)', font: '700 18px ' + F_UI, color: '#7fd8ff', y: 292 } : { text: 'The doubt got loud. Run it back.', font: '600 18px ' + F_UI, color: '#cfd2ff', y: 292 },
-      { text: G.unlocked.length ? 'Unlocked so far: ' + G.unlocked.join(', ') : '', font: '500 14px ' + F_UI, color: '#9aa0d0', y: 326 },
+      win ? { text: 'UNLOCKED: ' + G.lastUnlock, font: '700 18px ' + F_UI, color: '#7fd8ff', y: 288 } : { text: 'The doubt got loud. Run it back.', font: '600 18px ' + F_UI, color: '#cfd2ff', y: 288 },
+      { text: win ? '(placeholder for her real download)' : '', font: '500 13px ' + F_UI, color: '#9aa0d0', y: 312 },
+      { text: G.unlocked.length ? 'Unlocked so far: ' + G.unlocked.join(', ') : '', font: '500 14px ' + F_UI, color: '#9aa0d0', y: 340 },
       { text: TOUCH ? (win ? 'Tap for the next battle' : 'Tap to rematch') : (win ? 'Click or press Enter for the next battle' : 'Click or press Enter to rematch'), font: '700 18px ' + F_UI, color: '#ffe27a', y: 400 }
     ]);
   }
