@@ -82,8 +82,8 @@ const DPR = Math.min(window.devicePixelRatio || 1, 2);
 const DEMO = new URLSearchParams(location.search).has('demo');
 const FASTKO = new URLSearchParams(location.search).has('ko');
 const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-const LANES = 4, FALL = 1.5;
-let LW = 64, LEFT = 0, HITY = 478, TOPY = 80;
+const LANES = 4, FALL = 1.5, HIT_WIN = TOUCH ? 0.17 : 0.15;
+let LW = 64, LEFT = 0, HITY = 478, TOPY = 80, JUDGEY = 400;
 const KEYS = { d: 0, f: 1, j: 2, k: 3, ArrowLeft: 0, ArrowDown: 1, ArrowUp: 2, ArrowRight: 3 };
 const KEY_LABELS = ['D', 'F', 'J', 'K'];
 const LANE_COLORS = ['#7fd8ff', '#b794ff', '#ff7ad9', '#ffe27a'];
@@ -109,7 +109,7 @@ const TRACKS = ['The Confidence Chant', 'Shook Ones Freestyle', 'The Spell of th
 
 const G = {
   mode: 'title', level: 0, hp: 100, ohp: 100, combo: 0, best: 0, power: 0, score: 0,
-  notes: [], popups: [], bolts: [], rain: [], lanePulse: [0, 0, 0, 0], pad: [null, null, null, null], sparks: [],
+  notes: [], popups: [], bolts: [], rain: [], lanePulse: [0, 0, 0, 0], pad: [null, null, null, null], sparks: [], chopI: 0,
   shake: 0, flash: 0, heroAtk: -9, heroHurt: -9, oppAtk: -9, oppHurt: -9, t0: 0, endAt: 0,
   opp: OPPS[0], result: '', unlocked: [], bgFlash: 0, nextBgFlash: 3, barIdx: 0, lastLine: -9,
   specialArmed: true, paused: false, heroForce: 0, oppKnockT: -9, finaleAt: 0, fBeam: false, fHit: false,
@@ -124,6 +124,7 @@ function layout() {
   if (PORTRAIT) { LW = 128; TOPY = 560; GROUND = 500; HERO_X = 140; OPP_X = 400; CS = 0.7; HITY = H - (LW - 14) / 2 - 44; }
   else { LW = TOUCH ? 120 : 80; TOPY = 80; GROUND = 440; HERO_X = 150; OPP_X = 790; CS = 1; HITY = H - (LW - 14) / 2 - 26; }
   LEFT = (W - LANES * LW) / 2;
+  JUDGEY = HITY - (LW - 14) / 2 - 12;
   G.rain = [];
   for (let i = 0; i < 140; i++) G.rain.push({ x: Math.random() * W, y: Math.random() * H, s: 600 + Math.random() * 500 });
 }
@@ -327,7 +328,7 @@ function startFight() {
   hideActions();
   closeSpecial(); unfreezeTime(); G.paused = false; G.specialArmed = true; G.heroForce = 0; G.oppKnockT = -9; G.fBeam = false; G.fHit = false;
   G.ko = { at: 0, landed: false, chord: false, landT: 0 }; G.koFinish = false; if (spEl) spEl.classList.remove('ko');
-  G.pad = [null, null, null, null]; G.sparks = [];
+  G.pad = [null, null, null, null]; G.sparks = []; G.chopI = 0;
   if (master && ac) master.gain.setTargetAtTime(0.7, ac.currentTime, 0.01);
   primeSpecialVideo();
   G.t0 = tnow() + 2.4;
@@ -383,20 +384,20 @@ function padSound(l, s) {
     noise(t, s > 0.9 ? 0.26 : 0.07, 7500, 0.35 * v, 'highpass');
     noise(t, 0.04, 11000, 0.2 * v, 'highpass');
   } else {
-    const bar = Math.max(0, Math.floor((tnow() - G.t0) / STEP / 8)), c = CHORDS[bar % 4];
-    const f = mtof(c.lead[(G.combo + l) % c.lead.length]);
+    const bi = Math.max(0, Math.floor((tnow() - G.t0) / STEP / 8)), c = CHORDS[bi % 4];
+    const f = mtof(c.keys[(G.chopI++) % c.keys.length] + 12);
     const o1 = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter();
-    o1.type = 'square'; o2.type = 'triangle'; o1.frequency.value = f; o2.frequency.value = f * 2;
-    lp.type = 'lowpass'; lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(500, t + 0.2);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.26 * v, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+    o1.type = 'sine'; o2.type = 'triangle'; o1.frequency.value = f; o2.frequency.value = f * 2; o2.detune.value = 4;
+    lp.type = 'lowpass'; lp.frequency.value = 2400;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2 * v, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
     o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(master);
-    o1.start(t); o2.start(t); o1.stop(t + 0.3); o2.stop(t + 0.3);
+    o1.start(t); o2.start(t); o1.stop(t + 0.46); o2.stop(t + 0.46);
   }
 }
 function padTap(l, s, perfect) {
   const raw = rawNow();
   G.pad[l] = { t: raw, s };
-  padSound(l, s);
+  try { padSound(l, s); } catch (e) {}
   const cx = LEFT + l * LW + LW / 2, py = HITY - (LW - 14) / 2, n = perfect ? 14 : s > 0.6 ? 9 : 5;
   for (let k = 0; k < n; k++) {
     const ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.5, sp = 120 + Math.random() * 280;
@@ -415,7 +416,7 @@ function press(l) {
     const d = Math.abs(n.t - now);
     if (d < bd) { bd = d; best = n; }
   }
-  if (best && bd < 0.15) { best.done = true; hit(bd < 0.065, l); } else padTap(l, 0.5, false);
+  if (best && bd < HIT_WIN) { best.done = true; hit(bd < 0.065, l); } else padTap(l, 0.5, false);
 }
 function hit(perfect, l) {
   const now = tnow();
@@ -940,7 +941,7 @@ function update() {
   if (G.mode === 'play') {
     if (DEMO) for (const n of G.notes) if (!n.done && Math.abs(n.t - now) < 0.012 && (n.t * 1000 | 0) % 11 !== 0) press(n.lane);
     if (DEMO && G.power >= 100) ultimate();
-    for (const n of G.notes) if (!n.done && now - n.t > 0.15) { n.done = true; miss(); if (G.mode !== 'play') break; }
+    for (const n of G.notes) if (!n.done && now - n.t > HIT_WIN) { n.done = true; miss(); if (G.mode !== 'play') break; }
     if (G.mode === 'play' && now > G.endAt) endFight(G.ohp < G.hp ? 'win' : 'lose');
   }
 }
@@ -1147,7 +1148,7 @@ function drawLanes() {
   }
   for (const n of G.notes) {
     if (n.done) continue;
-    const y = HITY - (n.t - now) / FALL * (HITY - TOPY);
+    const y = JUDGEY - (n.t - now) / FALL * (JUDGEY - TOPY);
     if (y < TOPY - 20 || y > H) continue;
     const a = clamp((y - TOPY) / 60, 0.2, 1);
     ctx.globalAlpha = a; ctx.fillStyle = LANE_COLORS[n.lane]; ctx.shadowColor = LANE_COLORS[n.lane]; ctx.shadowBlur = 16;
