@@ -43,6 +43,18 @@
   .sp-vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%); }
   @media (orientation: portrait) { .sp-bg { background-image: url(assets/special-bg-port.jpg); } }
   @media (orientation: landscape) { #spVideo { -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%); } }
+  #special .cutvid { display: none; }
+  #special .cutvid.act { display: block; }
+  #special.k-intro .sp-bg { background-image: url(assets/intro-bg-land.jpg); }
+  #special.k-outro .sp-bg { background-image: url(assets/outro-bg-land.jpg); }
+  .cutvid.wide { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; background: transparent; }
+  .sp-skip { position: absolute; bottom: calc(16px + env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; color: rgba(232, 230, 255, 0.75); font-size: 12px; letter-spacing: 0.28em; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+  #special.k-intro .sp-skip, #special.k-outro .sp-skip { opacity: 1; }
+  @media (orientation: portrait) {
+    #special.k-intro .sp-bg { background-image: url(assets/intro-bg-port.jpg); }
+    #special.k-outro .sp-bg { background-image: url(assets/outro-bg-port.jpg); }
+    .cutvid.wide { top: 50%; left: -10%; width: 120%; height: auto; aspect-ratio: 16 / 9; transform: translateY(-50%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 88%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 88%, transparent 100%); }
+  }
   #actions { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 10; display: none; gap: 8px; flex-direction: column; align-items: flex-end; max-width: 280px; }
   #actions button { background: #ffe27a; color: #05060d; border: 0; border-radius: 6px; padding: 12px 18px; font-size: 15px; font-weight: 700; font-family: inherit; }
   #topbtns { position: fixed; left: calc(12px + env(safe-area-inset-left)); bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 10; display: none; gap: 8px; }
@@ -57,7 +69,7 @@
 </head>
 <body>
 <canvas id="g"></canvas>
-<div id="special" aria-hidden="true"><div class="sp-bg"></div><canvas id="spFx"></canvas><video id="spVideo" src="assets/special.mp4" poster="assets/special-poster.jpg" playsinline webkit-playsinline preload="auto"></video><div class="sp-flash"></div><div class="sp-vig"></div></div>
+<div id="special" aria-hidden="true"><div class="sp-bg"></div><canvas id="spFx"></canvas><video id="spVideo" class="cutvid" src="assets/special.mp4" poster="assets/special-poster.jpg" playsinline webkit-playsinline preload="auto"></video><video id="introVideo" class="cutvid wide" src="assets/intro.mp4" playsinline webkit-playsinline preload="auto"></video><video id="outroVideo" class="cutvid wide" src="assets/outro.mp4" playsinline webkit-playsinline preload="auto"></video><div class="sp-skip">TAP TO SKIP</div><div class="sp-flash"></div><div class="sp-vig"></div></div>
 <div id="topbtns"><button id="fs" type="button">Full screen</button><button id="install" type="button">Install app</button><button id="reset" type="button">New game</button></div>
 <div id="actions"><button id="share" type="button">Share my score</button><div id="a2hs">Tip: tap the Share icon in Safari, then Add to Home Screen, for full screen.</div></div>
 <div class="bar">
@@ -136,7 +148,7 @@ const G = {
   mode: 'title', level: 0, hp: 100, ohp: 100, combo: 0, best: 0, power: 0, score: 0,
   notes: [], popups: [], bolts: [], rain: [], lanePulse: [0, 0, 0, 0], pad: [null, null, null, null], sparks: [], chopI: 0,
   shake: 0, flash: 0, heroAtk: -9, heroHurt: -9, oppAtk: -9, oppHurt: -9, t0: 0, endAt: 0,
-  opp: OPPS[0], result: '', unlocked: [], bgFlash: 0, nextBgFlash: 3, barIdx: 0, lastLine: -9, introAt: 0, introSting: false, lap: 0, dmgScale: 1, missDmg: 5, bestScores: {},
+  opp: OPPS[0], result: '', unlocked: [], bgFlash: 0, nextBgFlash: 3, barIdx: 0, lastLine: -9, introAt: 0, introSting: false, cutAt: 0, lap: 0, dmgScale: 1, missDmg: 5, bestScores: {},
   specialArmed: true, paused: false, heroForce: 0, oppKnockT: -9, finaleAt: 0, fBeam: false, fHit: false,
   ko: { at: 0, landed: false, chord: false, landT: 0 }, koFinish: false
 };
@@ -358,6 +370,7 @@ function startFight() {
   initAudio();
   if (ac && ac.state === 'suspended') ac.resume();
   primeSpecialVideo();
+  const rematch = G.mode === 'result' && G.result === 'lose';
   const o = OPPS[G.level % OPPS.length];
   G.lap = Math.floor(G.level / OPPS.length);
   Object.assign(G, { mode: 'intro', opp: o, result: '', introAt: rawNow(), introSting: false, notes: [], popups: [], bolts: [], combo: 0, power: 0 });
@@ -366,7 +379,7 @@ function startFight() {
   G.ko = { at: 0, landed: false, chord: false, landT: 0 }; G.koFinish = false; if (spEl) spEl.classList.remove('ko');
   G.pad = [null, null, null, null]; G.sparks = []; G.chopI = 0;
   if (master && ac) master.gain.setTargetAtTime(0.7, ac.currentTime, 0.01);
-  G.flash = 0.9; thunder();
+  if (CUTS_ON && !rematch) { G.mode = 'cutintro'; if (!openCut('intro', false, false)) enterVersus(); } else enterVersus();
 }
 function beginFight() {
   const o = G.opp, lap = G.lap;
@@ -394,7 +407,6 @@ function beginFight() {
 }
 function endFight(result) {
   G.mode = 'result'; G.result = result; G.resultAt = tnow(); stopMusic();
-  showActions(result === 'win');
   if (result === 'win') {
     const tr = TRACKS[G.level % TRACKS.length];
     if (!G.unlocked.includes(tr)) G.unlocked.push(tr);
@@ -403,9 +415,12 @@ function endFight(result) {
     G.level++;
     writeSave();
     thunder();
+    if (CUTS_ON) { G.mode = 'outro'; if (openCut('outro', true, false)) return; G.mode = 'result'; }
   }
+  showActions(result === 'win');
 }
 function advance() {
+  if (G.mode === 'cutintro' || G.mode === 'outro') { if (rawNow() - G.cutAt > 1.0) endCut(); return; }
   if (G.mode === 'intro') { if (rawNow() - G.introAt > 0.9) beginFight(); return; }
   if (G.mode === 'result' && tnow() - G.resultAt < 1.3) return;
   if (G.mode === 'title' || G.mode === 'result') startFight();
@@ -794,19 +809,63 @@ function stopFx() { if (fx.active) fx.stopAt = rawNow() + 0.3; }
 
 /* ---------- special move ---------- */
 const SPECIAL_COMBO = 12, SPECIAL_DMG = 30;
-const spEl = document.getElementById('special'), spVideo = document.getElementById('spVideo');
+const spEl = document.getElementById('special'), spVideo = document.getElementById('spVideo'), introVideo = document.getElementById('introVideo'), outroVideo = document.getElementById('outroVideo');
+const CUTS = { special: spVideo, intro: introVideo, outro: outroVideo };
+const CUT_MODE = { special: 'special', cutintro: 'intro', outro: 'outro' };
+const CUTS_ON = !DEMO;
 let spDeadline = 0, spPrimed = false;
 function primeSpecialVideo() {
-  if (!spVideo || spPrimed || typeof spVideo.play !== 'function') return;
+  if (spPrimed) return;
   spPrimed = true;
-  try {
-    spVideo.muted = true;
-    const p = spVideo.play();
-    const reset = () => { try { spVideo.pause(); spVideo.currentTime = 0; } catch (e) {} spVideo.muted = false; };
-    if (p && p.then) p.then(reset).catch(() => { spVideo.muted = false; }); else reset();
-  } catch (e) {}
+  for (const k in CUTS) {
+    const v = CUTS[k];
+    if (!v || typeof v.play !== 'function') continue;
+    try {
+      v.muted = true;
+      const p = v.play();
+      const reset = () => { try { v.pause(); v.currentTime = 0; } catch (e) {} v.muted = false; };
+      if (p && p.then) p.then(reset).catch(() => { v.muted = false; }); else reset();
+    } catch (e) {}
+  }
 }
-function closeSpecial() { stopFx(); if (spEl) spEl.classList.remove('on'); if (spVideo && typeof spVideo.pause === 'function') { try { spVideo.pause(); } catch (e) {} } }
+function closeSpecial() {
+  stopFx(); if (spEl) spEl.classList.remove('on');
+  for (const k in CUTS) { const v = CUTS[k]; if (v && typeof v.pause === 'function') { try { v.pause(); } catch (e) {} } }
+}
+function openCut(kind, intense, ko) {
+  const v = CUTS[kind];
+  if (!spEl || !v || typeof v.play !== 'function') return false;
+  G.paused = true; freezeTime(); G.bolts = []; G.popups = [];
+  if (master && ac) master.gain.setTargetAtTime(0, ac.currentTime, 0.02);
+  ['special', 'intro', 'outro'].forEach(k => { spEl.classList.remove('k-' + k); const cv = CUTS[k]; if (cv && cv.classList) { if (k === kind) cv.classList.add('act'); else cv.classList.remove('act'); } });
+  spEl.classList.add('k-' + kind);
+  if (ko) spEl.classList.add('ko'); else spEl.classList.remove('ko');
+  spEl.classList.add('on'); startFx(!!intense);
+  try { v.currentTime = 0; } catch (e) {}
+  G.cutAt = rawNow();
+  spDeadline = rawNow() + ((isFinite(v.duration) && v.duration > 0) ? v.duration : 3.3) + 1.5;
+  const p = v.play();
+  if (p && p.catch) p.catch(() => { v.muted = true; const q = v.play(); if (q && q.catch) q.catch(() => endCut()); });
+  return true;
+}
+function endCut() {
+  if (G.mode === 'special') endSpecial(); else if (G.mode === 'cutintro') endCutIntro(); else if (G.mode === 'outro') endOutro();
+}
+function enterVersus() {
+  G.mode = 'intro'; G.introAt = rawNow(); G.introSting = false; G.flash = 0.9; thunder();
+}
+function endCutIntro() {
+  if (G.mode !== 'cutintro') return;
+  closeSpecial(); unfreezeTime(); G.paused = false;
+  if (master && ac) master.gain.setTargetAtTime(0.7, ac.currentTime, 0.01);
+  enterVersus();
+}
+function endOutro() {
+  if (G.mode !== 'outro') return;
+  closeSpecial(); unfreezeTime(); G.paused = false;
+  if (master && ac) master.gain.setTargetAtTime(0.7, ac.currentTime, 0.01);
+  G.mode = 'result'; G.resultAt = tnow(); showActions(true);
+}
 function startFinisher() {
   G.koFinish = true;
   startSpecial(true);
@@ -814,15 +873,8 @@ function startFinisher() {
 }
 function startSpecial(ko) {
   if (G.mode !== 'play' || !spEl || !spVideo) return;
-  G.mode = 'special'; G.paused = true; freezeTime();
-  G.bolts = []; G.popups = [];
-  if (master && ac) master.gain.setTargetAtTime(0, ac.currentTime, 0.02);
-  if (ko) spEl.classList.add('ko'); else spEl.classList.remove('ko');
-  spEl.classList.add('on'); startFx(!!ko);
-  try { spVideo.currentTime = 0; } catch (e) {}
-  spDeadline = rawNow() + ((isFinite(spVideo.duration) && spVideo.duration > 0) ? spVideo.duration : 3.3) + 1.5;
-  const p = spVideo.play();
-  if (p && p.catch) p.catch(() => { spVideo.muted = true; const q = spVideo.play(); if (q && q.catch) q.catch(() => endSpecial()); });
+  G.mode = 'special';
+  if (!openCut('special', !!ko, !!ko)) endSpecial();
 }
 function endSpecial() {
   if (G.mode !== 'special') return;
@@ -902,10 +954,13 @@ function updateFinale(raw) {
   }
   if (f >= 1.6) finishFinale();
 }
-if (spVideo) {
-  spVideo.addEventListener('ended', () => { if (G.mode === 'special') endSpecial(); });
-  spVideo.addEventListener('error', () => { if (G.mode === 'special') endSpecial(); });
+for (const kind in CUTS) {
+  const v = CUTS[kind];
+  if (!v || typeof v.addEventListener !== 'function') continue;
+  v.addEventListener('ended', () => { if (CUT_MODE[G.mode] === kind) endCut(); });
+  v.addEventListener('error', () => { if (CUT_MODE[G.mode] === kind) endCut(); });
 }
+if (spEl && typeof spEl.addEventListener === 'function') spEl.addEventListener('pointerdown', () => { if (G.mode === 'cutintro' || G.mode === 'outro') advance(); });
 function drawFinaleFx() {
   const raw = rawNow(), f = raw - G.finaleAt, K = (G.koFinish || G.ko.at) ? 1.6 : 1, pose = koPose();
   const hx = HERO_X + 175 * CS, hy = GROUND - 205 * CS;
@@ -990,7 +1045,7 @@ function update() {
     if (!G.introSting && raw - G.introAt > 0.75) { G.introSting = true; thunder(); G.flash = 0.7; G.shake = 14; }
     if (raw - G.introAt > (DEMO ? 0.05 : INTRO_LEN)) beginFight();
   }
-  if (G.mode === 'special' && raw > spDeadline) endSpecial();
+  if ((G.mode === 'special' || G.mode === 'cutintro' || G.mode === 'outro') && raw > spDeadline) endCut();
   if (G.mode === 'finale') updateFinale(raw);
   if (G.mode === 'play') {
     if (DEMO) for (const n of G.notes) if (!n.done && Math.abs(n.t - now) < 0.012 && (n.t * 1000 | 0) % 11 !== 0) press(n.lane);
@@ -1617,6 +1672,7 @@ function draw() {
   if (G.shake > 0) ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
   drawBg(tt); drawRain();
   if (G.mode === 'title') { drawIntro(tt); ctx.restore(); return; }
+  if (G.mode === 'cutintro') { ctx.restore(); return; }
   if (G.mode === 'intro') { drawVersus(tt); if (G.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + G.flash * 0.6 + ')'; ctx.fillRect(0, 0, W, H); } ctx.restore(); return; }
   ctx.save();
   if (G.ko.at) {
