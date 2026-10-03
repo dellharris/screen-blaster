@@ -68,7 +68,7 @@
 </head>
 <body>
 <canvas id="g"></canvas>
-<div id="special" aria-hidden="true"><div class="sp-bg"></div><canvas id="spFx"></canvas><video id="spVideo" class="cutvid" src="assets/special.mp4" poster="assets/special-poster.jpg" playsinline webkit-playsinline preload="auto"></video><video id="introVideo" class="cutvid wide" src="assets/intro.mp4" playsinline webkit-playsinline preload="auto"></video><video id="outroVideo" class="cutvid wide" src="assets/outro.mp4" playsinline webkit-playsinline preload="auto"></video><div class="sp-skip">TAP TO SKIP</div><div class="sp-flash"></div><div class="sp-vig"></div></div>
+<div id="special" aria-hidden="true"><div class="sp-bg"></div><canvas id="spFx"></canvas><video id="spVideo" class="cutvid" src="assets/special.mp4" poster="assets/special-poster.jpg" playsinline webkit-playsinline preload="auto"></video><video id="introVideo" class="cutvid wide" src="assets/intro.mp4" poster="assets/intro-poster.jpg" playsinline webkit-playsinline preload="auto"></video><video id="outroVideo" class="cutvid wide" src="assets/outro.mp4" poster="assets/outro-poster.jpg" playsinline webkit-playsinline preload="auto"></video><div class="sp-skip">TAP TO SKIP</div><div class="sp-flash"></div><div class="sp-vig"></div></div>
 <div id="topbtns"><button id="fs" type="button">Full screen</button><button id="install" type="button">Install app</button><button id="reset" type="button">New game</button></div>
 <div id="actions"><button id="share" type="button">Share my score</button><div id="a2hs">Tip: tap the Share icon in Safari, then Add to Home Screen, for full screen.</div></div>
 <div class="bar">
@@ -522,10 +522,11 @@ addEventListener('keydown', e => {
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (k in KEYS) { e.preventDefault(); press(KEYS[k]); }
 });
+cv.addEventListener('click', () => { if (G.mode !== 'play') advance(); });
 cv.addEventListener('pointerdown', e => {
   const r = cv.getBoundingClientRect();
   const x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
-  if (G.mode !== 'play') { advance(); return; }
+  if (G.mode !== 'play') return;
   if (y > H * 0.45) press(clamp(Math.floor((x - LEFT) / LW), 0, 3)); else ultimate();
 });
 
@@ -811,6 +812,7 @@ const SPECIAL_COMBO = 12, SPECIAL_DMG = 30;
 const spEl = document.getElementById('special'), spVideo = document.getElementById('spVideo'), introVideo = document.getElementById('introVideo'), outroVideo = document.getElementById('outroVideo');
 const CUTS = { special: spVideo, intro: introVideo, outro: outroVideo };
 const CUT_MODE = { special: 'special', cutintro: 'intro', outro: 'outro' };
+const CUT_LEN = { special: 3.3, intro: 5.3, outro: 2.3 };
 const CUTS_ON = !DEMO;
 let spDeadline = 0, spPrimed = false;
 function primeSpecialVideo() {
@@ -818,12 +820,17 @@ function primeSpecialVideo() {
   spPrimed = true;
   for (const k in CUTS) {
     const v = CUTS[k];
-    if (!v || typeof v.play !== 'function') continue;
+    if (k === 'intro' || !v || typeof v.play !== 'function') continue;
     try {
-      v.muted = true;
+      v.__priming = true; v.muted = true;
       const p = v.play();
-      const reset = () => { try { v.pause(); v.currentTime = 0; } catch (e) {} v.muted = false; };
-      if (p && p.then) p.then(reset).catch(() => { v.muted = false; }); else reset();
+      const reset = () => {
+        v.__priming = false;
+        if (v.__cancel) { v.__cancel = false; v.muted = false; return; }
+        try { v.pause(); v.currentTime = 0; } catch (e) {}
+        v.muted = false;
+      };
+      if (p && p.then) p.then(reset).catch(() => { v.__priming = false; v.muted = false; }); else reset();
     } catch (e) {}
   }
 }
@@ -841,8 +848,9 @@ function openCut(kind, intense, ko) {
   if (ko) spEl.classList.add('ko'); else spEl.classList.remove('ko');
   spEl.classList.add('on'); if (kind === 'special') startFx(!!intense);
   try { v.currentTime = 0; } catch (e) {}
-  G.cutAt = rawNow();
-  spDeadline = rawNow() + ((isFinite(v.duration) && v.duration > 0) ? v.duration : 3.3) + 1.5;
+  if (v.__priming) v.__cancel = true;
+  v.muted = false; G.cutAt = rawNow(); G.cutRetry = false;
+  spDeadline = rawNow() + ((isFinite(v.duration) && v.duration > 0) ? v.duration : CUT_LEN[kind]) + 1.5;
   const p = v.play();
   if (p && p.catch) p.catch(() => { v.muted = true; const q = v.play(); if (q && q.catch) q.catch(() => endCut()); });
   return true;
@@ -865,6 +873,15 @@ function panCut() {
   const cx = subjectX(kind, v.currentTime || 0);
   const px = vis >= 1 ? 0.5 : clamp((cx - vis / 2) / (1 - vis), 0, 1);
   v.style.objectPosition = (px * 100).toFixed(1) + '% 30%';
+}
+function watchCut(raw) {
+  const kind = CUT_MODE[G.mode]; if (!kind) return;
+  const v = CUTS[kind]; if (!v) return;
+  if (typeof v.readyState === 'number' && v.readyState < 3 && raw < G.cutAt + 12) spDeadline = Math.max(spDeadline, raw + 1.2);
+  if (!G.cutRetry && raw - G.cutAt > 0.7 && v.paused === true && !v.ended) {
+    G.cutRetry = true;
+    try { const p = v.play(); if (p && p.catch) p.catch(() => { v.muted = true; const q = v.play(); if (q && q.catch) q.catch(() => {}); }); } catch (e) {}
+  }
 }
 function endCut() {
   if (G.mode === 'special') endSpecial(); else if (G.mode === 'cutintro') endCutIntro(); else if (G.mode === 'outro') endOutro();
@@ -975,6 +992,7 @@ function updateFinale(raw) {
 for (const kind in CUTS) {
   const v = CUTS[kind];
   if (!v || typeof v.addEventListener !== 'function') continue;
+  v.addEventListener('loadedmetadata', () => { if (CUT_MODE[G.mode] === kind && isFinite(v.duration) && v.duration > 0) spDeadline = Math.max(spDeadline, G.cutAt + v.duration + 1.5); });
   v.addEventListener('ended', () => { if (CUT_MODE[G.mode] === kind) endCut(); });
   v.addEventListener('error', () => { if (CUT_MODE[G.mode] === kind) endCut(); });
 }
@@ -1064,6 +1082,7 @@ function update() {
     if (raw - G.introAt > (DEMO ? 0.05 : INTRO_LEN)) beginFight();
   }
   panCut();
+  watchCut(raw);
   if ((G.mode === 'special' || G.mode === 'cutintro' || G.mode === 'outro') && raw > spDeadline) endCut();
   if (G.mode === 'finale') updateFinale(raw);
   if (G.mode === 'play') {
