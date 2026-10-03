@@ -148,7 +148,7 @@ const G = {
   notes: [], popups: [], bolts: [], rain: [], lanePulse: [0, 0, 0, 0], pad: [null, null, null, null], sparks: [], chopI: 0,
   shake: 0, flash: 0, heroAtk: -9, heroHurt: -9, oppAtk: -9, oppHurt: -9, t0: 0, endAt: 0,
   opp: OPPS[0], result: '', unlocked: [], bgFlash: 0, nextBgFlash: 3, barIdx: 0, lastLine: -9, introAt: 0, introSting: false, cutAt: 0, lap: 0, dmgScale: 1, missDmg: 5, bestScores: {},
-  specialArmed: true, paused: false, heroForce: 0, oppKnockT: -9, finaleAt: 0, fBeam: false, fHit: false,
+  specialArmed: true, specialReadyAt: 0, gen: null, paused: false, heroForce: 0, oppKnockT: -9, finaleAt: 0, fBeam: false, fHit: false,
   ko: { at: 0, landed: false, chord: false, landT: 0 }, koFinish: false
 };
 function layout() {
@@ -296,7 +296,7 @@ function hash(i) { let h = Math.imul(i + 1, 2654435761) >>> 0; h ^= h >>> 13; h 
 function buildSolo() {
   const solo = {};
   let pos = 4;
-  for (let bar = 2; bar < 40; bar++) {
+  for (let bar = 2; bar < 160; bar++) {
     const sc = SCALES[bar % 4];
     const rest = hash(bar * 31) > 0.86;
     const cell = bar % 2 === 0 ? CELLS[Math.floor(hash(bar * 7) * 3)] : CELLS[Math.floor(hash(bar * 13) * 4)];
@@ -380,6 +380,19 @@ function startFight() {
   if (master && ac) master.gain.setTargetAtTime(0.7, ac.currentTime, 0.01);
   if (CUTS_ON && !rematch) { G.mode = 'cutintro'; if (!openCut('intro', false, false)) enterVersus(); } else enterVersus();
 }
+function genNotes(from, to) {
+  const g = G.gen;
+  for (let i = from; i < to; i++) {
+    const p = i % 2 === 0 ? g.dens[0] : g.dens[1];
+    if (g.r() < p) {
+      let l = Math.floor(g.r() * 4);
+      if (l === g.last) l = (l + 1 + Math.floor(g.r() * 3)) % 4;
+      g.last = l;
+      G.notes.push({ t: G.t0 + stepTime(i), lane: l, done: false });
+    }
+  }
+  g.next = to;
+}
 function beginFight() {
   const o = G.opp, lap = G.lap;
   Object.assign(G, { mode: 'play', hp: 100, ohp: 100, combo: 0, best: 0, power: 0, score: 0, notes: [], popups: [], bolts: [], result: '' });
@@ -388,19 +401,10 @@ function beginFight() {
   audioOff = ac ? ac.currentTime - tnow() : 0;
   const bars = o.bars + lap * 2, dens = [clamp(o.dens[0] + 0.02 * lap, 0, 0.9), clamp(o.dens[1] + 0.03 * lap, 0, 0.55)];
   FALL = Math.max(0.95, o.fall - 0.06 * lap); G.missDmg = o.missDmg + lap;
-  const r = rng(7 + G.level * 13);
-  let last = -1;
-  for (let i = 8; i < 8 * bars; i++) {
-    const p = i % 2 === 0 ? dens[0] : dens[1];
-    if (r() < p) {
-      let l = Math.floor(r() * 4);
-      if (l === last) l = (l + 1 + Math.floor(r() * 3)) % 4;
-      last = l;
-      G.notes.push({ t: G.t0 + stepTime(i), lane: l, done: false });
-    }
-  }
+  G.gen = { r: rng(7 + G.level * 13), last: -1, dens, next: 8 };
+  genNotes(8, 8 * bars);
   G.dmgScale = clamp(52 / G.notes.length, 0.5, 1.6);
-  G.endAt = G.notes[G.notes.length - 1].t + 1.5;
+  G.specialReadyAt = 0;
   G.flash = 1; G.shake = 10; thunder();
   startMusic();
 }
@@ -492,7 +496,7 @@ function hit(perfect, l) {
   padTap(l, perfect ? 1 : 0.75, perfect);
   if (G.combo % 6 === 0) { popup(PORTRAIT ? W / 2 : HERO_X + 40, GROUND - 335 * CS, HERO_BARS[G.barIdx++ % HERO_BARS.length], '#e8e6ff', PORTRAIT ? 16 : 20, 1.8); }
   if (G.ohp <= 0) { startFinisher(); return; }
-  if (G.mode === 'play' && G.specialArmed && G.combo >= SPECIAL_COMBO && G.endAt - now > 4) { G.specialArmed = false; startSpecial(); }
+  if (G.mode === 'play' && G.specialArmed && G.combo >= SPECIAL_COMBO && now >= G.specialReadyAt) { G.specialArmed = false; startSpecial(); }
 }
 function miss() {
   const now = tnow();
@@ -808,7 +812,7 @@ function startFx(intense) {
 function stopFx() { if (fx.active) fx.stopAt = rawNow() + 0.3; }
 
 /* ---------- special move ---------- */
-const SPECIAL_COMBO = 12, SPECIAL_DMG = 30;
+const SPECIAL_COMBO = 4, SPECIAL_DMG = 30, SPECIAL_COOLDOWN = 15;
 const spEl = document.getElementById('special'), spVideo = document.getElementById('spVideo'), introVideo = document.getElementById('introVideo'), outroVideo = document.getElementById('outroVideo');
 const CUTS = { special: spVideo, intro: introVideo, outro: outroVideo };
 const CUT_MODE = { special: 'special', cutintro: 'intro', outro: 'outro' };
@@ -938,7 +942,7 @@ function applySpecialHit() {
 }
 function finishFinale() {
   G.heroForce = 0; G.fBeam = false;
-  unfreezeTime(); G.paused = false; resyncAudio = true;
+  unfreezeTime(); G.paused = false; resyncAudio = true; G.specialReadyAt = tnow() + SPECIAL_COOLDOWN; G.specialArmed = true;
   if (G.ohp <= 0) endFight('win'); else G.mode = 'play';
 }
 function finishKO() {
@@ -1089,7 +1093,7 @@ function update() {
     if (DEMO) for (const n of G.notes) if (!n.done && Math.abs(n.t - now) < 0.012 && (n.t * 1000 | 0) % 11 !== 0) press(n.lane);
     if (DEMO && G.power >= 100) ultimate();
     for (const n of G.notes) if (!n.done && now - n.t > HIT_WIN) { n.done = true; miss(); if (G.mode !== 'play') break; }
-    if (G.mode === 'play' && now > G.endAt) endFight(G.ohp < G.hp ? 'win' : 'lose');
+    if (G.mode === 'play' && G.gen && G.gen.next < Math.floor((now - G.t0) / STEP) + 48) genNotes(G.gen.next, G.gen.next + 32);
   }
 }
 
@@ -1618,7 +1622,7 @@ function drawHud(tt) {
   ctx.textAlign = 'center'; ctx.fillStyle = '#e8e6ff'; ctx.font = '400 ' + (P ? 18 : 22) + 'px ' + F_TITLE; ctx.fillText('VS', W / 2, P ? 50 : 44);
   ctx.font = '700 ' + (P ? 12 : 13) + 'px ' + F_UI; ctx.fillStyle = '#9aa0d0'; ctx.fillText('SCORE ' + G.score, W / 2, P ? 90 : 66);
   if (G.combo >= 3) { ctx.font = '400 26px ' + F_TITLE; ctx.fillStyle = '#ffe27a'; ctx.fillText(G.combo + ' COMBO', W / 2, P ? 160 : 124); }
-  if (G.specialArmed && G.combo >= 3 && G.combo < SPECIAL_COMBO && G.mode === 'play') { ctx.font = '700 12px ' + F_UI; ctx.fillStyle = '#7fd8ff'; ctx.fillText('SPECIAL BLAST AT ' + SPECIAL_COMBO, W / 2, P ? 182 : 146); }
+  if (G.specialArmed && G.combo >= 1 && G.combo < SPECIAL_COMBO && G.mode === 'play' && tnow() >= G.specialReadyAt) { ctx.font = '700 12px ' + F_UI; ctx.fillStyle = '#7fd8ff'; ctx.fillText('SPECIAL BLAST AT ' + SPECIAL_COMBO, W / 2, P ? 182 : 146); }
   if (G.mode === 'play' && tnow() < G.t0 + 1.4) {
     const oy = P ? 100 : 0;
     ctx.fillStyle = '#9aa0d0'; ctx.font = '400 30px ' + F_TITLE; ctx.fillText('STAGE ' + ((G.level % OPPS.length) + 1), W / 2, 214 + oy);
