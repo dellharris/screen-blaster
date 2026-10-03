@@ -47,13 +47,12 @@
   #special .cutvid.act { display: block; }
   #special.k-intro .sp-bg { background-image: url(assets/intro-bg-land.jpg); }
   #special.k-outro .sp-bg { background-image: url(assets/outro-bg-land.jpg); }
-  .cutvid.wide { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; background: transparent; }
+  .cutvid.wide { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; object-position: 40% 30%; background: transparent; }
   .sp-skip { position: absolute; bottom: calc(16px + env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; color: rgba(232, 230, 255, 0.75); font-size: 12px; letter-spacing: 0.28em; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
   #special.k-intro .sp-skip, #special.k-outro .sp-skip { opacity: 1; }
   @media (orientation: portrait) {
     #special.k-intro .sp-bg { background-image: url(assets/intro-bg-port.jpg); }
     #special.k-outro .sp-bg { background-image: url(assets/outro-bg-port.jpg); }
-    .cutvid.wide { top: 50%; left: -10%; width: 120%; height: auto; aspect-ratio: 16 / 9; transform: translateY(-50%); -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 88%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 88%, transparent 100%); }
   }
   #actions { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 10; display: none; gap: 8px; flex-direction: column; align-items: flex-end; max-width: 280px; }
   #actions button { background: #ffe27a; color: #05060d; border: 0; border-radius: 6px; padding: 12px 18px; font-size: 15px; font-weight: 700; font-family: inherit; }
@@ -840,13 +839,32 @@ function openCut(kind, intense, ko) {
   ['special', 'intro', 'outro'].forEach(k => { spEl.classList.remove('k-' + k); const cv = CUTS[k]; if (cv && cv.classList) { if (k === kind) cv.classList.add('act'); else cv.classList.remove('act'); } });
   spEl.classList.add('k-' + kind);
   if (ko) spEl.classList.add('ko'); else spEl.classList.remove('ko');
-  spEl.classList.add('on'); startFx(!!intense);
+  spEl.classList.add('on'); if (kind === 'special') startFx(!!intense);
   try { v.currentTime = 0; } catch (e) {}
   G.cutAt = rawNow();
   spDeadline = rawNow() + ((isFinite(v.duration) && v.duration > 0) ? v.duration : 3.3) + 1.5;
   const p = v.play();
   if (p && p.catch) p.catch(() => { v.muted = true; const q = v.play(); if (q && q.catch) q.catch(() => endCut()); });
   return true;
+}
+const SUBJECT_X = {
+  intro: [[0, 0.34], [0.8, 0.38], [1.5, 0.37], [2.0, 0.36], [2.6, 0.4], [3.0, 0.43], [4.0, 0.42], [6, 0.42]],
+  outro: [[0, 0.45], [0.6, 0.47], [1.0, 0.5], [1.5, 0.49], [3, 0.46]]
+};
+function subjectX(kind, tm) {
+  const a = SUBJECT_X[kind]; if (!a) return 0.5;
+  if (tm <= a[0][0]) return a[0][1];
+  for (let i = 1; i < a.length; i++) if (tm <= a[i][0]) { const k = (tm - a[i - 1][0]) / (a[i][0] - a[i - 1][0]); return lerp(a[i - 1][1], a[i][1], k); }
+  return a[a.length - 1][1];
+}
+function panCut() {
+  const kind = CUT_MODE[G.mode];
+  if (kind !== 'intro' && kind !== 'outro') return;
+  const v = CUTS[kind]; if (!v || !v.style) return;
+  const ar = (window.innerWidth || 16) / (window.innerHeight || 9), vis = Math.min(1, ar / (16 / 9));
+  const cx = subjectX(kind, v.currentTime || 0);
+  const px = vis >= 1 ? 0.5 : clamp((cx - vis / 2) / (1 - vis), 0, 1);
+  v.style.objectPosition = (px * 100).toFixed(1) + '% 30%';
 }
 function endCut() {
   if (G.mode === 'special') endSpecial(); else if (G.mode === 'cutintro') endCutIntro(); else if (G.mode === 'outro') endOutro();
@@ -1045,6 +1063,7 @@ function update() {
     if (!G.introSting && raw - G.introAt > 0.75) { G.introSting = true; thunder(); G.flash = 0.7; G.shake = 14; }
     if (raw - G.introAt > (DEMO ? 0.05 : INTRO_LEN)) beginFight();
   }
+  panCut();
   if ((G.mode === 'special' || G.mode === 'cutintro' || G.mode === 'outro') && raw > spDeadline) endCut();
   if (G.mode === 'finale') updateFinale(raw);
   if (G.mode === 'play') {
