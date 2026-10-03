@@ -30,6 +30,7 @@
   #special { position: fixed; inset: 0; z-index: -1; opacity: 0; pointer-events: none; transition: opacity 0.25s; background: #02040c; overflow: hidden; }
   #special.on { z-index: 30; opacity: 1; pointer-events: auto; }
   .sp-bg { position: absolute; inset: 0; background: #02040c url(assets/special-bg-land.jpg) center / cover no-repeat; }
+  #spCity { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   #spVideo { position: absolute; top: 0; left: 50%; height: 100%; width: auto; aspect-ratio: 720 / 1068; transform: translateX(-50%); object-fit: cover; background: transparent; }
   .sp-vig { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%); }
   @media (orientation: portrait) { .sp-bg { background-image: url(assets/special-bg-port.jpg); } }
@@ -48,7 +49,7 @@
 </head>
 <body>
 <canvas id="g"></canvas>
-<div id="special" aria-hidden="true"><div class="sp-bg"></div><video id="spVideo" src="assets/special.mp4" poster="assets/special-poster.jpg" playsinline webkit-playsinline preload="auto"></video><div class="sp-vig"></div></div>
+<div id="special" aria-hidden="true"><div class="sp-bg"></div><canvas id="spCity"></canvas><video id="spVideo" src="assets/special.mp4" poster="assets/special-poster.jpg" playsinline webkit-playsinline preload="auto"></video><div class="sp-vig"></div></div>
 <div id="topbtns"><button id="fs" type="button">Full screen</button><button id="install" type="button">Install app</button></div>
 <div id="actions"><button id="share" type="button">Share my score</button><div id="a2hs">Tip: tap the Share icon in Safari, then Add to Home Screen, for full screen.</div></div>
 <div class="bar">
@@ -545,6 +546,143 @@ addEventListener('pointerup', () => {
 });
 if (typeof location !== 'undefined' && /^https?:/.test(location.protocol) && navigator.serviceWorker) navigator.serviceWorker.register('sw.js').catch(() => {});
 
+/* ---------- electric city behind the cutscene ---------- */
+const city = { cv: document.getElementById('spCity'), x: null, w: 0, h: 0, layers: [], cars: [], bolts: [], rain: [], nextBolt: 0, looping: false, active: false, stopAt: 0, t0: 0, last: 0 };
+const NEON = ['#7fd8ff', '#b794ff', '#ff7ad9', '#ffe27a', '#4cf0b4'];
+function buildCity() {
+  if (!city.cv || typeof city.cv.getContext !== 'function') return false;
+  const portrait = window.innerHeight > window.innerWidth;
+  const w = portrait ? 720 : 1280, h = portrait ? 1280 : 720;
+  if (city.w === w && city.layers.length) return true;
+  city.w = w; city.h = h; city.cv.width = w; city.cv.height = h; city.x = city.cv.getContext('2d');
+  const r = rng(2026);
+  const cfgs = [
+    { speed: 10, minW: 60, maxW: 130, minH: 0.22, maxH: 0.42, shade: ['#0a1038', '#050824'], win: 0.25, alpha: 0.85, neon: 0 },
+    { speed: 28, minW: 80, maxW: 170, minH: 0.30, maxH: 0.60, shade: ['#0b123f', '#04061c'], win: 0.45, alpha: 1, neon: 0.35 },
+    { speed: 70, minW: 110, maxW: 230, minH: 0.18, maxH: 0.50, shade: ['#05061a', '#02030c'], win: 0.28, alpha: 1, neon: 0.6 }
+  ];
+  city.layers = cfgs.map(c => {
+    const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
+    const g = cvs.getContext('2d'), wins = [], roofs = [];
+    let px = 0;
+    while (px < w) {
+      let bw = c.minW + r() * (c.maxW - c.minW);
+      if (px + bw > w - 20) bw = w - px;
+      const bh = h * (c.minH + r() * (c.maxH - c.minH)), by = h - bh;
+      const gr = g.createLinearGradient(0, by, 0, h); gr.addColorStop(0, c.shade[0]); gr.addColorStop(1, c.shade[1]);
+      g.globalAlpha = c.alpha; g.fillStyle = gr; g.fillRect(px, by, bw, bh); g.globalAlpha = 1;
+      const col = NEON[Math.floor(r() * NEON.length)];
+      if (r() < c.neon + 0.2) { g.fillStyle = col; g.shadowColor = col; g.shadowBlur = 10; g.fillRect(px, by, bw, 2); g.shadowBlur = 0; }
+      let tipX = px + bw * 0.5, tipY = by;
+      if (r() < 0.5) {
+        const ax = px + bw * (0.2 + r() * 0.6), ah = 20 + r() * 50;
+        g.fillStyle = '#0c1244'; g.fillRect(ax, by - ah, 2, ah); g.fillStyle = '#ff5d73'; g.fillRect(ax - 1, by - ah - 3, 4, 4);
+        tipX = ax; tipY = by - ah;
+      }
+      roofs.push([tipX, tipY]);
+      for (let wy = by + 14; wy < h - 12; wy += 18) {
+        for (let wx = px + 8; wx < px + bw - 14; wx += 14) {
+          if (r() < c.win) {
+            const lc = r() < 0.5 ? '#ffe27a' : r() < 0.5 ? '#7fd8ff' : '#ffffff';
+            g.globalAlpha = 0.45 + r() * 0.45; g.fillStyle = lc; g.fillRect(wx, wy, 6, 9); g.globalAlpha = 1;
+            wins.push([wx, wy]);
+          }
+        }
+      }
+      if (r() < c.neon * 0.7) {
+        const sx = px + bw * (0.1 + r() * 0.7), sh = 40 + r() * 60, sy = by + 20 + r() * Math.max(10, bh * 0.3);
+        g.fillStyle = col; g.shadowColor = col; g.shadowBlur = 14; g.fillRect(sx, sy, 6, sh); g.shadowBlur = 0;
+      }
+      px += bw + r() * 8;
+    }
+    return { c: cvs, speed: c.speed, wins, roofs };
+  });
+  city.cars = [];
+  for (let i = 0; i < 9; i++) {
+    const dir = r() < 0.5 ? -1 : 1;
+    city.cars.push({ x: r() * w, y: h * (0.28 + r() * 0.42), v: dir * (120 + r() * 240), len: 40 + r() * 90, col: NEON[Math.floor(r() * NEON.length)], th: 2 + r() * 1.5 });
+  }
+  city.rain = [];
+  for (let i = 0; i < 120; i++) city.rain.push({ x: r() * w, y: r() * h, s: 700 + r() * 500 });
+  return true;
+}
+function cityLine(pts, color, width, blur) {
+  const x = city.x;
+  x.strokeStyle = color; x.lineWidth = width; x.lineCap = 'round'; x.lineJoin = 'round'; x.shadowColor = color; x.shadowBlur = blur;
+  x.beginPath(); pts.forEach((q, i) => i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1])); x.stroke(); x.shadowBlur = 0;
+}
+function drawCity(raw) {
+  const x = city.x, w = city.w, h = city.h, t = raw - city.t0, dt = Math.min(0.05, raw - city.last); city.last = raw;
+  x.clearRect(0, 0, w, h);
+  const pulse = 0.5 + 0.5 * Math.sin(t * 1.7);
+  const hg = x.createLinearGradient(0, h * 0.35, 0, h); hg.addColorStop(0, 'rgba(60,110,255,0)'); hg.addColorStop(1, 'rgba(90,140,255,' + (0.28 + 0.14 * pulse) + ')');
+  x.fillStyle = hg; x.fillRect(0, h * 0.35, w, h * 0.65);
+  if (t > city.nextBolt) {
+    const bx = 60 + Math.random() * (w - 120);
+    const main = boltPath(bx, -10, bx + (Math.random() - 0.5) * 140, h * (0.5 + Math.random() * 0.15), 14, 60);
+    const branches = [];
+    for (let b = 0; b < 2; b++) { const [qx, qy] = main[3 + Math.floor(Math.random() * 8)]; const d = Math.random() < 0.5 ? -1 : 1; branches.push(boltPath(qx, qy, qx + d * (40 + Math.random() * 90), qy + 60 + Math.random() * 90, 5, 30)); }
+    city.bolts.push({ t, main, branches }); city.nextBolt = t + 0.7 + Math.random() * 1.6;
+  }
+  city.bolts = city.bolts.filter(b => t - b.t < 0.7);
+  let flash = 0;
+  for (const b of city.bolts) flash = Math.max(flash, strikeLevel(t - b.t));
+  const offs = [];
+  city.layers.forEach((L, li) => {
+    const off = (t * L.speed) % w; offs.push(off);
+    x.drawImage(L.c, -off, 0); x.drawImage(L.c, w - off, 0);
+    if (li >= 1) {
+      for (let k = 0; k < 22; k++) {
+        const wn = L.wins[Math.floor(Math.random() * L.wins.length)]; if (!wn) break;
+        const sx = (((wn[0] - off) % w) + w) % w;
+        x.globalAlpha = 0.85; x.fillStyle = Math.random() < 0.45 ? '#04061c' : NEON[Math.floor(Math.random() * NEON.length)]; x.fillRect(sx, wn[1], 6, 9); x.globalAlpha = 1;
+      }
+    }
+    if (li === 1) {
+      for (let k = 0; k < 2; k++) {
+        if (Math.random() > 0.45) continue;
+        const a = L.roofs[Math.floor(Math.random() * L.roofs.length)], b = L.roofs[Math.floor(Math.random() * L.roofs.length)]; if (!a || !b) continue;
+        const ax = (((a[0] - off) % w) + w) % w, bx = (((b[0] - off) % w) + w) % w;
+        if (Math.abs(ax - bx) < 40 || Math.abs(ax - bx) > 300) continue;
+        const pts = [[ax, a[1]]]; for (let s = 1; s < 6; s++) pts.push([ax + (bx - ax) * s / 6 + (Math.random() - 0.5) * 22, a[1] + (b[1] - a[1]) * s / 6 + (Math.random() - 0.5) * 22]); pts.push([bx, b[1]]);
+        cityLine(pts, '#bfeaff', 1.8, 12);
+      }
+    }
+    if (li === 1) {
+      for (const c of city.cars) {
+        c.x += c.v * dt; if (c.v > 0 && c.x - c.len > w) c.x = -10; if (c.v < 0 && c.x + c.len < 0) c.x = w + 10;
+        const x0 = c.x, x1 = c.x - Math.sign(c.v) * c.len, gr = x.createLinearGradient(x0, 0, x1, 0);
+        gr.addColorStop(0, c.col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        x.strokeStyle = gr; x.lineWidth = c.th; x.lineCap = 'round'; x.shadowColor = c.col; x.shadowBlur = 8;
+        x.beginPath(); x.moveTo(x0, c.y); x.lineTo(x1, c.y); x.stroke(); x.shadowBlur = 0;
+      }
+    }
+  });
+  for (const b of city.bolts) {
+    const f = strikeLevel(t - b.t); if (f <= 0) continue;
+    cityLine(b.main, 'rgba(127,216,255,' + f + ')', 6, 24);
+    b.branches.forEach(br => cityLine(br, 'rgba(127,216,255,' + f + ')', 3, 16));
+    cityLine(b.main, 'rgba(255,255,255,' + f + ')', 2.2, 8);
+  }
+  x.strokeStyle = 'rgba(160,190,255,0.28)'; x.lineWidth = 1; x.beginPath();
+  for (const d of city.rain) { d.y += d.s * dt; d.x -= d.s * 0.12 * dt; if (d.y > h) { d.y = -12; d.x = Math.random() * (w + 120); } x.moveTo(d.x, d.y); x.lineTo(d.x + 4, d.y + 16); }
+  x.stroke();
+  if (flash > 0) { x.fillStyle = 'rgba(190,210,255,' + 0.26 * flash + ')'; x.fillRect(0, 0, w, h); }
+}
+function cityLoop() {
+  if (!city.active) { city.looping = false; return; }
+  const raw = rawNow();
+  if (city.stopAt > 0 && raw > city.stopAt) { city.active = false; city.looping = false; return; }
+  drawCity(raw);
+  requestAnimationFrame(cityLoop);
+}
+function startCity() {
+  if (!buildCity()) return;
+  city.t0 = rawNow(); city.last = city.t0; city.nextBolt = 0.25; city.bolts = []; city.stopAt = 0; city.active = true;
+  if (!city.looping) { city.looping = true; requestAnimationFrame(cityLoop); }
+}
+function stopCity() { if (city.active) city.stopAt = rawNow() + 0.3; }
+
 /* ---------- special move ---------- */
 const SPECIAL_COMBO = 12, SPECIAL_DMG = 30;
 const spEl = document.getElementById('special'), spVideo = document.getElementById('spVideo');
@@ -559,13 +697,13 @@ function primeSpecialVideo() {
     if (p && p.then) p.then(reset).catch(() => { spVideo.muted = false; }); else reset();
   } catch (e) {}
 }
-function closeSpecial() { if (spEl) spEl.classList.remove('on'); if (spVideo && typeof spVideo.pause === 'function') { try { spVideo.pause(); } catch (e) {} } }
+function closeSpecial() { stopCity(); if (spEl) spEl.classList.remove('on'); if (spVideo && typeof spVideo.pause === 'function') { try { spVideo.pause(); } catch (e) {} } }
 function startSpecial() {
   if (G.mode !== 'play' || !spEl || !spVideo) return;
   G.mode = 'special'; G.paused = true; freezeTime();
   G.bolts = []; G.popups = [];
   if (master && ac) master.gain.setTargetAtTime(0, ac.currentTime, 0.02);
-  spEl.classList.add('on');
+  spEl.classList.add('on'); startCity();
   try { spVideo.currentTime = 0; } catch (e) {}
   spDeadline = rawNow() + ((isFinite(spVideo.duration) && spVideo.duration > 0) ? spVideo.duration : 3.3) + 1.5;
   const p = spVideo.play();
