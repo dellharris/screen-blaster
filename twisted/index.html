@@ -186,12 +186,18 @@ function dScale(wz) { return lerp(0.28, 1.15, wz); }
 // Overhead squish: simulates camera looking down at ~40° angle
 const SQUISH = 0.66;
 
+// ─── PWA install detection ────────────────────────────────────────────────────
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+const IS_STANDALONE = window.navigator.standalone === true ||
+                      window.matchMedia('(display-mode: standalone)').matches;
+const NEEDS_INSTALL = IS_IOS && !IS_STANDALONE;
+
 // ─── Game phases ──────────────────────────────────────────────────────────────
-const PH = { INTRO:0, TITLE:1, DLG:2, CUTSCENE:3, CROSSFADE:4, PLAY:5, CAUGHT:6, WIN:7, WIN_DLG:8, END:9 };
-let phase = PH.INTRO;
+const PH = { INSTALL:-1, INTRO:0, TITLE:1, DLG:2, CUTSCENE:3, CROSSFADE:4, PLAY:5, CAUGHT:6, WIN:7, WIN_DLG:8, END:9 };
+let phase = NEEDS_INSTALL ? PH.INSTALL : PH.INTRO;
 let pulse = 0, dlgIdx = 0, winDlgIdx = 0, endTimer = 0;
 let crossfadeTimer = 0;
-const CROSSFADE_DUR = 1.2; // seconds video→game overlap
+const CROSSFADE_DUR = 1.2;
 
 // ─── Cutscene video ───────────────────────────────────────────────────────────
 const VID = document.getElementById('cutscene-video');
@@ -322,11 +328,13 @@ function toV(touch) {
   };
 }
 
-function isCrouchBtn(x, y) { return x > VW-110 && x < VW-16 && y > VH-98 && y < VH-22; }
-function isMuteBtn(x, y)   { return x > VW-110 && x < VW-16 && y > 8    && y < 44;     }
-function isJoyZone(x, y)   { return x < VW*0.32 && y > VH*0.52; }
+const CROUCH_BTN = { cx: VW-64, cy: VH-64, r: 46 };
+function isCrouchBtn(x, y) { return Math.hypot(x-CROUCH_BTN.cx, y-CROUCH_BTN.cy) < CROUCH_BTN.r; }
+function isMuteBtn(x, y)   { return x > VW-110 && x < VW-16 && y > 8 && y < 44; }
+function isJoyZone(x, y)   { return x < VW*0.45 && y > VH*0.42; }
 
 function handleTap() {
+  if (phase === PH.INSTALL)   { return; } // install screen — no tap to proceed
   if (phase === PH.INTRO)     { phase = PH.TITLE; startMusic(); return; }
   if (phase === PH.TITLE)     { phase = PH.DLG; return; }
   if (phase === PH.DLG)       { dlgIdx++; if (dlgIdx >= DLG.length) playCutscene(); return; }
@@ -402,9 +410,9 @@ window.addEventListener('keyup', e => { KEYS[e.key]=false; });
 // ─── Game control ─────────────────────────────────────────────────────────────
 function startGame() {
   phase = PH.PLAY;
-  P.wx=0.72; P.wz=0.32; P.vwx=P.vwz=0; P.crouch=false; P.det=0; P.catches=0;
+  P.wx=0.85; P.wz=0.38; P.vwx=P.vwz=0; P.crouch=false; P.det=0; P.catches=0;
   P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false;
-  NPC.wx=0.50; NPC.wz=0.18; NPC.walkTimer=0; NPC.walkFrame=0; NPC.walkStep=0; NPC.moving=false;
+  NPC.wx=0.78; NPC.wz=0.28; NPC.walkTimer=0; NPC.walkFrame=0; NPC.walkStep=0; NPC.moving=false;
   CAR.la=0; CAR.ldir=1; CAR.ft=0;
   isCaught=false; catchFlash=0;
 }
@@ -845,27 +853,64 @@ function drawHUD() {
   cx.fillStyle = musicMuted ? '#555' : '#ff2d78';
   cx.fillText(musicMuted ? '🔇 MUTED' : '🔊 MUSIC', mx2+mw2/2, my2+mh2/2+4);
 
-  // STAY LOW button
-  const bx=VW-112, by=VH-102, bw=96, bh=74;
-  cx.globalAlpha=0.9;
-  cx.fillStyle = P.crouch ? '#ff2d7820':'#07050c';
-  cx.strokeStyle = P.crouch ? '#ff2d78':'#3a3a3a'; cx.lineWidth=2;
-  cx.beginPath(); cx.roundRect(bx,by,bw,bh,8); cx.fill(); cx.stroke();
-  const ic=bx+bw/2, ir=by+30;
-  cx.globalAlpha=1; cx.fillStyle = P.crouch ? '#ff2d78':'#888';
-  cx.beginPath(); cx.arc(ic, ir-12, 6, 0, Math.PI*2); cx.fill();
+  // STAY LOW — round arcade button
+  const { cx: bcx, cy: bcy, r: br } = CROUCH_BTN;
+  cx.save();
+  // Outer shadow/depth
+  cx.globalAlpha = 0.85;
+  cx.fillStyle = '#000';
+  cx.beginPath(); cx.arc(bcx+1, bcy+5, br, 0, Math.PI*2); cx.fill();
+  // Button face gradient
+  const btnG = cx.createRadialGradient(bcx-br*0.25, bcy-br*0.25, 2, bcx, bcy, br);
+  if (P.crouch) {
+    btnG.addColorStop(0, '#ff6699'); btnG.addColorStop(0.5, '#ff2d78'); btnG.addColorStop(1, '#8a0030');
+  } else {
+    btnG.addColorStop(0, '#3a3a4a'); btnG.addColorStop(0.5, '#1e1e2a'); btnG.addColorStop(1, '#0d0d14');
+  }
+  cx.fillStyle = btnG;
+  cx.beginPath(); cx.arc(bcx, bcy, br, 0, Math.PI*2); cx.fill();
+  // Inner rim
+  cx.globalAlpha = P.crouch ? 0.9 : 0.35;
+  cx.strokeStyle = P.crouch ? '#ff2d78' : '#555';
+  cx.lineWidth = 2.5;
+  cx.beginPath(); cx.arc(bcx, bcy, br - 2, 0, Math.PI*2); cx.stroke();
+  // Top highlight glint
+  cx.globalAlpha = P.crouch ? 0.35 : 0.15;
+  cx.fillStyle = '#fff';
+  cx.beginPath(); cx.ellipse(bcx - br*0.2, bcy - br*0.35, br*0.4, br*0.18, -0.4, 0, Math.PI*2); cx.fill();
+  // Crouching icon — head + body
+  cx.globalAlpha = 1;
+  cx.fillStyle = P.crouch ? '#fff' : '#777';
+  cx.beginPath(); cx.arc(bcx, bcy - 18, 7, 0, Math.PI*2); cx.fill();
   cx.beginPath();
-  cx.moveTo(ic,ir-6); cx.quadraticCurveTo(ic-12,ir+5,ic-16,ir+14);
-  cx.quadraticCurveTo(ic,ir+6,ic+16,ir+14); cx.quadraticCurveTo(ic+12,ir+5,ic,ir-6);
+  cx.moveTo(bcx-14, bcy-10); cx.quadraticCurveTo(bcx, bcy-2, bcx+14, bcy-10);
+  cx.quadraticCurveTo(bcx+18, bcy+4, bcx+10, bcy+10);
+  cx.quadraticCurveTo(bcx, bcy+4, bcx-10, bcy+10);
+  cx.quadraticCurveTo(bcx-18, bcy+4, bcx-14, bcy-10);
   cx.fill();
-  cx.font='bold 9px monospace'; cx.textAlign='center';
-  cx.fillStyle = P.crouch ? '#ff2d78':'#888';
-  cx.fillText('STAY LOW', bx+bw/2, by+bh-8);
+  // Label
+  cx.font = 'bold 8px monospace'; cx.textAlign = 'center';
+  cx.fillStyle = P.crouch ? '#ff2d78' : '#555';
+  cx.fillText('STAY LOW', bcx, bcy + br + 14);
+  cx.restore();
 
-  // Joystick ghost
+  // Joystick ghost — always show left zone hint
   if (!JOY.on) {
-    cx.globalAlpha=0.11; cx.strokeStyle='#fff'; cx.lineWidth=1.5;
-    cx.beginPath(); cx.arc(72,VH-64,58,0,Math.PI*2); cx.stroke();
+    cx.save();
+    cx.globalAlpha = 0.08;
+    cx.strokeStyle = '#fff'; cx.lineWidth = 1.5;
+    cx.beginPath(); cx.arc(90, VH - 80, JOY.r, 0, Math.PI*2); cx.stroke();
+    // direction arrows hint
+    cx.globalAlpha = 0.06;
+    cx.fillStyle = '#fff';
+    [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx,dy]) => {
+      cx.beginPath();
+      cx.moveTo(90+dx*(JOY.r-10), VH-80+dy*(JOY.r-10));
+      cx.lineTo(90+dx*(JOY.r-20)+dy*7, VH-80+dy*(JOY.r-20)-dx*7);
+      cx.lineTo(90+dx*(JOY.r-20)-dy*7, VH-80+dy*(JOY.r-20)+dx*7);
+      cx.closePath(); cx.fill();
+    });
+    cx.restore();
   }
   cx.restore();
 }
@@ -873,13 +918,97 @@ function drawHUD() {
 function drawJoystick() {
   if (!JOY.on) return;
   cx.save();
-  cx.globalAlpha=0.25; cx.strokeStyle='#fff'; cx.lineWidth=2;
-  cx.beginPath(); cx.arc(JOY.sx,JOY.sy,JOY.r,0,Math.PI*2); cx.stroke();
-  const kx = JOY.sx+JOY.dx*JOY.r, ky = JOY.sy+JOY.dy*JOY.r;
-  cx.globalAlpha=0.75; cx.fillStyle='#ff2d78';
-  cx.beginPath(); cx.arc(kx,ky,24,0,Math.PI*2); cx.fill();
-  cx.globalAlpha=0.25; cx.strokeStyle='#fff'; cx.lineWidth=1.5;
-  cx.beginPath(); cx.arc(kx,ky,24,0,Math.PI*2); cx.stroke();
+  const ox = JOY.sx, oy = JOY.sy, r = JOY.r;
+  // Base plate
+  cx.globalAlpha = 0.30;
+  cx.fillStyle = '#0d0d20';
+  cx.beginPath(); cx.arc(ox, oy, r, 0, Math.PI*2); cx.fill();
+  // Outer ring
+  cx.globalAlpha = 0.55;
+  cx.strokeStyle = '#3a3a6a'; cx.lineWidth = 3;
+  cx.beginPath(); cx.arc(ox, oy, r, 0, Math.PI*2); cx.stroke();
+  // Inner ring
+  cx.globalAlpha = 0.2;
+  cx.strokeStyle = '#8888aa'; cx.lineWidth = 1;
+  cx.beginPath(); cx.arc(ox, oy, r * 0.55, 0, Math.PI*2); cx.stroke();
+  // Direction marks (Xbox notches at N/S/E/W)
+  cx.globalAlpha = 0.35;
+  cx.strokeStyle = '#6666aa'; cx.lineWidth = 2;
+  [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dx,dy]) => {
+    cx.beginPath();
+    cx.moveTo(ox + dx*(r-16), oy + dy*(r-16));
+    cx.lineTo(ox + dx*(r-6),  oy + dy*(r-6));
+    cx.stroke();
+  });
+  // Thumbstick
+  const kx = ox + JOY.dx*r, ky = oy + JOY.dy*r;
+  const kr = 30;
+  // Stick shadow
+  cx.globalAlpha = 0.45;
+  cx.fillStyle = '#000';
+  cx.beginPath(); cx.arc(kx+2, ky+4, kr, 0, Math.PI*2); cx.fill();
+  // Stick body gradient
+  const sg = cx.createRadialGradient(kx-kr*0.3, ky-kr*0.3, 1, kx, ky, kr);
+  sg.addColorStop(0,   '#7070c0');
+  sg.addColorStop(0.45,'#282850');
+  sg.addColorStop(1,   '#10101e');
+  cx.globalAlpha = 0.92;
+  cx.fillStyle = sg;
+  cx.beginPath(); cx.arc(kx, ky, kr, 0, Math.PI*2); cx.fill();
+  // Stick rim
+  cx.globalAlpha = 0.6;
+  cx.strokeStyle = '#5555aa'; cx.lineWidth = 2;
+  cx.beginPath(); cx.arc(kx, ky, kr, 0, Math.PI*2); cx.stroke();
+  // Specular glint
+  cx.globalAlpha = 0.3;
+  cx.fillStyle = '#aaaaff';
+  cx.beginPath(); cx.ellipse(kx-kr*0.22, ky-kr*0.28, kr*0.35, kr*0.18, -0.5, 0, Math.PI*2); cx.fill();
+  cx.restore();
+}
+
+// ─── Install screen ───────────────────────────────────────────────────────────
+function drawInstall() {
+  // Dark background with intro image
+  cx.fillStyle = '#000'; cx.fillRect(0,0,VW,VH);
+  if (IMG['intro']) { cx.globalAlpha=0.45; cx.drawImage(IMG['intro'],0,0,VW,VH); cx.globalAlpha=1; }
+  // Dark overlay
+  cx.fillStyle='rgba(0,0,0,0.55)'; cx.fillRect(0,0,VW,VH);
+
+  cx.save();
+  // Title
+  cx.shadowBlur=40; cx.shadowColor='#ff2d78';
+  cx.font=`bold 58px serif`; cx.textAlign='center'; cx.fillStyle='#ff2d78';
+  cx.fillText('TWISTED', VW/2, VH*0.22);
+  cx.shadowBlur=0;
+  cx.font='bold 14px monospace'; cx.fillStyle='#00ffcc';
+  cx.fillText('MIAMI UNDERWORLD', VW/2, VH*0.31);
+
+  // Install prompt box
+  const bx=VW/2-170, by=VH*0.38, bw=340, bh=200, br2=14;
+  cx.globalAlpha=0.88;
+  cx.fillStyle='#07040f'; cx.strokeStyle='#ff2d78'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.roundRect(bx,by,bw,bh,br2); cx.fill(); cx.stroke();
+  cx.globalAlpha=1;
+
+  cx.font='bold 13px monospace'; cx.fillStyle='#ff2d78'; cx.textAlign='center';
+  cx.fillText('SAVE TO HOME SCREEN TO PLAY', VW/2, by+30);
+
+  cx.font='12px monospace'; cx.fillStyle='#aaa';
+  const steps = [
+    '1.  Tap the  Share  button  ⬆',
+    '2.  Scroll down and tap',
+    '    "Add to Home Screen"',
+    '3.  Tap  Add  — then open the app',
+  ];
+  steps.forEach((s,i) => cx.fillText(s, VW/2, by+58+i*28));
+
+  // Share icon indicator
+  cx.font='28px sans-serif'; cx.fillText('⬆', VW/2, by+170);
+
+  // Pulse hint
+  cx.globalAlpha = 0.4 + Math.sin(pulse*3)*0.35;
+  cx.font='italic 11px monospace'; cx.fillStyle='#fff';
+  cx.fillText('This game is a full-screen experience', VW/2, VH*0.92);
   cx.restore();
 }
 
@@ -1296,6 +1425,10 @@ function render(ts) {
   cx.scale(scale, scale);
 
   switch (phase) {
+    case PH.INSTALL:
+      drawInstall();
+      break;
+
     case PH.INTRO:
       drawIntro();
       break;
