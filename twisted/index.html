@@ -752,13 +752,13 @@ function drawDumpsters() {
 
   // Draw back bin first (B = further, smaller)
   const db = w2s(DUMP_B.wx, DUMP_B.wz);
-  const scb = dScale(DUMP_B.wz) * 3.4;
+  const scb = dScale(DUMP_B.wz) * 2.0;
   const dhb = 220 * scb * SQUISH;
   cx.drawImage(img, db.x - dhb*ar*0.46, db.y - dhb*0.92, dhb*ar, dhb);
 
   // Draw front bin (A = closer, bigger)
   const da = w2s(DUMP_A.wx, DUMP_A.wz);
-  const sca = dScale(DUMP_A.wz) * 3.4;
+  const sca = dScale(DUMP_A.wz) * 2.0;
   const dha = 220 * sca * SQUISH;
   cx.drawImage(img, da.x - dha*ar*0.46, da.y - dha*0.92, dha*ar, dha);
 }
@@ -815,7 +815,7 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   const baseDir = sprKey.replace(/_a$|_b$/, '');
   const spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
 
-  const baseH = 280;
+  const baseH = 360;
   const hasSquatSprite = crouchBinary && (SPR[key + '_squat'] || IMG[key + '_squat']);
   const heightMul = hasSquatSprite ? 1.0 : lerp(1.0, 0.62, crouchLerp);
   const sh = baseH * s * SQUISH * heightMul;
