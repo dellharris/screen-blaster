@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>TWISTED: Miami Underworld</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    canvas { position: fixed; top: 0; left: 0; display: block; z-index: 2; }
+    #cutscene-video {
+      display: none;
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      z-index: 1;
+      background: #000;
+    }
+    #rotate-msg {
+      display: none;
+      position: fixed; inset: 0; z-index: 99;
+      background: #000; color: #ff2d78;
+      font-family: monospace; font-size: 18px;
+      text-align: center;
+      align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+    }
+    #rotate-msg span { font-size: 48px; }
+    @media (orientation: portrait) and (max-width: 900px) {
+      #rotate-msg { display: flex; }
+    }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<video id="cutscene-video" src="assets/cutscene.mp4" playsinline webkit-playsinline preload="auto"></video>
+<audio id="bg-music" src="assets/bg_music.wav" loop preload="auto"></audio>
+<div id="rotate-msg"><span>&#8635;</span>ROTATE YOUR PHONE<br><small style="color:#666">Landscape mode required</small></div>
+<script>
+'use strict';
+
+// ─── Canvas setup ─────────────────────────────────────────────────────────────
+const cv = document.getElementById('c');
+const cx = cv.getContext('2d');
+const VW = 900, VH = 500;
+let scale = 1, offX = 0, offY = 0;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  cv.width  = window.innerWidth  * dpr;
+  cv.height = window.innerHeight * dpr;
+  scale = Math.min(cv.width / VW, cv.height / VH);
+  offX = (cv.width  - VW * scale) / 2;
+  offY = (cv.height - VH * scale) / 2;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ─── Assets ───────────────────────────────────────────────────────────────────
+const IMG = {};
+const SPR = {};
+const CHAR_KEYS = [
+  'sierra_front','sierra_back','sierra_side','sierra_backq',
+  'sierra_front_a','sierra_front_b','sierra_back_a','sierra_back_b',
+  'sierra_side_a','sierra_side_b','sierra_backq_a','sierra_backq_b',
+  'sierra_squat',
+  'naomi_front', 'naomi_back', 'naomi_side', 'naomi_backq',
+  'naomi_front_a','naomi_front_b','naomi_back_a','naomi_back_b',
+  'naomi_side_a','naomi_side_b','naomi_backq_a','naomi_backq_b',
+  'naomi_squat',
+  'police',
+];
+
+function processSprite(key) {
+  const img = IMG[key];
+  if (!img || !img.complete || img.naturalWidth === 0) {
+    SPR[key] = img || null;
+    return;
+  }
+  // Resize to working resolution
+  const maxH = 512;
+  const ratio = img.naturalWidth / img.naturalHeight;
+  const h = maxH, w = Math.max(1, Math.round(h * ratio));
+  const oc = document.createElement('canvas');
+  oc.width = w; oc.height = h;
+  const gc = oc.getContext('2d');
+  gc.drawImage(img, 0, 0, w, h);
+  try {
+    const id = gc.getImageData(0, 0, w, h);
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const bright = Math.max(d[i], d[i+1], d[i+2]);
+      if (bright < 8)       d[i+3] = 0;
+      else if (bright < 20) d[i+3] = Math.floor((bright - 8) / 12 * 255);
+    }
+    gc.putImageData(id, 0, 0);
+    SPR[key] = oc;
+  } catch(e) {
+    // getImageData blocked — use raw image, screen blend will handle bg
+    SPR[key] = img;
+  }
+}
+
+function loadImg(k, src) {
+  const i = new Image();
+  i.onload  = () => { IMG[k] = i; if (CHAR_KEYS.includes(k)) processSprite(k); };
+  i.onerror = () => { IMG[k] = null; SPR[k] = null; };
+  i.src = src;
+}
+
+loadImg('intro',        'assets/intro.jpg');
+loadImg('scene',        'assets/scene.png');
+loadImg('fg',           'assets/foreground.png');
+loadImg('police',       'assets/police.png');
+// Dialogue comic portraits (used as-is, no black removal needed)
+loadImg('dlg_naomi1',   'assets/dlg_naomi1.png');
+loadImg('dlg_naomi2',   'assets/dlg_naomi2.png');
+loadImg('dlg_sierra1',  'assets/dlg_sierra1.png');
+// Sierra directional sprites (base + walk frames a/b + squat)
+loadImg('sierra_front',   'assets/sierra_front.png');
+loadImg('sierra_back',    'assets/sierra_back.png');
+loadImg('sierra_side',    'assets/sierra_side.png');
+loadImg('sierra_backq',   'assets/sierra_backq.png');
+loadImg('sierra_front_a', 'assets/sierra_front_a.png');
+loadImg('sierra_front_b', 'assets/sierra_front_b.png');
+loadImg('sierra_back_a',  'assets/sierra_back_a.png');
+loadImg('sierra_back_b',  'assets/sierra_back_b.png');
+loadImg('sierra_side_a',  'assets/sierra_side_a.png');
+loadImg('sierra_side_b',  'assets/sierra_side_b.png');
+loadImg('sierra_backq_a', 'assets/sierra_backq_a.png');
+loadImg('sierra_backq_b', 'assets/sierra_backq_b.png');
+loadImg('sierra_squat',   'assets/sierra_squat.png');
+// Naomi directional sprites (base + walk frames a/b + squat)
+loadImg('naomi_front',    'assets/naomi_front.png');
+loadImg('naomi_back',     'assets/naomi_back.png');
+loadImg('naomi_side',     'assets/naomi_side.png');
+loadImg('naomi_backq',    'assets/naomi_backq.png');
+loadImg('naomi_front_a',  'assets/naomi_front_a.png');
+loadImg('naomi_front_b',  'assets/naomi_front_b.png');
+loadImg('naomi_back_a',   'assets/naomi_back_a.png');
+loadImg('naomi_back_b',   'assets/naomi_back_b.png');
+loadImg('naomi_side_a',   'assets/naomi_side_a.png');
+loadImg('naomi_side_b',   'assets/naomi_side_b.png');
+loadImg('naomi_backq_a',  'assets/naomi_backq_a.png');
+loadImg('naomi_backq_b',  'assets/naomi_backq_b.png');
+loadImg('naomi_squat',    'assets/naomi_squat.png');
+
+// ─── Perspective floor definition ─────────────────────────────────────────────
+// The alley floor is a trapezoid. Top = far from camera (narrow). Bot = near (wide).
+// These values are tuned to match the scene image's vanishing lines.
+const FL = {
+  topY: VH * 0.555, botY: VH * 0.96,   // Y range of playable floor
+  topXL: VW * 0.28, topXR: VW * 0.72,  // left/right edge at far end
+  botXL: VW * 0.04, botXR: VW * 0.96,  // left/right edge at near end
+};
+
+// World → screen. wx=0..1 (left→right on floor), wz=0..1 (far→near = small→big)
+function w2s(wx, wz) {
+  const lx = lerp(FL.topXL, FL.botXL, wz);
+  const rx = lerp(FL.topXR, FL.botXR, wz);
+  const sy = lerp(FL.topY,  FL.botY,  wz);
+  return { x: lx + wx * (rx - lx), y: sy };
+}
+
+// Depth scale: far=0.28, near=1.15  (GTA-style dramatic depth)
+function dScale(wz) { return lerp(0.28, 1.15, wz); }
+
+// Overhead squish: simulates camera looking down at ~40° angle
+const SQUISH = 0.66;
+
+// ─── Game phases ──────────────────────────────────────────────────────────────
+const PH = { INTRO:0, TITLE:1, DLG:2, CUTSCENE:3, PLAY:4, CAUGHT:5, WIN:6, WIN_DLG:7, END:8 };
+let phase = PH.INTRO;
+let pulse = 0, dlgIdx = 0, winDlgIdx = 0, endTimer = 0;
+
+// ─── Cutscene video ───────────────────────────────────────────────────────────
+const VID = document.getElementById('cutscene-video');
+const MUS = document.getElementById('bg-music');
+let musicMuted = false;
+
+function startMusic() {
+  MUS.volume = 0.7;
+  MUS.play().catch(() => {});
+}
+function toggleMute() {
+  musicMuted = !musicMuted;
+  MUS.muted = musicMuted;
+}
+
+function playCutscene() {
+  phase = PH.CUTSCENE;
+  VID.style.display = 'block';
+  VID.currentTime = 0;
+  VID.play().catch(() => {
+    // Autoplay blocked — skip straight to game
+    endCutscene();
+  });
+}
+
+function endCutscene() {
+  VID.pause();
+  VID.style.display = 'none';
+  startGame();
+}
+
+VID.addEventListener('ended', endCutscene);
+
+const WIN_DLG = [
+  { who:'SIERRA', col:'#ff2d78', portrait:'dlg_sierra1', txt:'We\'re good. We lost them.' },
+  { who:'NAOMI',  col:'#00ffcc', portrait:'dlg_naomi1',  txt:'We didn\'t lose them, Sierra. They know my face now.' },
+  { who:'SIERRA', col:'#ff2d78', portrait:'dlg_sierra1', txt:'So what\'s in the notebook that\'s worth all this?' },
+  { who:'NAOMI',  col:'#00ffcc', portrait:'dlg_naomi2',  txt:'Everything. My dad. What he did. What we did. All of it.' },
+  { who:'SIERRA', col:'#ff2d78', portrait:'dlg_sierra1', txt:'Naomi... if that gets out—' },
+  { who:'NAOMI',  col:'#00ffcc', portrait:'dlg_naomi2',  txt:'It won\'t. Not until I decide.' },
+];
+
+// Intro timing (seconds)
+const INTRO_IN   = 1.6;   // fade-in duration
+const INTRO_HOLD = 3.2;   // fully visible
+const INTRO_OUT  = 1.4;   // fade-out duration
+const INTRO_TOTAL = INTRO_IN + INTRO_HOLD + INTRO_OUT;
+let introTimer = 0;
+
+// Pre-generated grain canvas (created once)
+let grainCv = null;
+function buildGrain() {
+  grainCv = document.createElement('canvas');
+  grainCv.width = VW; grainCv.height = VH;
+  const gc = grainCv.getContext('2d');
+  const id = gc.createImageData(VW, VH);
+  for (let i = 0; i < id.data.length; i += 4) {
+    const v = (Math.random() * 255) | 0;
+    id.data[i] = id.data[i+1] = id.data[i+2] = v;
+    id.data[i+3] = (Math.random() * 28) | 0;
+  }
+  gc.putImageData(id, 0, 0);
+}
+
+const DLG = [
+  { who:'NAOMI',  col:'#00ffcc', portrait:'dlg_naomi1',  txt:'Sierra, we need to move faster. If my dad finds out I still have that notebook, it\'s over for both of us.' },
+  { who:'SIERRA', col:'#ff2d78', portrait:'dlg_sierra1', txt:'Chill, Naomi. We\'re moving. Just keep your eyes on the path and stop looking back. You\'re drawing attention.' },
+  { who:'NAOMI',  col:'#00ffcc', portrait:'dlg_naomi2',  txt:'This city is like a museum of people acting. I\'m done playing my part.' },
+];
+
+// ─── Player: Naomi ────────────────────────────────────────────────────────────
+// wx: 0=left wall, 1=right wall  |  wz: 0=far, 1=near camera
+const P = {
+  wx: 0.72, wz: 0.32,
+  sx: 0,    sy: 0,
+  vwx: 0,   vwz: 0,
+  wxSpeed: 0.55,
+  wzSpeed: 0.48,
+  crouch: false,
+  det: 0,
+  catches: 0, maxCatches: 3,
+  lastMvx: 0, lastMvz: 1,
+  walkTimer: 0, walkFrame: 0, walkStep: 0,
+  moving: false,
+};
+
+// ─── NPC: Sierra ─────────────────────────────────────────────────────────────
+const NPC = { wx: 0.42, wz: 0.18, targetWx: 0.20, targetWz: 0.02, lastMvx: 0, lastMvz: -1, walkTimer: 0, walkFrame: 0, walkStep: 0, moving: false };
+
+// ─── Patrol car ───────────────────────────────────────────────────────────────
+// Fixed at far-center of the alley
+const CAR = {
+  wx: 0.50, wz: 0.05,
+  la: 0, lspd: 0.65, ldir: 1,  // light angle oscillation
+  coneWx: 0.40,                 // half-width of detection cone in world X units
+  coneWz: 0.35,                 // detection depth range
+  ft: 0,                        // flash timer
+};
+
+// ─── Cover zones (world space) ────────────────────────────────────────────────
+const COVERS = [
+  { wxMin: 0.76, wxMax: 1.00, wzMin: 0.20, wzMax: 0.50, name:'dumpster' },
+  { wxMin: 0.00, wxMax: 0.10, wzMin: 0.10, wzMax: 0.65, name:'fire_escape' },
+];
+
+// Win zone: far-left door
+const WIN = { wxMin: 0.00, wxMax: 0.14, wzMin: 0.00, wzMax: 0.32 };
+
+// ─── State flags ──────────────────────────────────────────────────────────────
+let isCaught = false, catchFlash = 0;
+
+// ─── Input ────────────────────────────────────────────────────────────────────
+const JOY = { on:false, id:null, sx:0, sy:0, dx:0, dy:0, r:58 };
+let crouchId = null, mouseDrag = false;
+const KEYS = {};
+
+function toV(touch) {
+  const r = cv.getBoundingClientRect();
+  return {
+    x: ((touch.clientX - r.left) * (cv.width  / r.width)  - offX) / scale,
+    y: ((touch.clientY - r.top)  * (cv.height / r.height) - offY) / scale,
+  };
+}
+
+function isCrouchBtn(x, y) { return x > VW-110 && x < VW-16 && y > VH-98 && y < VH-22; }
+function isMuteBtn(x, y)   { return x > VW-110 && x < VW-16 && y > 8    && y < 44;     }
+function isJoyZone(x, y)   { return x < VW*0.32 && y > VH*0.52; }
+
+function handleTap() {
+  if (phase === PH.INTRO)     { phase = PH.TITLE; startMusic(); return; }
+  if (phase === PH.TITLE)     { phase = PH.DLG; return; }
+  if (phase === PH.DLG)       { dlgIdx++; if (dlgIdx >= DLG.length) playCutscene(); return; }
+  if (phase === PH.CUTSCENE)  { endCutscene(); return; }
+  if (phase === PH.WIN_DLG)   { winDlgIdx++; if (winDlgIdx >= WIN_DLG.length) { phase = PH.END; endTimer = 0; } return; }
+  if (phase === PH.END)       { resetGame(); return; }
+  if (phase === PH.CAUGHT)    { resetGame(); return; }
+}
+
+cv.addEventListener('touchstart', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const p = toV(t);
+    if (phase === PH.PLAY) {
+      if (isCrouchBtn(p.x, p.y) && crouchId === null) { crouchId = t.identifier; P.crouch = !P.crouch; }
+      else if (isMuteBtn(p.x, p.y)) { toggleMute(); }
+      else if (isJoyZone(p.x, p.y) && !JOY.on) {
+        JOY.on = true; JOY.id = t.identifier;
+        JOY.sx = p.x; JOY.sy = p.y; JOY.dx = JOY.dy = 0;
+      }
+    } else { handleTap(); }
+  }
+}, { passive: false });
+
+cv.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier !== JOY.id) continue;
+    const p = toV(t);
+    const dx = p.x - JOY.sx, dy = p.y - JOY.sy;
+    const d = Math.hypot(dx, dy) || 1, c = Math.min(d, JOY.r);
+    JOY.dx = (dx / d) * (c / JOY.r);
+    JOY.dy = (dy / d) * (c / JOY.r);
+  }
+}, { passive: false });
+
+cv.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === JOY.id)    { JOY.on = false; JOY.id = null; JOY.dx = JOY.dy = 0; }
+    if (t.identifier === crouchId)  crouchId = null;
+  }
+}, { passive: false });
+
+cv.addEventListener('mousedown', e => {
+  const r = cv.getBoundingClientRect();
+  const x = ((e.clientX-r.left)*(cv.width/r.width)-offX)/scale;
+  const y = ((e.clientY-r.top)*(cv.height/r.height)-offY)/scale;
+  if (phase === PH.PLAY) {
+    if (isCrouchBtn(x,y)) { P.crouch = !P.crouch; return; }
+    if (isMuteBtn(x,y))   { toggleMute(); return; }
+    if (isJoyZone(x,y)) { mouseDrag=true; JOY.on=true; JOY.sx=x; JOY.sy=y; JOY.dx=JOY.dy=0; }
+  } else handleTap();
+});
+cv.addEventListener('mousemove', e => {
+  if (!mouseDrag) return;
+  const r = cv.getBoundingClientRect();
+  const x = ((e.clientX-r.left)*(cv.width/r.width)-offX)/scale;
+  const y = ((e.clientY-r.top)*(cv.height/r.height)-offY)/scale;
+  const dx=x-JOY.sx, dy=y-JOY.sy, d=Math.hypot(dx,dy)||1, c=Math.min(d,JOY.r);
+  JOY.dx=(dx/d)*(c/JOY.r); JOY.dy=(dy/d)*(c/JOY.r);
+});
+cv.addEventListener('mouseup', () => { mouseDrag=false; JOY.on=false; JOY.dx=JOY.dy=0; });
+
+window.addEventListener('keydown', e => {
+  KEYS[e.key] = true;
+  if ((e.key===' '||e.key==='c') && phase===PH.PLAY) P.crouch=!P.crouch;
+  if (phase!==PH.PLAY) handleTap();
+});
+window.addEventListener('keyup', e => { KEYS[e.key]=false; });
+
+// ─── Game control ─────────────────────────────────────────────────────────────
+function startGame() {
+  phase = PH.PLAY;
+  P.wx=0.72; P.wz=0.32; P.vwx=P.vwz=0; P.crouch=false; P.det=0; P.catches=0;
+  P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false;
+  NPC.wx=0.50; NPC.wz=0.18; NPC.walkTimer=0; NPC.walkFrame=0; NPC.walkStep=0; NPC.moving=false;
+  CAR.la=0; CAR.ldir=1; CAR.ft=0;
+  isCaught=false; catchFlash=0;
+}
+function resetGame() { phase=PH.TITLE; pulse=0; dlgIdx=0; winDlgIdx=0; endTimer=0; }
+
+// ─── Update ───────────────────────────────────────────────────────────────────
+function inCover() {
+  for (const z of COVERS) {
+    if (P.wx>=z.wxMin && P.wx<=z.wxMax && P.wz>=z.wzMin && P.wz<=z.wzMax) return true;
+  }
+  return false;
+}
+
+function inSpotlight() {
+  // Car is at (CAR.wx, CAR.wz). Its light sweeps horizontally.
+  const dwx = P.wx - (CAR.wx + CAR.la * 0.30);
+  const dwz = P.wz - CAR.wz;
+  // Must be "in front of" the car (higher wz = closer to camera)
+  if (dwz < 0 || dwz > CAR.coneWz) return false;
+  // Cone narrows toward car, widens toward camera proportional to depth
+  const coneW = CAR.coneWx * (dwz / CAR.coneWz);
+  return Math.abs(dwx) < coneW;
+}
+
+let lastTs = 0;
+function update(ts) {
+  const dt = Math.min((ts - lastTs) / 1000, 0.05);
+  lastTs = ts;
+  pulse += dt;
+
+  // Intro auto-advance
+  if (phase === PH.INTRO) {
+    introTimer += dt;
+    if (introTimer >= INTRO_TOTAL) { phase = PH.TITLE; startMusic(); }
+    return;
+  }
+
+  // Win flash → win dialogue
+  tickWinFlash(dt);
+
+  // End card auto-replay after 8s
+  if (phase === PH.END) {
+    endTimer += dt;
+    if (endTimer > 8) resetGame();
+    return;
+  }
+
+  CAR.la += CAR.lspd * CAR.ldir * dt;
+  if (Math.abs(CAR.la) > 1) CAR.ldir *= -1;
+  CAR.ft += dt;
+
+  // Sierra trails Naomi toward the exit — stays diagonally ahead-left
+  // Slight lateral weave so she doesn't robot-lock to a fixed offset
+  const sideWeave = Math.sin(pulse * 1.3) * 0.022;
+  NPC.targetWx = clamp(P.wx - 0.15 + sideWeave, 0.03, 0.90);
+  NPC.targetWz = clamp(P.wz - 0.13, 0.02, 0.90);
+  const prevNx = NPC.wx, prevNz = NPC.wz;
+  // 6× faster than before — she actually keeps up now
+  NPC.wx = lerp(NPC.wx, NPC.targetWx, Math.min(1, dt * 2.0));
+  NPC.wz = lerp(NPC.wz, NPC.targetWz, Math.min(1, dt * 2.0));
+  const ndx = NPC.wx - prevNx, ndz = NPC.wz - prevNz;
+  const nmag = Math.hypot(ndx, ndz);
+  // Normalize so getSpriteKey thresholds (±0.01) fire correctly
+  if (nmag > 0.00003) { NPC.lastMvx = ndx / nmag; NPC.lastMvz = ndz / nmag; }
+
+  // Player world-space movement from joystick
+  let mx = 0, mz = 0;
+  if (JOY.on) { mx = JOY.dx; mz = JOY.dy; }
+  if (KEYS['ArrowLeft'] || KEYS['a']) mx -= 1;
+  if (KEYS['ArrowRight']|| KEYS['d']) mx += 1;
+  if (KEYS['ArrowUp']   || KEYS['w']) mz -= 1;
+  if (KEYS['ArrowDown'] || KEYS['s']) mz += 1;
+
+  const mag = Math.hypot(mx, mz) || 1;
+  if (mx || mz) { mx /= mag; mz /= mag; P.lastMvx = mx; P.lastMvz = mz; }
+
+  const spd = P.crouch ? 0.42 : 1.0;
+  P.wx = clamp(P.wx + mx * P.wxSpeed * spd * dt, 0.02, 0.98);
+  P.wz = clamp(P.wz + mz * P.wzSpeed * spd * dt, 0.01, 0.98);
+
+  // Walk animation tick — 3-frame cycle: neutral(0) → a(1) → neutral(0) → b(2)
+  P.moving = !!(mx || mz);
+  if (P.moving) {
+    const fps = P.crouch ? 4.0 : 7.0;
+    P.walkTimer += dt * fps;
+    if (P.walkTimer >= 1) {
+      P.walkTimer -= 1;
+      // 0=neutral, 1=_a, 2=neutral, 3=_b → maps to walkFrame 0,1,0,2
+      P.walkStep = (P.walkStep + 1) % 4;
+      P.walkFrame = [0, 1, 0, 2][P.walkStep];
+    }
+  } else {
+    P.walkTimer = 0; P.walkStep = 0; P.walkFrame = 0;
+  }
+
+  // NPC walk animation tick
+  NPC.moving = Math.hypot(NPC.wx - NPC.targetWx, NPC.wz - NPC.targetWz) > 0.004;
+  if (NPC.moving) {
+    NPC.walkTimer += dt * 7.0;
+    if (NPC.walkTimer >= 1) {
+      NPC.walkTimer -= 1;
+      NPC.walkStep = (NPC.walkStep + 1) % 4;
+      NPC.walkFrame = [0, 1, 0, 2][NPC.walkStep];
+    }
+  } else {
+    NPC.walkTimer = 0; NPC.walkStep = 0; NPC.walkFrame = 0;
+  }
+
+  // Derive screen pos for this frame
+  const sp = w2s(P.wx, P.wz);
+  P.sx = sp.x; P.sy = sp.y;
+
+  // Detection
+  if (inSpotlight() && !inCover() && !isCaught) {
+    P.det = Math.min(1, P.det + (P.crouch ? 0.25 : 1.0) * dt);
+  } else {
+    P.det = Math.max(0, P.det - 0.4 * dt);
+  }
+
+  if (P.det >= 1 && !isCaught) {
+    isCaught = true; catchFlash = 1; P.det = 0; P.catches++;
+    if (P.catches >= P.maxCatches) {
+      setTimeout(() => { phase = PH.CAUGHT; }, 1400);
+    } else {
+      setTimeout(() => { isCaught = false; }, 1600);
+    }
+  }
+  if (catchFlash > 0) catchFlash = Math.max(0, catchFlash - dt * 2.5);
+
+  // Win
+  if (P.wx >= WIN.wxMin && P.wx <= WIN.wxMax &&
+      P.wz >= WIN.wzMin && P.wz <= WIN.wzMax) {
+    phase = PH.WIN;
+  }
+}
+
+// Trigger win dialogue after a brief WIN flash
+let winFlashTimer = 0;
+function tickWinFlash(dt) {
+  if (phase !== PH.WIN) return;
+  winFlashTimer += dt;
+  if (winFlashTimer > 1.4) { phase = PH.WIN_DLG; winFlashTimer = 0; winDlgIdx = 0; }
+}
+
+// ─── Drawing: background ─────────────────────────────────────────────────────
+function drawBg(darken = 0) {
+  if (IMG['scene']) {
+    cx.drawImage(IMG['scene'], 0, 0, VW, VH);
+  } else {
+    // Fallback gradient
+    const g = cx.createLinearGradient(0,0,0,VH);
+    g.addColorStop(0,'#09031a'); g.addColorStop(1,'#1a0828');
+    cx.fillStyle = g; cx.fillRect(0,0,VW,VH);
+  }
+  if (darken > 0) {
+    cx.save(); cx.globalAlpha = darken;
+    cx.fillStyle = '#000'; cx.fillRect(0,0,VW,VH);
+    cx.restore();
+  }
+}
+
+// Patrol car spotlight cone drawn in world-perspective space
+function drawSpotlight() {
+  // Car screen position
+  const cs = w2s(CAR.wx, CAR.wz);
+  const ox = cs.x, oy = cs.y;
+
+  // The light sweeps forward (toward near camera, in screen = downward)
+  // Two boundary rays of the cone
+  const nearWz = clamp(CAR.wz + CAR.coneWz, 0, 1);
+  const sweep = CAR.la * 0.30;
+  const lEdge = w2s(CAR.wx + sweep - CAR.coneWx * 0.85, nearWz);
+  const rEdge = w2s(CAR.wx + sweep + CAR.coneWx * 0.85, nearWz);
+  const mEdge = w2s(CAR.wx + sweep, nearWz);
+
+  const g = cx.createRadialGradient(ox, oy, 0, mEdge.x, mEdge.y, 180);
+  g.addColorStop(0, 'rgba(255,250,190,0.42)');
+  g.addColorStop(0.5,'rgba(255,246,160,0.14)');
+  g.addColorStop(1, 'rgba(255,240,130,0)');
+
+  cx.save();
+  cx.beginPath();
+  cx.moveTo(ox, oy);
+  cx.lineTo(lEdge.x, lEdge.y);
+  cx.lineTo(rEdge.x, rEdge.y);
+  cx.closePath();
+  cx.fillStyle = g;
+  cx.fill();
+  cx.restore();
+}
+
+function drawCar() {
+  const cs  = w2s(CAR.wx, CAR.wz);
+  const s   = dScale(CAR.wz) * 3.0;
+  const spr = SPR['police'] || IMG['police'];
+
+  const baseW = 220, baseH = 120;
+  const sw = baseW * s, sh = baseH * s * SQUISH;
+  const x = cs.x, y = cs.y;
+
+  cx.save();
+  cx.translate(x, y);
+
+  if (spr) {
+    cx.scale(-1, 1);
+    cx.drawImage(spr, -sw / 2, -sh, sw, sh);
+    cx.scale(-1, 1);
+  } else {
+    cx.fillStyle = '#111820';
+    cx.fillRect(-sw / 2, -sh, sw, sh);
+  }
+
+  // Police light strobe overlay
+  const rb = Math.sin(CAR.ft * 6) > 0;
+  cx.globalAlpha = 0.5;
+  cx.fillStyle = rb ? '#ff000044' : '#0033ff44';
+  cx.beginPath();
+  cx.ellipse(0, -sh * 0.82, sw * 0.25, sh * 0.18, 0, 0, Math.PI * 2);
+  cx.fill();
+
+  cx.restore();
+}
+
+// Draw foreground overlay if available (dumpster, crates layer)
+function drawForeground() {
+  if (IMG['fg']) {
+    cx.drawImage(IMG['fg'], 0, 0, VW, VH);
+  }
+  // Always draw win zone glow
+  const ws = w2s(WIN.wxMin + 0.07, WIN.wzMin + 0.12);
+  cx.save();
+  cx.globalAlpha = 0.45 + Math.sin(pulse * 3) * 0.35;
+  cx.fillStyle = '#00ff88';
+  cx.font = `bold ${16 + Math.sin(pulse*3)*2}px sans-serif`;
+  cx.textAlign = 'center';
+  cx.fillText('→ SAFE', ws.x, ws.y);
+  cx.globalAlpha = 0.18 + Math.sin(pulse*3)*0.1;
+  const gg = cx.createRadialGradient(ws.x, ws.y, 0, ws.x, ws.y, 40);
+  gg.addColorStop(0,'#00ff88'); gg.addColorStop(1,'transparent');
+  cx.fillStyle = gg; cx.fillRect(ws.x-40, ws.y-40, 80, 80);
+  cx.restore();
+}
+
+// ─── Character rendering ──────────────────────────────────────────────────────
+// Pick the right sprite key + flip flag based on movement direction and state
+// walkFrame: 0=_a, 1=_b. crouch overrides to _squat.
+function getSpriteKey(charKey, mvx, mvz, walkFrame, crouch) {
+  if (crouch) return { k: charKey + '_squat', flip: mvx < -0.01 };
+
+  const ax = Math.abs(mvx), az = Math.abs(mvz);
+  const moving = ax > 0.001 || az > 0.001;
+  // walkFrame: 0=base(no suffix), 1=_a, 2=_b
+  const suf = !moving || walkFrame === 0 ? '' : walkFrame === 1 ? '_a' : '_b';
+
+  if (!moving) return { k: charKey + '_front', flip: false };
+
+  const goBack  = mvz < -0.01;
+  const goFront = mvz >  0.01;
+  const goRight = mvx >  0.01;
+  const goLeft  = mvx < -0.01;
+
+  if (goBack && goRight) return { k: charKey + '_backq' + suf, flip: false };
+  if (goBack && goLeft)  return { k: charKey + '_backq' + suf, flip: true  };
+  if (goBack)            return { k: charKey + '_back'  + suf, flip: false };
+  if (goRight && !goFront && !goBack) return { k: charKey + '_side' + suf, flip: false };
+  if (goLeft  && !goFront && !goBack) return { k: charKey + '_side' + suf, flip: true  };
+  return { k: charKey + '_front' + suf, flip: goLeft };
+}
+
+function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch) {
+  const sp  = w2s(wx, wz);
+  const s   = dScale(wz);
+
+  const { k: sprKey, flip } = getSpriteKey(key, mvx, mvz, walkFrame, crouch);
+  // Fallback chain: requested walk frame → base direction → front → raw image
+  const baseDir = sprKey.replace(/_a$|_b$/, '');
+  const spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
+
+  const baseH = 280;
+  // Only compress height if no squat sprite exists (fallback mode).
+  // When a real _squat sprite is loaded, the art already shows the crouch — don't double-squish.
+  const hasSquatSprite = crouch && (SPR[key + '_squat'] || IMG[key + '_squat']);
+  const heightMul = (crouch && !hasSquatSprite) ? 0.62 : 1.0;
+  const sh = baseH * s * SQUISH * heightMul;
+  const ar = spr ? (spr.width / spr.height) : 0.5;
+  const sw = sh * ar;
+  const yOff = (crouch && !hasSquatSprite) ? (baseH * s * SQUISH * (1 - heightMul)) * 0.5 : 0;
+
+  cx.save();
+  cx.translate(sp.x, sp.y + yOff);
+
+  // Ground shadow
+  cx.globalAlpha = 0.35;
+  cx.fillStyle = '#000';
+  cx.beginPath();
+  cx.ellipse(0, 6, sw * 0.28, sh * 0.05 * (1 / heightMul), 0, 0, Math.PI * 2);  cx.fill();
+  cx.globalAlpha = 1;
+
+  if (flip) cx.scale(-1, 1);
+
+  if (spr) {
+    cx.drawImage(spr, -sw / 2, -sh, sw, sh);
+  } else {
+    cx.globalAlpha = 0.85;
+    cx.fillStyle = key === 'naomi' ? '#a08070' : '#804040';
+    cx.fillRect(-sw / 2, -sh, sw, sh);
+  }
+
+  cx.restore();
+}
+
+// Detect outline glow when player is spotted
+function drawPlayerDetectGlow() {
+  if (P.det < 0.15) return;
+  const sp = { x: P.sx, y: P.sy };
+  const s  = dScale(P.wz);
+  const glow = cx.createRadialGradient(sp.x, sp.y - 40*s*SQUISH, 0,
+                                        sp.x, sp.y, 60*s);
+  glow.addColorStop(0, `rgba(255,200,0,${P.det * 0.55})`);
+  glow.addColorStop(1, 'transparent');
+  cx.save();
+  cx.globalAlpha = P.det;
+  cx.fillStyle = glow;
+  cx.beginPath();
+  cx.ellipse(sp.x, sp.y - 40*s*SQUISH, 35*s, 50*s*SQUISH, 0, 0, Math.PI*2);
+  cx.fill();
+  cx.restore();
+}
+
+// ─── Depth-sorted entity list ─────────────────────────────────────────────────
+// Draws characters in correct z-order (back first, front last = GTA style)
+function drawEntities() {
+  const ents = [
+    { type:'npc',    wx:NPC.wx, wz:NPC.wz, key:'sierra', mvx:NPC.lastMvx, mvz:NPC.lastMvz, walkFrame:NPC.walkFrame, crouch:false    },
+    { type:'player', wx:P.wx,   wz:P.wz,   key:'naomi',  mvx:P.lastMvx,   mvz:P.lastMvz,   walkFrame:P.walkFrame,   crouch:P.crouch },
+  ];
+  ents.sort((a,b) => a.wz - b.wz);
+  for (const e of ents) {
+    if (e.type === 'player') drawPlayerDetectGlow();
+    drawChar(e.key, e.wx, e.wz, e.mvx, e.mvz, e.walkFrame, e.crouch);
+  }
+}
+
+// ─── HUD ──────────────────────────────────────────────────────────────────────
+function drawMinimap() {
+  const mx=14, my=VH-104, mw=86, mh=76;
+  cx.save();
+  // Map background
+  cx.globalAlpha = 0.9;
+  cx.fillStyle='#06040e'; cx.strokeStyle='#ff2d78'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.roundRect(mx,my,mw,mh,5); cx.fill(); cx.stroke();
+
+  // Draw perspective trapezoid on minimap
+  cx.globalAlpha = 0.4; cx.strokeStyle='#334'; cx.lineWidth=0.7;
+  const ms = mw - 8, md = mh - 8;
+  function mapFloor(wx, wz) {
+    return { x: mx+4 + wx*ms, y: my+4 + wz*md };
+  }
+  cx.beginPath();
+  const tl=mapFloor(0,0), tr=mapFloor(1,0), bl=mapFloor(0,1), br=mapFloor(1,1);
+  cx.moveTo(tl.x,tl.y); cx.lineTo(tr.x,tr.y); cx.lineTo(br.x,br.y); cx.lineTo(bl.x,bl.y); cx.closePath();
+  cx.stroke();
+
+  // WIN zone
+  cx.globalAlpha = 0.6; cx.fillStyle='#00ff88';
+  const wp = mapFloor(WIN.wxMin, WIN.wzMin);
+  cx.fillRect(wp.x, wp.y, mw*WIN.wxMax*0.5, md*WIN.wzMax*0.4);
+
+  // Patrol car
+  cx.globalAlpha = 1; cx.fillStyle='#ffdd00';
+  const cp = mapFloor(CAR.wx, CAR.wz);
+  cx.beginPath(); cx.arc(cp.x, cp.y, 3, 0, Math.PI*2); cx.fill();
+
+  // Sierra
+  cx.fillStyle='#00ffcc';
+  const np = mapFloor(NPC.wx, NPC.wz);
+  cx.beginPath(); cx.arc(np.x, np.y, 2.5, 0, Math.PI*2); cx.fill();
+
+  // Player
+  cx.fillStyle='#ff2d78';
+  const pp = mapFloor(P.wx, P.wz);
+  cx.beginPath(); cx.arc(pp.x, pp.y, 3.5, 0, Math.PI*2); cx.fill();
+
+  cx.restore();
+}
+
+function drawHUD() {
+  cx.save();
+  // Objective
+  cx.globalAlpha = 0.85;
+  cx.fillStyle='#06040d'; cx.strokeStyle='#ff2d78'; cx.lineWidth=1.2;
+  cx.beginPath(); cx.roundRect(8,8,290,30,4); cx.fill(); cx.stroke();
+  cx.globalAlpha=1; cx.font='10px monospace'; cx.fillStyle='#e0e0e0'; cx.textAlign='left';
+  cx.fillText('OBJECTIVE: Get the notebook to the safehouse', 14, 27);
+
+  // Hearts
+  for (let i=0; i<P.maxCatches; i++) {
+    cx.font='17px sans-serif';
+    cx.fillStyle = i < P.maxCatches - P.catches ? '#ff2d78' : '#2a1220';
+    cx.fillText('♥', 13+i*22, 56);
+  }
+
+  // Detection bar
+  const dx=13, dy=62, dw=108, dh=8;
+  cx.fillStyle='#180c20'; cx.fillRect(dx,dy,dw,dh);
+  if (P.det > 0) {
+    const col = P.det>0.7?'#ff2020':P.det>0.4?'#ffaa00':'#ffe040';
+    cx.fillStyle=col; cx.fillRect(dx,dy,dw*P.det,dh);
+  }
+  cx.strokeStyle='#333'; cx.lineWidth=1; cx.strokeRect(dx,dy,dw,dh);
+  cx.font='8px monospace'; cx.fillStyle='#777'; cx.fillText('DETECTED', dx, dy+17);
+  if (P.catches > 0) {
+    cx.fillStyle='#ffaa00'; cx.font='bold 9px monospace';
+    cx.fillText(`SPOTTED ${P.catches}/${P.maxCatches}`, dx, dy+28);
+  }
+
+  // MUTE button — top right
+  const mx2=VW-110, my2=8, mw2=94, mh2=36;
+  cx.globalAlpha=0.9;
+  cx.fillStyle = musicMuted ? '#07050c' : '#ff2d7820';
+  cx.strokeStyle = musicMuted ? '#3a3a3a' : '#ff2d78'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.roundRect(mx2,my2,mw2,mh2,5); cx.fill(); cx.stroke();
+  cx.globalAlpha=1; cx.font='bold 10px monospace'; cx.textAlign='center';
+  cx.fillStyle = musicMuted ? '#555' : '#ff2d78';
+  cx.fillText(musicMuted ? '🔇 MUTED' : '🔊 MUSIC', mx2+mw2/2, my2+mh2/2+4);
+
+  // STAY LOW button
+  const bx=VW-112, by=VH-102, bw=96, bh=74;
+  cx.globalAlpha=0.9;
+  cx.fillStyle = P.crouch ? '#ff2d7820':'#07050c';
+  cx.strokeStyle = P.crouch ? '#ff2d78':'#3a3a3a'; cx.lineWidth=2;
+  cx.beginPath(); cx.roundRect(bx,by,bw,bh,8); cx.fill(); cx.stroke();
+  const ic=bx+bw/2, ir=by+30;
+  cx.globalAlpha=1; cx.fillStyle = P.crouch ? '#ff2d78':'#888';
+  cx.beginPath(); cx.arc(ic, ir-12, 6, 0, Math.PI*2); cx.fill();
+  cx.beginPath();
+  cx.moveTo(ic,ir-6); cx.quadraticCurveTo(ic-12,ir+5,ic-16,ir+14);
+  cx.quadraticCurveTo(ic,ir+6,ic+16,ir+14); cx.quadraticCurveTo(ic+12,ir+5,ic,ir-6);
+  cx.fill();
+  cx.font='bold 9px monospace'; cx.textAlign='center';
+  cx.fillStyle = P.crouch ? '#ff2d78':'#888';
+  cx.fillText('STAY LOW', bx+bw/2, by+bh-8);
+
+  // Joystick ghost
+  if (!JOY.on) {
+    cx.globalAlpha=0.11; cx.strokeStyle='#fff'; cx.lineWidth=1.5;
+    cx.beginPath(); cx.arc(72,VH-64,58,0,Math.PI*2); cx.stroke();
+  }
+  cx.restore();
+}
+
+function drawJoystick() {
+  if (!JOY.on) return;
+  cx.save();
+  cx.globalAlpha=0.25; cx.strokeStyle='#fff'; cx.lineWidth=2;
+  cx.beginPath(); cx.arc(JOY.sx,JOY.sy,JOY.r,0,Math.PI*2); cx.stroke();
+  const kx = JOY.sx+JOY.dx*JOY.r, ky = JOY.sy+JOY.dy*JOY.r;
+  cx.globalAlpha=0.75; cx.fillStyle='#ff2d78';
+  cx.beginPath(); cx.arc(kx,ky,24,0,Math.PI*2); cx.fill();
+  cx.globalAlpha=0.25; cx.strokeStyle='#fff'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.arc(kx,ky,24,0,Math.PI*2); cx.stroke();
+  cx.restore();
+}
+
+// ─── Intro sequence ───────────────────────────────────────────────────────────
+function drawIntro() {
+  // Black base
+  cx.fillStyle = '#000';
+  cx.fillRect(0, 0, VW, VH);
+
+  // Compute master alpha for fade in/out
+  let alpha;
+  if (introTimer < INTRO_IN) {
+    alpha = introTimer / INTRO_IN;
+  } else if (introTimer < INTRO_IN + INTRO_HOLD) {
+    alpha = 1;
+  } else {
+    alpha = 1 - (introTimer - INTRO_IN - INTRO_HOLD) / INTRO_OUT;
+  }
+  alpha = Math.max(0, Math.min(1, alpha));
+
+  cx.save();
+
+  // ── Base image ──
+  if (IMG['intro']) {
+    cx.globalAlpha = alpha;
+    cx.drawImage(IMG['intro'], 0, 0, VW, VH);
+  }
+
+  // ── Animated orange glow (right side) ──
+  const glowPulse = 0.06 + Math.sin(pulse * 1.4) * 0.025;
+  cx.globalAlpha = alpha * glowPulse * 4;
+  const og = cx.createRadialGradient(VW*0.82, VH*0.62, 0, VW*0.82, VH*0.55, VW*0.5);
+  og.addColorStop(0, '#c84010');
+  og.addColorStop(0.5,'#6a1c00');
+  og.addColorStop(1, 'transparent');
+  cx.globalCompositeOperation = 'screen';
+  cx.fillStyle = og;
+  cx.fillRect(0, 0, VW, VH);
+
+  // ── Animated teal glow (left side) ──
+  cx.globalAlpha = alpha * (0.04 + Math.sin(pulse * 1.1 + 1) * 0.02) * 3;
+  const tg = cx.createRadialGradient(VW*0.14, VH*0.40, 0, VW*0.14, VH*0.40, VW*0.45);
+  tg.addColorStop(0, '#1a8090');
+  tg.addColorStop(0.5,'#0a3a44');
+  tg.addColorStop(1, 'transparent');
+  cx.fillStyle = tg;
+  cx.fillRect(0, 0, VW, VH);
+
+  // ── Film grain overlay ──
+  if (!grainCv) buildGrain();
+  cx.globalAlpha = alpha * 0.18;
+  cx.globalCompositeOperation = 'overlay';
+  cx.drawImage(grainCv, 0, 0, VW, VH);
+
+  // ── Horizontal scan-line shimmer ──
+  cx.globalCompositeOperation = 'source-over';
+  cx.globalAlpha = alpha * 0.03;
+  cx.fillStyle = '#fff';
+  const lineY = ((pulse * 60) % VH);
+  cx.fillRect(0, lineY, VW, 2);
+
+  // ── Vignette ──
+  cx.globalAlpha = alpha * 0.55;
+  cx.globalCompositeOperation = 'source-over';
+  const vg = cx.createRadialGradient(VW/2,VH/2, VH*0.2, VW/2,VH/2, VH*0.85);
+  vg.addColorStop(0, 'transparent');
+  vg.addColorStop(1, '#000');
+  cx.fillStyle = vg;
+  cx.fillRect(0, 0, VW, VH);
+
+  cx.restore();
+
+  // ── Skip hint (fades in after 0.6s) ──
+  if (introTimer > 0.6) {
+    const skipAlpha = Math.min(1, (introTimer - 0.6) / 0.5) * alpha;
+    cx.save();
+    cx.globalAlpha = skipAlpha * (0.28 + Math.sin(pulse * 2.5) * 0.14);
+    cx.font = '10px monospace';
+    cx.fillStyle = '#aaa';
+    cx.textAlign = 'right';
+    cx.fillText('TAP TO SKIP', VW - 18, VH - 14);
+    cx.restore();
+  }
+}
+
+
+function drawTitle() {
+  drawBg(0.65);
+  cx.save();
+  cx.globalAlpha = 0.28;
+  const rg = cx.createRadialGradient(VW/2,VH*0.4,0,VW/2,VH*0.4,260);
+  rg.addColorStop(0,'#ff2d78'); rg.addColorStop(1,'transparent');
+  cx.fillStyle=rg; cx.fillRect(0,0,VW,VH);
+  cx.restore();
+
+  cx.save();
+  cx.shadowBlur=48; cx.shadowColor='#ff2d78';
+  cx.font=`bold ${66+Math.sin(pulse*1.8)*2}px serif`;
+  cx.textAlign='center'; cx.fillStyle='#ff2d78';
+  cx.fillText('TWISTED', VW/2, VH*0.30);
+  cx.shadowBlur=16; cx.font='bold 20px monospace'; cx.fillStyle='#00ffcc';
+  cx.fillText('MIAMI UNDERWORLD', VW/2, VH*0.41);
+  cx.restore();
+
+  cx.font='12px monospace'; cx.fillStyle='#555'; cx.textAlign='center';
+  cx.fillText('— THE NOTEBOOK RUN —', VW/2, VH*0.52);
+  cx.globalAlpha=0.5+Math.sin(pulse*3)*0.5;
+  cx.font='15px monospace'; cx.fillStyle='#fff';
+  cx.fillText('TAP TO BEGIN', VW/2, VH*0.74);
+  cx.globalAlpha=1;
+  cx.font='9px monospace'; cx.fillStyle='#2a2a2a';
+  cx.fillText('v0.2  |  proof of concept', VW/2, VH*0.94);
+}
+
+function drawDialogue() {
+  if (dlgIdx >= DLG.length) return;
+  const d = DLG[dlgIdx];
+
+  const FONT_TITLE = "900 16px 'Bangers', Impact, sans-serif";
+  const FONT_DLG   = "bold 15px 'Comic Neue', 'Comic Sans MS', Arial, sans-serif";
+  const FONT_HINT  = "italic 11px 'Comic Neue', 'Comic Sans MS', Arial, sans-serif";
+
+  const panelY = Math.round(VH * 0.46);
+  const panelH = VH - panelY;
+  const portW  = Math.round(VW * 0.29);
+
+  // ── Scene — upper half visible, bottom darkens into panel ──
+  drawBg(0);
+  cx.save();
+  const fadeG = cx.createLinearGradient(0, panelY - 60, 0, panelY + 10);
+  fadeG.addColorStop(0, 'transparent');
+  fadeG.addColorStop(1, 'rgba(0,0,0,0.92)');
+  cx.fillStyle = fadeG;
+  cx.fillRect(0, panelY - 60, VW, 70);
+  cx.restore();
+
+  // ── Panel base — deep black ─────────────────────────────────
+  cx.fillStyle = '#050209';
+  cx.fillRect(0, panelY, VW, panelH);
+
+  // ── Screen-tone diagonal lines (classic manga/GN texture) ──
+  cx.save();
+  cx.strokeStyle = d.col === '#00ffcc' ? '#06141a' : '#180610';
+  cx.lineWidth = 0.7;
+  cx.globalAlpha = 0.6;
+  for (let x = -panelH; x < VW + panelH; x += 7) {
+    cx.beginPath();
+    cx.moveTo(x, panelY);
+    cx.lineTo(x + panelH, VH);
+    cx.stroke();
+  }
+  cx.restore();
+
+  // ── Heavy top ink border ────────────────────────────────────
+  cx.fillStyle = '#000';
+  cx.fillRect(0, panelY - 7, VW, 8);
+  cx.fillStyle = d.col;
+  cx.fillRect(0, panelY - 1, VW, 4);
+
+  // ── PORTRAIT PANEL ─────────────────────────────────────────
+  cx.save();
+  cx.beginPath();
+  cx.rect(0, panelY, portW, panelH);
+  cx.clip();
+
+  cx.fillStyle = '#000';
+  cx.fillRect(0, panelY, portW, panelH);
+
+  const portrait = IMG[d.portrait];
+  if (portrait) {
+    const imgAR = portrait.naturalWidth / portrait.naturalHeight;
+    const panAR = portW / panelH;
+    let sx=0, sy=0, sw=portrait.naturalWidth, sh=portrait.naturalHeight;
+    if (imgAR > panAR) {
+      sw = portrait.naturalHeight * panAR;
+      sx = (portrait.naturalWidth - sw) * 0.38;
+    } else {
+      sh = portrait.naturalWidth / panAR;
+      sy = (portrait.naturalHeight - sh) * 0.08;
+    }
+    cx.drawImage(portrait, sx, sy, sw, sh, 0, panelY, portW, panelH);
+  }
+
+  // Right-edge fade into panel
+  const fadeR = cx.createLinearGradient(portW - 45, 0, portW, 0);
+  fadeR.addColorStop(0, 'transparent');
+  fadeR.addColorStop(1, '#050209');
+  cx.fillStyle = fadeR;
+  cx.fillRect(portW - 45, panelY, 45, panelH);
+  cx.restore();
+
+  // Portrait divider — thick ink
+  cx.fillStyle = '#000';
+  cx.fillRect(portW, panelY, 5, panelH);
+  cx.fillStyle = d.col;
+  cx.fillRect(portW + 5, panelY, 2.5, panelH);
+
+  // ── SPEAKER NAME — Bangers font, bottom of portrait ────────
+  cx.save();
+  const nameBarH = 28;
+  cx.fillStyle = d.col;
+  cx.fillRect(0, VH - nameBarH, portW, nameBarH);
+  // Diagonal slash accent
+  cx.fillStyle = 'rgba(0,0,0,0.25)';
+  cx.beginPath();
+  cx.moveTo(portW - 40, VH - nameBarH);
+  cx.lineTo(portW, VH - nameBarH);
+  cx.lineTo(portW - 14, VH);
+  cx.lineTo(portW - 54, VH);
+  cx.closePath();
+  cx.fill();
+  cx.font = FONT_TITLE;
+  cx.textAlign = 'center';
+  cx.letterSpacing = '3px';
+  cx.fillStyle = '#000';
+  cx.fillText(d.who, portW / 2 + 1, VH - 9);
+  cx.restore();
+
+  // ── SPEECH BUBBLE — cream white, black ink, proper tail ────
+  cx.save();
+  const bx  = portW + 18;
+  const by  = panelY + 12;
+  const bw  = VW - bx - 14;
+  const bh  = panelH - 44;
+  const rad = 12;
+
+  // Hard drop shadow
+  cx.fillStyle = 'rgba(0,0,0,0.55)';
+  cx.beginPath();
+  cx.roundRect(bx + 5, by + 5, bw, bh, rad);
+  cx.fill();
+
+  // Cream bubble fill
+  cx.fillStyle = '#fdfbf0';
+  cx.beginPath();
+  // Top edge
+  cx.moveTo(bx + rad, by);
+  cx.lineTo(bx + bw - rad, by);
+  cx.arcTo(bx+bw, by,      bx+bw, by+rad,   rad);
+  cx.lineTo(bx+bw, by+bh-rad);
+  cx.arcTo(bx+bw, by+bh,   bx+bw-rad, by+bh, rad);
+  cx.lineTo(bx+rad, by+bh);
+  cx.arcTo(bx, by+bh,      bx, by+bh-rad,   rad);
+  // Left side with tail
+  cx.lineTo(bx, by + 52);
+  cx.lineTo(bx - 16, by + 38);   // tail tip
+  cx.lineTo(bx, by + 24);
+  cx.lineTo(bx, by + rad);
+  cx.arcTo(bx, by, bx+rad, by, rad);
+  cx.closePath();
+  cx.fill();
+
+  // Ink outline — thick
+  cx.strokeStyle = '#0a0a0a';
+  cx.lineWidth = 3;
+  cx.stroke();
+
+  // Inner subtle texture lines (graphic novel depth)
+  cx.strokeStyle = 'rgba(0,0,0,0.06)';
+  cx.lineWidth = 1;
+  for (let ty = by + 18; ty < by + bh - 8; ty += 8) {
+    cx.beginPath();
+    cx.moveTo(bx + 10, ty);
+    cx.lineTo(bx + bw - 10, ty);
+    cx.stroke();
+  }
+
+  // ── Dialogue text ──
+  cx.font = FONT_DLG;
+  cx.fillStyle = '#0a0a0a';
+  cx.textAlign = 'left';
+  cx.shadowColor = 'transparent';
+  const pad = 18;
+  const maxW = bw - pad * 2;
+  const words = d.txt.split(' ');
+  let line = '', ly = by + 34, lineH = 23;
+  for (const w of words) {
+    const test = line + w + ' ';
+    if (cx.measureText(test).width > maxW && line) {
+      cx.fillText(line.trim(), bx + pad, ly);
+      line = w + ' '; ly += lineH;
+    } else line = test;
+  }
+  cx.fillText(line.trim(), bx + pad, ly);
+  cx.restore();
+
+  // ── CONTINUE HINT — italic, bottom right ───────────────────
+  cx.save();
+  cx.globalAlpha = 0.45 + Math.sin(pulse * 3.5) * 0.42;
+  cx.font = FONT_HINT;
+  cx.fillStyle = d.col;
+  cx.textAlign = 'right';
+  cx.fillText('tap to continue ▶', VW - 14, VH - 8);
+  cx.restore();
+
+  // ── PROGRESS DOTS ──────────────────────────────────────────
+  cx.save();
+  const dotCX = portW / 2;
+  for (let i = 0; i < DLG.length; i++) {
+    const active = i === dlgIdx;
+    cx.fillStyle   = active ? d.col : 'rgba(255,255,255,0.15)';
+    cx.strokeStyle = d.col;
+    cx.lineWidth   = 1.5;
+    cx.beginPath();
+    cx.arc(dotCX + (i - 1) * 18, VH - nameBarH - 12, active ? 5.5 : 3.5, 0, Math.PI*2);
+    cx.fill(); cx.stroke();
+  }
+  cx.restore();
+}
+
+
+function drawWinDlg() {
+  if (winDlgIdx >= WIN_DLG.length) return;
+  const d = WIN_DLG[winDlgIdx];
+
+  // Draw dialogue using win data — inline to avoid array mutation
+  const savedIdx = dlgIdx;
+  dlgIdx = winDlgIdx;
+  // Temporarily patch DLG entries
+  const origLen = DLG.length;
+  WIN_DLG.forEach((l, i) => { DLG[i] = l; });
+  DLG.length = WIN_DLG.length;
+
+  drawBg(0.72);
+  drawDialogue();
+
+  // Restore DLG
+  DLG.length = origLen;
+  [
+    { who:'NAOMI',  col:'#00ffcc', portrait:'dlg_naomi1',  txt:'Sierra, we need to move faster. If my dad finds out I still have that notebook, it\'s over for both of us.' },
+    { who:'SIERRA', col:'#ff2d78', portrait:'dlg_sierra1', txt:'Chill, Naomi. We\'re moving. Just keep your eyes on the path and stop looking back. You\'re drawing attention.' },
+    { who:'NAOMI',  col:'#00ffcc', portrait:'dlg_naomi2',  txt:'This city is like a museum of people acting. I\'m done playing my part.' },
+  ].forEach((l, i) => { DLG[i] = l; });
+  dlgIdx = savedIdx;
+}
+
+function drawEndCard() {
+  // Black base
+  cx.fillStyle = '#000';
+  cx.fillRect(0, 0, VW, VH);
+
+  // Intro image as base with heavy overlay
+  if (IMG['intro']) {
+    cx.save();
+    const t = Math.min(endTimer / 1.2, 1);
+    cx.globalAlpha = t;
+    cx.drawImage(IMG['intro'], 0, 0, VW, VH);
+    cx.globalAlpha = t * 0.55;
+    cx.fillStyle = '#000';
+    cx.fillRect(0, 0, VW, VH);
+    cx.restore();
+  }
+
+  // Season 2 tag
+  const t = Math.min(endTimer / 1.8, 1);
+  cx.save();
+  cx.globalAlpha = t;
+  cx.font = "12px 'Bangers', Impact, sans-serif";
+  cx.fillStyle = '#c86030';
+  cx.letterSpacing = '4px';
+  cx.textAlign = 'center';
+  cx.fillText('SEASON TWO  /  COMING SOON', VW/2, VH * 0.28);
+
+  // TWISTED title
+  cx.globalAlpha = Math.min((endTimer - 0.3) / 1.2, 1) * 1;
+  cx.shadowBlur = 40; cx.shadowColor = '#c86030';
+  cx.font = `bold ${70 + Math.sin(pulse*1.5)*1.5}px serif`;
+  cx.fillStyle = '#fff';
+  cx.fillText('twisted', VW/2, VH * 0.52);
+
+  // Tagline
+  cx.shadowBlur = 0;
+  cx.globalAlpha = Math.min((endTimer - 0.8) / 1.0, 1);
+  cx.font = "italic 18px 'Comic Neue', 'Comic Sans MS', serif";
+  cx.fillStyle = '#d4d4d4';
+  cx.letterSpacing = '1px';
+  cx.fillText('twisted minds together', VW/2, VH * 0.65);
+
+  // Notebook hint line — the real hook
+  cx.globalAlpha = Math.min((endTimer - 1.4) / 1.2, 1);
+  cx.font = "13px 'Comic Neue', 'Comic Sans MS', monospace";
+  cx.fillStyle = '#00ffcc';
+  cx.fillText('"The notebook changes everything."', VW/2, VH * 0.76);
+
+  // Tap to replay
+  cx.globalAlpha = (Math.min((endTimer - 2.0) / 1.0, 1)) * (0.4 + Math.sin(pulse*3)*0.4);
+  cx.font = "italic 11px 'Comic Neue', monospace";
+  cx.fillStyle = '#888';
+  cx.fillText('tap to play again', VW/2, VH * 0.91);
+
+  cx.restore();
+}
+
+function drawOverlay(col, title, sub, hint) {
+  cx.save();
+  cx.fillStyle=col; cx.fillRect(0,0,VW,VH);
+  cx.shadowBlur=35; cx.shadowColor=title.startsWith('C')?'#ff0000':'#00ff88';
+  cx.font='bold 52px serif'; cx.fillStyle='#fff'; cx.textAlign='center';
+  cx.fillText(title, VW/2, VH*0.38);
+  cx.shadowBlur=0; cx.font='15px monospace'; cx.fillStyle='#ccc';
+  cx.fillText(sub, VW/2, VH*0.54);
+  cx.globalAlpha=0.5+Math.sin(pulse*3)*0.5;
+  cx.font='14px monospace'; cx.fillStyle='#fff';
+  cx.fillText(hint, VW/2, VH*0.72);
+  cx.restore();
+}
+
+// ─── Main render loop ─────────────────────────────────────────────────────────
+function render(ts) {
+  update(ts);
+  cx.clearRect(0, 0, cv.width, cv.height);
+  cx.save();
+  cx.translate(offX, offY);
+  cx.scale(scale, scale);
+
+  switch (phase) {
+    case PH.INTRO:
+      drawIntro();
+      break;
+
+    case PH.TITLE:
+      drawTitle();
+      break;
+
+    case PH.DLG:
+      drawDialogue();
+      break;
+
+    case PH.CUTSCENE:
+      // Video plays underneath — canvas is transparent, just draw skip hint
+      cx.save();
+      cx.globalAlpha = 0.3 + Math.sin(pulse * 2.5) * 0.18;
+      cx.font = "italic 11px 'Comic Neue', monospace";
+      cx.fillStyle = '#fff';
+      cx.textAlign = 'right';
+      cx.fillText('tap to skip ▶', VW - 16, VH - 14);
+      cx.restore();
+      break;
+
+    case PH.PLAY:
+      drawBg();
+      drawSpotlight();
+      drawCar();
+      drawEntities();          // depth-sorted characters
+      drawForeground();        // foreground props layer on top of characters
+      // Spotted flash
+      if (catchFlash > 0) {
+        cx.save();
+        cx.globalAlpha=catchFlash*0.55; cx.fillStyle='#ff0000'; cx.fillRect(0,0,VW,VH);
+        cx.globalAlpha=catchFlash; cx.shadowBlur=20; cx.shadowColor='#ff0000';
+        cx.font='bold 44px serif'; cx.fillStyle='#fff'; cx.textAlign='center';
+        cx.fillText('SPOTTED!', VW/2, VH/2);
+        cx.restore();
+      }
+      drawMinimap();
+      drawHUD();
+      drawJoystick();
+      break;
+
+    case PH.CAUGHT:
+      drawBg(0.82);
+      drawOverlay('rgba(160,0,0,0.88)', 'CAUGHT', 'You were spotted too many times.', 'TAP TO TRY AGAIN');
+      break;
+
+    case PH.WIN:
+      // Brief flash before win dialogue
+      drawBg(0.3);
+      cx.save();
+      cx.globalAlpha = Math.max(0, 1 - winFlashTimer * 1.5);
+      cx.fillStyle = '#00ff8844';
+      cx.fillRect(0, 0, VW, VH);
+      cx.shadowBlur = 30; cx.shadowColor = '#00ff88';
+      cx.font = "bold 38px 'Bangers', Impact, serif";
+      cx.fillStyle = '#00ff88'; cx.textAlign = 'center';
+      cx.fillText('NOTEBOOK SECURED', VW/2, VH/2);
+      cx.restore();
+      break;
+
+    case PH.WIN_DLG:
+      drawWinDlg();
+      break;
+
+    case PH.END:
+      drawEndCard();
+      break;
+  }
+
+  cx.restore();
+  requestAnimationFrame(render);
+}
+
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
