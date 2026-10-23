@@ -228,9 +228,11 @@ function endCutscene() {
   // Start game in background immediately — position characters to match last video frame
   // (both crouched right-side near the dumpster)
   startGame();
-  P.crouch = true;
-  P.wx = 0.82; P.wz = 0.48;
-  NPC.wx = 0.70; NPC.wz = 0.38;
+  P.crouch = true; P.crouchLerp = 1;
+  P.wx = 0.85; P.wz = 0.46; P.renderWx = 0.85; P.renderWz = 0.46;
+  P.lastMvx = 0; P.lastMvz = 1;
+  NPC.wx = 0.78; NPC.wz = 0.38; NPC.renderWx = 0.78; NPC.renderWz = 0.38;
+  NPC.lastMvx = 0; NPC.lastMvz = 1;
   // Crossfade: video fades out while canvas fades in over it
   phase = PH.CROSSFADE;
   crossfadeTimer = 0;
@@ -278,21 +280,31 @@ const DLG = [
 // ─── Player: Naomi ────────────────────────────────────────────────────────────
 // wx: 0=left wall, 1=right wall  |  wz: 0=far, 1=near camera
 const P = {
-  wx: 0.72, wz: 0.32,
-  sx: 0,    sy: 0,
-  vwx: 0,   vwz: 0,
-  wxSpeed: 0.55,
-  wzSpeed: 0.48,
-  crouch: false,
+  wx: 0.85, wz: 0.46,
+  renderWx: 0.85, renderWz: 0.46,
+  sx: 0, sy: 0,
+  vwx: 0, vwz: 0,
+  wxSpeed: 0.55, wzSpeed: 0.48,
+  crouch: true,
+  crouchLerp: 1,       // 0=standing 1=crouched, interpolated
   det: 0,
   catches: 0, maxCatches: 3,
   lastMvx: 0, lastMvz: 1,
   walkTimer: 0, walkFrame: 0, walkStep: 0,
   moving: false,
+  idlePhase: 0,        // per-character breathing phase offset
 };
 
 // ─── NPC: Sierra ─────────────────────────────────────────────────────────────
-const NPC = { wx: 0.42, wz: 0.18, targetWx: 0.20, targetWz: 0.02, lastMvx: 0, lastMvz: -1, walkTimer: 0, walkFrame: 0, walkStep: 0, moving: false };
+const NPC = {
+  wx: 0.78, wz: 0.38,
+  renderWx: 0.78, renderWz: 0.38,
+  targetWx: 0.78, targetWz: 0.38,
+  lastMvx: 0, lastMvz: 1,
+  walkTimer: 0, walkFrame: 0, walkStep: 0,
+  moving: false,
+  idlePhase: 1.8,      // offset so breathing is out of phase with Naomi
+};
 
 // ─── Patrol car ───────────────────────────────────────────────────────────────
 // Fixed at far-center of the alley
@@ -411,9 +423,14 @@ window.addEventListener('keyup', e => { KEYS[e.key]=false; });
 // ─── Game control ─────────────────────────────────────────────────────────────
 function startGame() {
   phase = PH.PLAY;
-  P.wx=0.85; P.wz=0.38; P.vwx=P.vwz=0; P.crouch=false; P.det=0; P.catches=0;
+  P.wx=0.85; P.wz=0.46; P.renderWx=0.85; P.renderWz=0.46;
+  P.vwx=P.vwz=0; P.crouch=true; P.crouchLerp=1; P.det=0; P.catches=0;
   P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false;
-  NPC.wx=0.78; NPC.wz=0.28; NPC.walkTimer=0; NPC.walkFrame=0; NPC.walkStep=0; NPC.moving=false;
+  P.lastMvx=0; P.lastMvz=1;
+  NPC.wx=0.78; NPC.wz=0.38; NPC.renderWx=0.78; NPC.renderWz=0.38;
+  NPC.targetWx=0.78; NPC.targetWz=0.38;
+  NPC.walkTimer=0; NPC.walkFrame=0; NPC.walkStep=0; NPC.moving=false;
+  NPC.lastMvx=0; NPC.lastMvz=1;
   CAR.la=0; CAR.ldir=1; CAR.ft=0;
   isCaught=false; catchFlash=0;
 }
@@ -479,19 +496,27 @@ function update(ts) {
   if (Math.abs(CAR.la) > 1) CAR.ldir *= -1;
   CAR.ft += dt;
 
-  // Sierra trails Naomi toward the exit — stays diagonally ahead-left
-  // Slight lateral weave so she doesn't robot-lock to a fixed offset
+  // Sierra mirrors Naomi's crouch
   const sideWeave = Math.sin(pulse * 1.3) * 0.022;
-  NPC.targetWx = clamp(P.wx - 0.15 + sideWeave, 0.03, 0.90);
-  NPC.targetWz = clamp(P.wz - 0.13, 0.02, 0.90);
+
+  if (P.crouch) {
+    // Both crouching — Sierra pulls behind dumpster cover with Naomi
+    NPC.targetWx = clamp(P.wx - 0.06 + sideWeave, 0.76, 0.94);
+    NPC.targetWz = clamp(P.wz - 0.06, 0.22, 0.48);
+  } else {
+    // Running — Sierra leads slightly ahead-left
+    NPC.targetWx = clamp(P.wx - 0.15 + sideWeave, 0.03, 0.90);
+    NPC.targetWz = clamp(P.wz - 0.13, 0.02, 0.90);
+  }
+
   const prevNx = NPC.wx, prevNz = NPC.wz;
-  // 6× faster than before — she actually keeps up now
-  NPC.wx = lerp(NPC.wx, NPC.targetWx, Math.min(1, dt * 2.0));
-  NPC.wz = lerp(NPC.wz, NPC.targetWz, Math.min(1, dt * 2.0));
+  const npcSpeed = P.crouch ? 1.2 : 2.2;
+  NPC.wx = lerp(NPC.wx, NPC.targetWx, Math.min(1, dt * npcSpeed));
+  NPC.wz = lerp(NPC.wz, NPC.targetWz, Math.min(1, dt * npcSpeed));
   const ndx = NPC.wx - prevNx, ndz = NPC.wz - prevNz;
   const nmag = Math.hypot(ndx, ndz);
-  // Normalize so getSpriteKey thresholds (±0.01) fire correctly
   if (nmag > 0.00003) { NPC.lastMvx = ndx / nmag; NPC.lastMvz = ndz / nmag; }
+  else if (!P.crouch) { NPC.lastMvx = 0; NPC.lastMvz = 1; } // idle faces camera
 
   // Player world-space movement from joystick
   let mx = 0, mz = 0;
@@ -504,9 +529,22 @@ function update(ts) {
   const mag = Math.hypot(mx, mz) || 1;
   if (mx || mz) { mx /= mag; mz /= mag; P.lastMvx = mx; P.lastMvz = mz; }
 
-  const spd = P.crouch ? 0.42 : 1.0;
+  const spd = P.crouch ? 0.28 : 1.0;
   P.wx = clamp(P.wx + mx * P.wxSpeed * spd * dt, 0.02, 0.98);
   P.wz = clamp(P.wz + mz * P.wzSpeed * spd * dt, 0.01, 0.98);
+
+  // Smooth crouch interpolation
+  P.crouchLerp = lerp(P.crouchLerp, P.crouch ? 1 : 0, Math.min(1, dt * 9));
+
+  // Smooth render positions — tiny lag makes motion feel organic
+  P.renderWx = lerp(P.renderWx, P.wx, Math.min(1, dt * 14));
+  P.renderWz = lerp(P.renderWz, P.wz, Math.min(1, dt * 14));
+  NPC.renderWx = lerp(NPC.renderWx, NPC.wx, Math.min(1, dt * 14));
+  NPC.renderWz = lerp(NPC.renderWz, NPC.wz, Math.min(1, dt * 14));
+
+  // Idle phase ticks (breathing animation)
+  P.idlePhase   = (P.idlePhase   + dt) % (Math.PI * 200);
+  NPC.idlePhase = (NPC.idlePhase + dt) % (Math.PI * 200);
 
   // Walk animation tick — 3-frame cycle: neutral(0) → a(1) → neutral(0) → b(2)
   P.moving = !!(mx || mz);
@@ -657,16 +695,16 @@ function drawForeground() {
     cx.drawImage(IMG['fg'], 0, 0, VW, VH);
   }
 
-  // Dumpster — anchored to its cover zone world position
+  // Dumpster — anchored to cover zone, sized to mask the scene's built-in dumpster
   if (IMG['dumpster']) {
-    const dWx = 0.89, dWz = 0.34;          // world anchor (right-center of cover)
+    const dWx = 0.86, dWz = 0.42;
     const ds  = w2s(dWx, dWz);
-    const sc  = dScale(dWz) * 1.8;
+    const sc  = dScale(dWz) * 3.8;
     const img = IMG['dumpster'];
     const ar  = img.naturalWidth / img.naturalHeight;
     const dh  = 220 * sc * SQUISH;
     const dw  = dh * ar;
-    cx.drawImage(img, ds.x - dw * 0.5, ds.y - dh, dw, dh);
+    cx.drawImage(img, ds.x - dw * 0.48, ds.y - dh * 0.92, dw, dh);
   }
 
   // Win zone glow
@@ -710,33 +748,38 @@ function getSpriteKey(charKey, mvx, mvz, walkFrame, crouch) {
   return { k: charKey + '_front' + suf, flip: goLeft };
 }
 
-function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch) {
+function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase) {
   const sp  = w2s(wx, wz);
   const s   = dScale(wz);
 
-  const { k: sprKey, flip } = getSpriteKey(key, mvx, mvz, walkFrame, crouch);
-  // Fallback chain: requested walk frame → base direction → front → raw image
+  const crouchBinary = crouchLerp > 0.5;
+  const { k: sprKey, flip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
   const baseDir = sprKey.replace(/_a$|_b$/, '');
   const spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
 
   const baseH = 280;
-  // Only compress height if no squat sprite exists (fallback mode).
-  // When a real _squat sprite is loaded, the art already shows the crouch — don't double-squish.
-  const hasSquatSprite = crouch && (SPR[key + '_squat'] || IMG[key + '_squat']);
-  const heightMul = (crouch && !hasSquatSprite) ? 0.62 : 1.0;
+  const hasSquatSprite = crouchBinary && (SPR[key + '_squat'] || IMG[key + '_squat']);
+  const heightMul = hasSquatSprite ? 1.0 : lerp(1.0, 0.62, crouchLerp);
   const sh = baseH * s * SQUISH * heightMul;
   const ar = spr ? (spr.width / spr.height) : 0.5;
   const sw = sh * ar;
-  const yOff = (crouch && !hasSquatSprite) ? (baseH * s * SQUISH * (1 - heightMul)) * 0.5 : 0;
+  const yOff = hasSquatSprite ? 0 : lerp(0, baseH * s * SQUISH * (1 - 0.62) * 0.5, crouchLerp);
+
+  // Breathing idle — only when not moving
+  const moving = Math.abs(mvx) > 0.001 || Math.abs(mvz) > 0.001;
+  const breathY     = moving ? 0 : Math.sin(idlePhase * (crouchLerp > 0.5 ? 0.55 : 0.95)) * (crouchLerp > 0.5 ? 1.2 : 2.2);
+  const breathScale = moving ? 1 : 1 + Math.sin(idlePhase * 0.48) * 0.005;
 
   cx.save();
-  cx.translate(sp.x, sp.y + yOff);
+  cx.translate(sp.x, sp.y + yOff + breathY);
+  cx.scale(breathScale, breathScale);
 
   // Ground shadow
   cx.globalAlpha = 0.35;
   cx.fillStyle = '#000';
   cx.beginPath();
-  cx.ellipse(0, 6, sw * 0.28, sh * 0.05 * (1 / heightMul), 0, 0, Math.PI * 2);  cx.fill();
+  cx.ellipse(0, 6, sw * 0.28, Math.max(2, sh * 0.05), 0, 0, Math.PI * 2);
+  cx.fill();
   cx.globalAlpha = 1;
 
   if (flip) cx.scale(-1, 1);
@@ -774,13 +817,13 @@ function drawPlayerDetectGlow() {
 // Draws characters in correct z-order (back first, front last = GTA style)
 function drawEntities() {
   const ents = [
-    { type:'npc',    wx:NPC.wx, wz:NPC.wz, key:'sierra', mvx:NPC.lastMvx, mvz:NPC.lastMvz, walkFrame:NPC.walkFrame, crouch:false    },
-    { type:'player', wx:P.wx,   wz:P.wz,   key:'naomi',  mvx:P.lastMvx,   mvz:P.lastMvz,   walkFrame:P.walkFrame,   crouch:P.crouch },
+    { type:'npc',    wx:NPC.renderWx, wz:NPC.renderWz, key:'sierra', mvx:NPC.lastMvx, mvz:NPC.lastMvz, walkFrame:NPC.walkFrame, crouch:P.crouch,   crouchLerp:P.crouchLerp, idlePhase:NPC.idlePhase },
+    { type:'player', wx:P.renderWx,   wz:P.renderWz,   key:'naomi',  mvx:P.lastMvx,   mvz:P.lastMvz,   walkFrame:P.walkFrame,   crouch:P.crouch,   crouchLerp:P.crouchLerp, idlePhase:P.idlePhase   },
   ];
   ents.sort((a,b) => a.wz - b.wz);
   for (const e of ents) {
     if (e.type === 'player') drawPlayerDetectGlow();
-    drawChar(e.key, e.wx, e.wz, e.mvx, e.mvz, e.walkFrame, e.crouch);
+    drawChar(e.key, e.wx, e.wz, e.mvx, e.mvz, e.walkFrame, e.crouch, e.crouchLerp, e.idlePhase);
   }
 }
 
