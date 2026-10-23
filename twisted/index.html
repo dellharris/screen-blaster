@@ -131,6 +131,7 @@ loadImg('scene',        'assets/scene.png');
 loadImg('fg',           'assets/foreground.png');
 loadImg('police',       'assets/police.png');
 // Dialogue comic portraits (used as-is, no black removal needed)
+loadImg('dumpster',     'assets/dumpster.png');
 loadImg('dlg_naomi1',   'assets/dlg_naomi1.png');
 loadImg('dlg_naomi2',   'assets/dlg_naomi2.png');
 loadImg('dlg_sierra1',  'assets/dlg_sierra1.png');
@@ -655,7 +656,20 @@ function drawForeground() {
   if (IMG['fg']) {
     cx.drawImage(IMG['fg'], 0, 0, VW, VH);
   }
-  // Always draw win zone glow
+
+  // Dumpster — anchored to its cover zone world position
+  if (IMG['dumpster']) {
+    const dWx = 0.89, dWz = 0.34;          // world anchor (right-center of cover)
+    const ds  = w2s(dWx, dWz);
+    const sc  = dScale(dWz) * 1.8;
+    const img = IMG['dumpster'];
+    const ar  = img.naturalWidth / img.naturalHeight;
+    const dh  = 220 * sc * SQUISH;
+    const dw  = dh * ar;
+    cx.drawImage(img, ds.x - dw * 0.5, ds.y - dh, dw, dh);
+  }
+
+  // Win zone glow
   const ws = w2s(WIN.wxMin + 0.07, WIN.wzMin + 0.12);
   cx.save();
   cx.globalAlpha = 0.45 + Math.sin(pulse * 3) * 0.35;
