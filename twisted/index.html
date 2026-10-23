@@ -59,6 +59,8 @@ function resize() {
   const dpr = window.devicePixelRatio || 1;
   cv.width  = window.innerWidth  * dpr;
   cv.height = window.innerHeight * dpr;
+  cv.style.width  = window.innerWidth  + 'px';
+  cv.style.height = window.innerHeight + 'px';
   scale = Math.min(cv.width / VW, cv.height / VH);
   offX = (cv.width  - VW * scale) / 2;
   offY = (cv.height - VH * scale) / 2;
