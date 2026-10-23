@@ -4,8 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
+  <meta name="apple-mobile-web-app-title" content="TWISTED">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="assets/naomi.png">
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
   <title>TWISTED: Miami Underworld</title>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -184,9 +187,11 @@ function dScale(wz) { return lerp(0.28, 1.15, wz); }
 const SQUISH = 0.66;
 
 // ─── Game phases ──────────────────────────────────────────────────────────────
-const PH = { INTRO:0, TITLE:1, DLG:2, CUTSCENE:3, PLAY:4, CAUGHT:5, WIN:6, WIN_DLG:7, END:8 };
+const PH = { INTRO:0, TITLE:1, DLG:2, CUTSCENE:3, CROSSFADE:4, PLAY:5, CAUGHT:6, WIN:7, WIN_DLG:8, END:9 };
 let phase = PH.INTRO;
 let pulse = 0, dlgIdx = 0, winDlgIdx = 0, endTimer = 0;
+let crossfadeTimer = 0;
+const CROSSFADE_DUR = 1.2; // seconds video→game overlap
 
 // ─── Cutscene video ───────────────────────────────────────────────────────────
 const VID = document.getElementById('cutscene-video');
@@ -213,9 +218,15 @@ function playCutscene() {
 }
 
 function endCutscene() {
-  VID.pause();
-  VID.style.display = 'none';
+  // Start game in background immediately — position characters to match last video frame
+  // (both crouched right-side near the dumpster)
   startGame();
+  P.crouch = true;
+  P.wx = 0.82; P.wz = 0.48;
+  NPC.wx = 0.70; NPC.wz = 0.38;
+  // Crossfade: video fades out while canvas fades in over it
+  phase = PH.CROSSFADE;
+  crossfadeTimer = 0;
 }
 
 VID.addEventListener('ended', endCutscene);
@@ -320,6 +331,7 @@ function handleTap() {
   if (phase === PH.TITLE)     { phase = PH.DLG; return; }
   if (phase === PH.DLG)       { dlgIdx++; if (dlgIdx >= DLG.length) playCutscene(); return; }
   if (phase === PH.CUTSCENE)  { endCutscene(); return; }
+  if (phase === PH.CROSSFADE) { crossfadeTimer = CROSSFADE_DUR; return; }
   if (phase === PH.WIN_DLG)   { winDlgIdx++; if (winDlgIdx >= WIN_DLG.length) { phase = PH.END; endTimer = 0; } return; }
   if (phase === PH.END)       { resetGame(); return; }
   if (phase === PH.CAUGHT)    { resetGame(); return; }
@@ -427,6 +439,20 @@ function update(ts) {
   if (phase === PH.INTRO) {
     introTimer += dt;
     if (introTimer >= INTRO_TOTAL) { phase = PH.TITLE; startMusic(); }
+    return;
+  }
+
+  // Crossfade video → game
+  if (phase === PH.CROSSFADE) {
+    crossfadeTimer += dt;
+    // Fade video opacity down
+    VID.style.opacity = Math.max(0, 1 - crossfadeTimer / CROSSFADE_DUR);
+    if (crossfadeTimer >= CROSSFADE_DUR) {
+      VID.pause();
+      VID.style.display = 'none';
+      VID.style.opacity = 1;
+      phase = PH.PLAY;
+    }
     return;
   }
 
@@ -1292,6 +1318,23 @@ function render(ts) {
       cx.fillText('tap to skip ▶', VW - 16, VH - 14);
       cx.restore();
       break;
+
+    case PH.CROSSFADE: {
+      // Render full game scene — canvas fades in as video fades out beneath
+      const cfAlpha = Math.min(1, crossfadeTimer / CROSSFADE_DUR);
+      cx.save(); cx.globalAlpha = cfAlpha;
+      drawBg();
+      drawSpotlight();
+      drawCar();
+      drawEntities();
+      drawForeground();
+      cx.restore();
+      cx.save(); cx.globalAlpha = cfAlpha;
+      drawMinimap();
+      drawHUD();
+      cx.restore();
+      break;
+    }
 
     case PH.PLAY:
       drawBg();
