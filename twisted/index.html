@@ -46,7 +46,8 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<video id="cutscene-video" src="assets/cutscene.mp4" playsinline webkit-playsinline preload="auto"></video>
+<video id="cutscene-video" src="assets/cutscene_run.mp4" playsinline webkit-playsinline preload="auto"></video>
+<video id="latch-video" src="assets/cutscene_latch.mp4" playsinline webkit-playsinline preload="auto" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:3;background:#000"></video>
 <audio id="bg-music" src="assets/bg_music.wav" loop preload="auto"></audio>
 <div id="rotate-msg"><span>&#8635;</span>ROTATE YOUR PHONE<br><small style="color:#666">Landscape mode required</small></div>
 <script>
@@ -203,7 +204,46 @@ const CROSSFADE_DUR = 1.2;
 // ─── Cutscene video ───────────────────────────────────────────────────────────
 const VID = document.getElementById('cutscene-video');
 const MUS = document.getElementById('bg-music');
+const LVID = document.getElementById('latch-video');
 let musicMuted = false;
+
+// ─── Latch scene system ───────────────────────────────────────────────────────
+// Add clips here as the game grows. played=false means not yet triggered.
+const LATCH_CLIPS = [
+  { id: 'squat', src: 'assets/latch_squat.mp4', played: false },
+  // future clips go here: { id: 'key_found', src: 'assets/latch_key.mp4', played: false },
+];
+let latchCallback = null;
+
+function playLatch(clipId, onEnd) {
+  const clip = LATCH_CLIPS.find(c => c.id === clipId);
+  if (!clip || clip.played) { onEnd && onEnd(); return; }
+  clip.played = true;
+  latchCallback = onEnd;
+  LVID.src = clip.src;
+  LVID.style.display = 'block';
+  LVID.currentTime = 0;
+  LVID.play().catch(() => { endLatch(); });
+}
+
+function endLatch() {
+  LVID.pause();
+  LVID.style.display = 'none';
+  LVID.src = '';
+  const cb = latchCallback;
+  latchCallback = null;
+  cb && cb();
+}
+
+LVID.addEventListener('ended', endLatch);
+
+function triggerCrouch() {
+  const wasStanding = !P.crouch;
+  P.crouch = !P.crouch;
+  if (wasStanding) {
+    playLatch('squat', () => { P.crouch = true; P.crouchLerp = 1; });
+  }
+}
 
 function startMusic() {
   MUS.volume = 0.7;
@@ -218,27 +258,33 @@ function playCutscene() {
   phase = PH.CUTSCENE;
   VID.style.display = 'block';
   VID.currentTime = 0;
-  VID.play().catch(() => {
-    // Autoplay blocked — skip straight to game
-    endCutscene();
-  });
+  VID.play().catch(() => { chainLatch(); });
+}
+
+// Run video ends → chain into latch video seamlessly
+function chainLatch() {
+  VID.pause();
+  VID.style.display = 'none';
+  LVID.style.display = 'block';
+  LVID.currentTime = 0;
+  LVID.play().catch(() => { endCutscene(); });
 }
 
 function endCutscene() {
-  // Start game in background immediately — position characters to match last video frame
-  // (both crouched right-side near the dumpster)
+  LVID.pause();
+  LVID.style.display = 'none';
   startGame();
   P.crouch = true; P.crouchLerp = 1;
   P.wx = 0.85; P.wz = 0.46; P.renderWx = 0.85; P.renderWz = 0.46;
   P.lastMvx = 0; P.lastMvz = 1;
   NPC.wx = 0.78; NPC.wz = 0.38; NPC.renderWx = 0.78; NPC.renderWz = 0.38;
   NPC.lastMvx = 0; NPC.lastMvz = 1;
-  // Crossfade: video fades out while canvas fades in over it
   phase = PH.CROSSFADE;
   crossfadeTimer = 0;
 }
 
-VID.addEventListener('ended', endCutscene);
+VID.addEventListener('ended', chainLatch);
+LVID.addEventListener('ended', endCutscene);
 
 const WIN_DLG = [
   { who:'SIERRA', col:'#ff2d78', portrait:'dlg_sierra1', txt:'We\'re good. We lost them.' },
@@ -351,7 +397,7 @@ function handleTap() {
   if (phase === PH.INTRO)     { phase = PH.TITLE; startMusic(); return; }
   if (phase === PH.TITLE)     { phase = PH.DLG; return; }
   if (phase === PH.DLG)       { dlgIdx++; if (dlgIdx >= DLG.length) playCutscene(); return; }
-  if (phase === PH.CUTSCENE)  { endCutscene(); return; }
+  if (phase === PH.CUTSCENE)  { chainLatch(); return; }
   if (phase === PH.CROSSFADE) { crossfadeTimer = CROSSFADE_DUR; return; }
   if (phase === PH.WIN_DLG)   { winDlgIdx++; if (winDlgIdx >= WIN_DLG.length) { phase = PH.END; endTimer = 0; } return; }
   if (phase === PH.END)       { resetGame(); return; }
@@ -363,7 +409,7 @@ cv.addEventListener('touchstart', e => {
   for (const t of e.changedTouches) {
     const p = toV(t);
     if (phase === PH.PLAY) {
-      if (isCrouchBtn(p.x, p.y) && crouchId === null) { crouchId = t.identifier; P.crouch = !P.crouch; }
+      if (isCrouchBtn(p.x, p.y) && crouchId === null) { crouchId = t.identifier; triggerCrouch(); }
       else if (isMuteBtn(p.x, p.y)) { toggleMute(); }
       else if (isJoyZone(p.x, p.y) && !JOY.on) {
         JOY.on = true; JOY.id = t.identifier;
@@ -398,7 +444,7 @@ cv.addEventListener('mousedown', e => {
   const x = ((e.clientX-r.left)*(cv.width/r.width)-offX)/scale;
   const y = ((e.clientY-r.top)*(cv.height/r.height)-offY)/scale;
   if (phase === PH.PLAY) {
-    if (isCrouchBtn(x,y)) { P.crouch = !P.crouch; return; }
+    if (isCrouchBtn(x,y)) { triggerCrouch(); return; }
     if (isMuteBtn(x,y))   { toggleMute(); return; }
     if (isJoyZone(x,y)) { mouseDrag=true; JOY.on=true; JOY.sx=x; JOY.sy=y; JOY.dx=JOY.dy=0; }
   } else handleTap();
@@ -415,7 +461,7 @@ cv.addEventListener('mouseup', () => { mouseDrag=false; JOY.on=false; JOY.dx=JOY
 
 window.addEventListener('keydown', e => {
   KEYS[e.key] = true;
-  if ((e.key===' '||e.key==='c') && phase===PH.PLAY) P.crouch=!P.crouch;
+  if ((e.key===' '||e.key==='c') && phase===PH.PLAY) triggerCrouch();
   if (phase!==PH.PLAY) handleTap();
 });
 window.addEventListener('keyup', e => { KEYS[e.key]=false; });
@@ -434,7 +480,10 @@ function startGame() {
   CAR.la=0; CAR.ldir=1; CAR.ft=0;
   isCaught=false; catchFlash=0;
 }
-function resetGame() { phase=PH.TITLE; pulse=0; dlgIdx=0; winDlgIdx=0; endTimer=0; }
+function resetGame() {
+  phase=PH.TITLE; pulse=0; dlgIdx=0; winDlgIdx=0; endTimer=0;
+  LATCH_CLIPS.forEach(c => c.played = false);
+}
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 function inCover() {
