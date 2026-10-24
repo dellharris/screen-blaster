@@ -1724,8 +1724,7 @@ function drawDialogue() {
   if (dlgIdx >= DLG.length) return;
   const d = DLG[dlgIdx];
 
-  const FONT_TITLE = "900 16px 'Bangers', Impact, sans-serif";
-  const FONT_DLG   = "bold 15px 'Comic Neue', 'Comic Sans MS', Arial, sans-serif";
+  const FONT_TITLE = "900 18px 'Bangers', Impact, sans-serif";
   const FONT_HINT  = "italic 11px 'Comic Neue', 'Comic Sans MS', Arial, sans-serif";
 
   const panelY = Math.round(VH * 0.46);
@@ -1873,23 +1872,40 @@ function drawDialogue() {
     cx.stroke();
   }
 
-  // ── Dialogue text ──
-  cx.font = FONT_DLG;
+  // ── Dialogue text — auto-size to fill bubble ──
   cx.fillStyle = '#0a0a0a';
   cx.textAlign = 'left';
   cx.shadowColor = 'transparent';
-  const pad = 18;
+  const pad = 20;
   const maxW = bw - pad * 2;
-  const words = d.txt.split(' ');
-  let line = '', ly = by + 34, lineH = 23;
-  for (const w of words) {
-    const test = line + w + ' ';
-    if (cx.measureText(test).width > maxW && line) {
-      cx.fillText(line.trim(), bx + pad, ly);
-      line = w + ' '; ly += lineH;
-    } else line = test;
+  const bubbleH = bh - 52;  // usable height inside bubble
+
+  // Find largest font size where text wraps and fits vertically
+  let fontSize = 28, lineH, lines;
+  while (fontSize >= 13) {
+    cx.font = `900 ${fontSize}px 'Bangers', Impact, sans-serif`;
+    lineH = fontSize * 1.22;
+    lines = [];
+    let cur = '';
+    for (const w of d.txt.split(' ')) {
+      const test = cur + w + ' ';
+      if (cx.measureText(test).width > maxW && cur) {
+        lines.push(cur.trim()); cur = w + ' ';
+      } else cur = test;
+    }
+    lines.push(cur.trim());
+    if (lines.length * lineH <= bubbleH) break;
+    fontSize -= 1;
   }
-  cx.fillText(line.trim(), bx + pad, ly);
+
+  // Vertically center the text block in the bubble
+  const totalH = lines.length * lineH;
+  let ly = by + 16 + (bubbleH - totalH) / 2 + lineH * 0.85;
+  cx.font = `900 ${fontSize}px 'Bangers', Impact, sans-serif`;
+  for (const ln of lines) {
+    cx.fillText(ln, bx + pad, ly);
+    ly += lineH;
+  }
   cx.restore();
 
   // ── CONTINUE HINT — italic, bottom right ───────────────────
