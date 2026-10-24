@@ -153,6 +153,10 @@ loadImg('sierra_backq_b', 'assets/sierra_backq_b.png');
 loadImg('sierra_squat',   'assets/sierra_squat.png');
 // Sierra bubble gum idle animation frames
 for (let _gi = 1; _gi <= 8; _gi++) loadImg(`sierra_gum_${_gi}`, `assets/sierra_gum_${_gi}.png?v=3`);
+// Transition frames: squat → gum position
+loadImg('sierra_gum_t1', 'assets/sierra_gum_t1.png');
+loadImg('sierra_gum_t2', 'assets/sierra_gum_t2.png');
+loadImg('sierra_gum_t3', 'assets/sierra_gum_t3.png');
 // Naomi directional sprites (base + walk frames a/b + squat)
 loadImg('naomi_front',    'assets/naomi_front.png');
 loadImg('naomi_back',     'assets/naomi_back.png');
@@ -434,6 +438,21 @@ const COVERS = [
   { wxMin: 0.00, wxMax: 0.10, wzMin: 0.10, wzMax: 0.65, name:'fire_escape' },
 ];
 
+// Sierra gum animation sequence — transition frames then full 8-frame cycle
+const GUM_SEQ = [
+  { key:'sierra_gum_t1', dur:0.18 },
+  { key:'sierra_gum_t2', dur:0.18 },
+  { key:'sierra_gum_t3', dur:0.18 },
+  { key:'sierra_gum_1',  dur:0.30 },
+  { key:'sierra_gum_2',  dur:0.22 },
+  { key:'sierra_gum_3',  dur:0.28 },
+  { key:'sierra_gum_4',  dur:0.28 },
+  { key:'sierra_gum_5',  dur:0.32 },
+  { key:'sierra_gum_6',  dur:0.12 },
+  { key:'sierra_gum_7',  dur:0.28 },
+  { key:'sierra_gum_8',  dur:0.50 },
+];
+
 // Win zone: far-left door
 const WIN = { wxMin: 0.00, wxMax: 0.14, wzMin: 0.00, wzMax: 0.32 };
 
@@ -704,49 +723,27 @@ function update(ts) {
   }
 
   // ─── Sierra gum idle animation ────────────────────────────────────────────
-  const GUM_FRAME_DUR  = [0.30, 0.22, 0.28, 0.28, 0.32, 0.12, 0.28, 0.50];
-  const GUM_TRIGGER    = 5.0;
-  const GUM_FADE_SPEED = 3.5;  // faster fade — ~0.28s
+  const GUM_TRIGGER = 5.0;
 
-  if (P.crouch && !NPC.moving && !NPC.gumActive && !NPC.gumFading) {
+  if (P.crouch && !NPC.moving && !NPC.gumActive) {
     NPC.idleTimer += dt;
     if (NPC.idleTimer >= GUM_TRIGGER) {
-      // Start crossfade transition first, THEN play frames
-      NPC.gumFading = true;
-      NPC.gumFade   = 0;
+      NPC.gumActive = true; NPC.gumFrame = 0; NPC.gumFrameTimer = 0;
       NPC.idleTimer = 0;
     }
   } else if (!P.crouch || NPC.moving) {
-    // Interrupted — cancel everything immediately
-    NPC.gumFading = false; NPC.gumFade = 0;
     NPC.gumActive = false; NPC.gumFrame = 0; NPC.gumFrameTimer = 0;
+    NPC.gumFade = 0; NPC.gumFading = false;
     NPC.idleTimer = 0;
   }
 
-  // Tick crossfade
-  if (NPC.gumFading) {
-    NPC.gumFade = Math.min(1, NPC.gumFade + dt * GUM_FADE_SPEED);
-    if (NPC.gumFade >= 1) {
-      NPC.gumFading = false;
-      NPC.gumActive = true;
-      NPC.gumFrame  = 0;
-      NPC.gumFrameTimer = 0;
-    }
-  }
-
-  // Tick gum frames once transition is complete
   if (NPC.gumActive) {
     NPC.gumFrameTimer += dt;
-    if (NPC.gumFrameTimer >= GUM_FRAME_DUR[NPC.gumFrame]) {
+    if (NPC.gumFrameTimer >= GUM_SEQ[NPC.gumFrame].dur) {
       NPC.gumFrameTimer = 0;
       NPC.gumFrame++;
-      if (NPC.gumFrame >= 8) {
-        // Sequence done — fade back to squat, reset
-        NPC.gumActive  = false;
-        NPC.gumFrame   = 0;
-        NPC.gumFading  = false;
-        NPC.gumFade    = 0;
-        NPC.idleTimer  = 0;
+      if (NPC.gumFrame >= GUM_SEQ.length) {
+        NPC.gumActive = false; NPC.gumFrame = 0; NPC.idleTimer = 0;
       }
     }
   }
@@ -883,7 +880,9 @@ function drawEntities() {
     { type:'bin',    wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 2.2) },
     { type:'bin',    wz: DUMP_A.wz, draw: () => drawDumpster(DUMP_A.wx, DUMP_A.wz, 2.2) },
     { type:'npc',    wz: NPC.renderWz, draw: () => {
-      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, NPC.gumActive ? NPC.gumFrame : -1, NPC.gumFade);
+      // Pass active sequence sprite key when gum is running
+      const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
+      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, gumSprKey, 0);
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
@@ -937,23 +936,19 @@ function getSpriteKey(charKey, mvx, mvz, walkFrame, crouch) {
   return { k: charKey + '_front' + suf, flip: goLeft };
 }
 
-function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase, gumFrame, gumFade) {
+function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase, gumSprKey, gumFade) {
   const sp  = w2s(wx, wz);
   const s   = dScale(wz);
   const crouchBinary = crouchLerp > 0.5;
-
-  // During crossfade (0 < gumFade < 1): draw squat fading out + gum_1 fading in
-  const inFade = gumFade > 0 && gumFade < 1 && gumFrame < 0;
 
   // Resolve sprites
   const { k: sprKey, flip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
   const baseDir = sprKey.replace(/_a$|_b$/, '');
   let spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
 
-  // Active gum frame overrides base sprite
-  if (gumFrame >= 0 && gumFrame < 8) {
-    const gKey = `${key}_gum_${gumFrame + 1}`;
-    spr = SPR[gKey] || IMG[gKey] || spr;
+  // Active gum sequence key overrides base sprite entirely
+  if (gumSprKey) {
+    spr = SPR[gumSprKey] || IMG[gumSprKey] || spr;
   }
 
   const baseH = 360;
@@ -982,33 +977,13 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   cx.fill();
   cx.globalAlpha = 1;
 
-  if (inFade) {
-    // Crossfade: squat sprite fades out, gum_1 fades in
-    const sqKey  = `${key}_squat`;
-    const sqSpr  = SPR[sqKey] || IMG[sqKey] || spr;
-    const gumSpr = SPR[`${key}_gum_1`] || IMG[`${key}_gum_1`] || spr;
-
-    const sqAr  = sqSpr  ? sqSpr.width  / sqSpr.height  : ar;
-    const gmAr  = gumSpr ? gumSpr.width / gumSpr.height : ar;
-    const sqW = sh * sqAr, gmW = sh * gmAr;
-
-    if (flip) cx.scale(-1, 1);
-
-    // Squat fading out
-    cx.globalAlpha = 1 - gumFade;
-    cx.drawImage(sqSpr,  -sqW/2, -sh, sqW, sh);
-    // Gum frame 1 fading in
-    cx.globalAlpha = gumFade;
-    cx.drawImage(gumSpr, -gmW/2, -sh, gmW, sh);
+  if (flip) cx.scale(-1, 1);
+  if (spr) {
+    cx.drawImage(spr, -sw/2, -sh, sw, sh);
   } else {
-    if (flip) cx.scale(-1, 1);
-    if (spr) {
-      cx.drawImage(spr, -sw/2, -sh, sw, sh);
-    } else {
-      cx.globalAlpha = 0.85;
-      cx.fillStyle = key === 'naomi' ? '#a08070' : '#804040';
-      cx.fillRect(-sw/2, -sh, sw, sh);
-    }
+    cx.globalAlpha = 0.85;
+    cx.fillStyle = key === 'naomi' ? '#a08070' : '#804040';
+    cx.fillRect(-sw/2, -sh, sw, sh);
   }
 
   cx.restore();
