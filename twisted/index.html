@@ -407,7 +407,12 @@ const P = {
   transSeq: null,
   transFrame: 0,
   transTimer: 0,
-  stepPending: false,  // true when a micro-step should fire
+  stepPending: false,
+  // Squat idle fidget state
+  sqIdleTimer: 0,    // counts up while crouched still
+  sqIdleActive: false,
+  sqIdleFrame: 0,
+  sqIdleFrameTimer: 0,
 };
 
 // ─── NPC: Sierra ─────────────────────────────────────────────────────────────
@@ -596,6 +601,17 @@ const NAOMI_STEP_LEFT = [
   { key:'naomi_step_left4', dur:0.09 },
 ];
 
+// Naomi squat idle fidget: squat → shift through crouch poses → back to squat
+// Sequence: t4 → t1 → t3 → t4 → t1 → squat (then loops after 6s)
+const NAOMI_SQUAT_IDLE = [
+  { key:'naomi_crouch_t4', dur:0.22 },
+  { key:'naomi_crouch_t1', dur:0.22 },
+  { key:'naomi_crouch_t3', dur:0.22 },
+  { key:'naomi_crouch_t4', dur:0.22 },
+  { key:'naomi_crouch_t1', dur:0.22 },
+  { key:'naomi_squat',     dur:0.30 },
+];
+
 // Win zone: far-left door
 const WIN = { wxMin: 0.00, wxMax: 0.14, wzMin: 0.00, wzMax: 0.32 };
 
@@ -716,6 +732,7 @@ function startGame() {
   P.vwx=P.vwz=0; P.crouch=true; P.crouchLerp=1; P.det=0; P.catches=0;
   P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false; P.running=false;
   P.transSeq=null; P.transFrame=0; P.transTimer=0;
+  P.sqIdleTimer=0; P.sqIdleActive=false; P.sqIdleFrame=0; P.sqIdleFrameTimer=0;
   P.lastMvx=0; P.lastMvz=1;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
   NPC.targetWx=0.80; NPC.targetWz=0.62; NPC.crouchLerp=1;
@@ -875,6 +892,29 @@ function update(ts) {
   // Idle phase ticks (breathing animation)
   P.idlePhase   = (P.idlePhase   + dt) % (Math.PI * 200);
   NPC.idlePhase = (NPC.idlePhase + dt) % (Math.PI * 200);
+
+  // ─── Naomi squat idle fidget ───────────────────────────────────────────────
+  const sqMoving = !!(mx || mz);
+  if (P.crouch && !sqMoving && !P.transSeq && !P.sqIdleActive) {
+    P.sqIdleTimer += dt;
+    if (P.sqIdleTimer >= 6.0) {
+      P.sqIdleActive = true; P.sqIdleFrame = 0; P.sqIdleFrameTimer = 0;
+      P.sqIdleTimer = 0;
+    }
+  } else if (!P.crouch || sqMoving || P.transSeq) {
+    P.sqIdleTimer = 0; P.sqIdleActive = false; P.sqIdleFrame = 0;
+  }
+
+  if (P.sqIdleActive) {
+    P.sqIdleFrameTimer += dt;
+    if (P.sqIdleFrameTimer >= NAOMI_SQUAT_IDLE[P.sqIdleFrame].dur) {
+      P.sqIdleFrameTimer = 0;
+      P.sqIdleFrame++;
+      if (P.sqIdleFrame >= NAOMI_SQUAT_IDLE.length) {
+        P.sqIdleActive = false; P.sqIdleFrame = 0; P.sqIdleTimer = 0;
+      }
+    }
+  }
 
   // ─── Mission dumpster tick ────────────────────────────────────────────────
   if (MISSION_DUMP.state === 'opening') {
@@ -1093,7 +1133,7 @@ function drawDumpster(wx, wz, scale2, spriteKey) {
 // Depth-sorted render: bins AND characters in one list so depth is always correct
 function drawEntities() {
   const ents = [
-    { type:'bin', wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 2.2) },
+    { type:'bin', wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 1.4) },
     { type:'bin', wz: DUMP_A.wz, draw: () => {
       // Mission dumpster — show correct state sprite
       let sprKey = 'dumpster_closed';
@@ -1101,7 +1141,7 @@ function drawEntities() {
       if (MISSION_DUMP.state === 'opening')   sprKey = OPENING_SEQ[MISSION_DUMP.frame]?.key || 'dumpster_closed';
       if (MISSION_DUMP.state === 'open_key')  sprKey = KEY_IDLE_SEQ[MISSION_DUMP.frame % KEY_IDLE_SEQ.length]?.key;
       if (MISSION_DUMP.state === 'open_empty') sprKey = 'dumpster_open_empty';
-      drawDumpster(DUMP_A.wx, DUMP_A.wz, 2.2, sprKey);
+      drawDumpster(DUMP_A.wx, DUMP_A.wz, 1.4, sprKey);
     }},
     { type:'npc',    wz: NPC.renderWz, draw: () => {
       const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
@@ -1110,7 +1150,8 @@ function drawEntities() {
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
-      const naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
+      let naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
+      if (!naomiSprKey && P.sqIdleActive) naomiSprKey = NAOMI_SQUAT_IDLE[P.sqIdleFrame].key;
       drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, naomiSprKey, 0);
     }},
   ];
