@@ -1030,20 +1030,6 @@ function drawPlayerDetectGlow() {
   cx.restore();
 }
 
-// ─── Depth-sorted entity list ─────────────────────────────────────────────────
-// Draws characters in correct z-order (back first, front last = GTA style)
-function drawEntities() {
-  const ents = [
-    { type:'npc',    wx:NPC.renderWx, wz:NPC.renderWz, key:'sierra', mvx:NPC.lastMvx, mvz:NPC.lastMvz, walkFrame:NPC.walkFrame, crouch:P.crouch, crouchLerp:P.crouchLerp, idlePhase:NPC.idlePhase, gumFrame: NPC.gumActive ? NPC.gumFrame : -1 },
-    { type:'player', wx:P.renderWx,   wz:P.renderWz,   key:'naomi',  mvx:P.lastMvx,   mvz:P.lastMvz,   walkFrame:P.walkFrame,   crouch:P.crouch, crouchLerp:P.crouchLerp, idlePhase:P.idlePhase,   gumFrame:-1 },
-  ];
-  ents.sort((a,b) => a.wz - b.wz);
-  for (const e of ents) {
-    if (e.type === 'player') drawPlayerDetectGlow();
-    drawChar(e.key, e.wx, e.wz, e.mvx, e.mvz, e.walkFrame, e.crouch, e.crouchLerp, e.idlePhase, e.gumFrame);
-  }
-}
-
 // ─── HUD ──────────────────────────────────────────────────────────────────────
 function drawMinimap() {
   const mx=14, my=VH-104, mw=86, mh=76;
