@@ -175,7 +175,7 @@ loadImg('naomi_side_a',   'assets/naomi_side_a.png');
 loadImg('naomi_side_b',   'assets/naomi_side_b.png');
 loadImg('naomi_backq_a',  'assets/naomi_backq_a.png');
 loadImg('naomi_backq_b',  'assets/naomi_backq_b.png');
-loadImg('naomi_squat',    'assets/naomi_squat.png');
+loadImg('naomi_squat',    'assets/naomi_squat.png?v=2');
 // Naomi transition frames — stand steps and crouch bridge
 loadImg('naomi_stand_step1', 'assets/naomi_stand_step1.png');
 loadImg('naomi_stand_step2', 'assets/naomi_stand_step2.png');
@@ -753,11 +753,11 @@ function startGame() {
   P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false; P.running=false;
   P.transSeq=null; P.transFrame=0; P.transTimer=0;
   P.sqIdleTimer=0; P.sqIdleActive=false; P.sqIdleFrame=0; P.sqIdleFrameTimer=0;
-  P.lastMvx=0; P.lastMvz=1;
+  P.lastMvx=0; P.lastMvz=0;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
   NPC.targetWx=0.80; NPC.targetWz=0.62; NPC.crouchLerp=1;
   NPC.walkTimer=0; NPC.walkFrame=0; NPC.walkStep=0; NPC.moving=false;
-  NPC.lastMvx=0; NPC.lastMvz=1;
+  NPC.lastMvx=0; NPC.lastMvz=0;
   CAR.la=0; CAR.ldir=1; CAR.ft=0;
   isCaught=false; catchFlash=0;
 }
