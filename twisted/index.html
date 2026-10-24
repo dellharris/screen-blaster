@@ -176,6 +176,11 @@ loadImg('naomi_stand_step1', 'assets/naomi_stand_step1.png');
 loadImg('naomi_stand_step2', 'assets/naomi_stand_step2.png');
 loadImg('naomi_stand_step3', 'assets/naomi_stand_step3.png');
 loadImg('naomi_stand_step4', 'assets/naomi_stand_step4.png');
+// Naomi backward step frames
+loadImg('naomi_step_back1', 'assets/naomi_step_back1.png');
+loadImg('naomi_step_back2', 'assets/naomi_step_back2.png');
+loadImg('naomi_step_back3', 'assets/naomi_step_back3.png');
+loadImg('naomi_step_back4', 'assets/naomi_step_back4.png');
 loadImg('naomi_crouch_t1',   'assets/naomi_crouch_t1.png');
 loadImg('naomi_crouch_t2',   'assets/naomi_crouch_t2.png');
 loadImg('naomi_crouch_t3',   'assets/naomi_crouch_t3.png');
@@ -486,12 +491,19 @@ const NAOMI_CROUCH_OUT = [
   { key:'naomi_crouch_t2', dur:0.08 },
   { key:'naomi_crouch_t1', dur:0.08 },
 ];
-// Naomi micro-step: single tap while standing
+// Naomi micro-step forward/side: single tap while standing
 const NAOMI_STEP_SEQ = [
   { key:'naomi_stand_step1', dur:0.09 },
   { key:'naomi_stand_step2', dur:0.09 },
   { key:'naomi_stand_step3', dur:0.09 },
   { key:'naomi_stand_step4', dur:0.09 },
+];
+// Naomi micro-step backward: single up-tap or back joystick flick
+const NAOMI_STEP_BACK = [
+  { key:'naomi_step_back1', dur:0.09 },
+  { key:'naomi_step_back2', dur:0.09 },
+  { key:'naomi_step_back3', dur:0.09 },
+  { key:'naomi_step_back4', dur:0.09 },
 ];
 
 // Win zone: far-left door
@@ -713,7 +725,9 @@ function update(ts) {
   // Detect micro-step: input exists but movement is tiny (quick tap, not sustained)
   const inputMag = Math.hypot(mx, mz);
   if (inputMag > 0.05 && !P.crouch && !P.transSeq) {
-    P.transSeq = NAOMI_STEP_SEQ; P.transFrame = 0; P.transTimer = 0;
+    // Backward tap (mz < -0.3 = predominantly moving away from camera) → back step
+    P.transSeq   = (mz < -0.3) ? NAOMI_STEP_BACK : NAOMI_STEP_SEQ;
+    P.transFrame = 0; P.transTimer = 0;
   }
 
   // Tick Naomi's transition sequence
