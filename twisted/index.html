@@ -181,6 +181,11 @@ loadImg('naomi_step_back1', 'assets/naomi_step_back1.png');
 loadImg('naomi_step_back2', 'assets/naomi_step_back2.png');
 loadImg('naomi_step_back3', 'assets/naomi_step_back3.png');
 loadImg('naomi_step_back4', 'assets/naomi_step_back4.png');
+// Side step frames (right-facing source, left is flipped in code)
+for (let _si = 1; _si <= 4; _si++) {
+  loadImg(`naomi_step_right${_si}`, `assets/naomi_step_right${_si}.png`);
+  loadImg(`naomi_step_left${_si}`,  `assets/naomi_step_left${_si}.png`);
+}
 loadImg('naomi_crouch_t1',   'assets/naomi_crouch_t1.png');
 loadImg('naomi_crouch_t2',   'assets/naomi_crouch_t2.png');
 loadImg('naomi_crouch_t3',   'assets/naomi_crouch_t3.png');
@@ -506,6 +511,19 @@ const NAOMI_STEP_BACK = [
   { key:'naomi_step_back3', dur:0.09 },
   { key:'naomi_step_back4', dur:0.09 },
 ];
+// Naomi side steps — right and left profiles
+const NAOMI_STEP_RIGHT = [
+  { key:'naomi_step_right1', dur:0.09 },
+  { key:'naomi_step_right2', dur:0.09 },
+  { key:'naomi_step_right3', dur:0.09 },
+  { key:'naomi_step_right4', dur:0.09 },
+];
+const NAOMI_STEP_LEFT = [
+  { key:'naomi_step_left1', dur:0.09 },
+  { key:'naomi_step_left2', dur:0.09 },
+  { key:'naomi_step_left3', dur:0.09 },
+  { key:'naomi_step_left4', dur:0.09 },
+];
 
 // Win zone: far-left door
 const WIN = { wxMin: 0.00, wxMax: 0.14, wzMin: 0.00, wzMax: 0.32 };
@@ -723,12 +741,14 @@ function update(ts) {
   const mag = Math.hypot(mx, mz) || 1;
   if (mx || mz) { mx /= mag; mz /= mag; P.lastMvx = mx; P.lastMvz = mz; }
 
-  // Detect micro-step: input exists but movement is tiny (quick tap, not sustained)
+  // Detect micro-step: pick sequence based on dominant input direction
   const inputMag = Math.hypot(mx, mz);
   if (inputMag > 0.05 && !P.crouch && !P.transSeq) {
-    // Backward tap (mz < -0.3 = predominantly moving away from camera) → back step
-    P.transSeq   = (mz < -0.3) ? NAOMI_STEP_BACK : NAOMI_STEP_SEQ;
-    P.transFrame = 0; P.transTimer = 0;
+    let seq = NAOMI_STEP_SEQ; // default: forward-facing shuffle
+    if (mz < -0.4 && Math.abs(mz) > Math.abs(mx))      seq = NAOMI_STEP_BACK;
+    else if (mx >  0.4 && Math.abs(mx) > Math.abs(mz)) seq = NAOMI_STEP_RIGHT;
+    else if (mx < -0.4 && Math.abs(mx) > Math.abs(mz)) seq = NAOMI_STEP_LEFT;
+    P.transSeq = seq; P.transFrame = 0; P.transTimer = 0;
   }
 
   // Tick Naomi's transition sequence
