@@ -46,6 +46,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<video id="intro-video" src="assets/intro_video.mp4" playsinline webkit-playsinline preload="auto" muted style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:4;background:#000"></video>
 <video id="cutscene-video" src="assets/cutscene_run.mp4" playsinline webkit-playsinline preload="auto"></video>
 <video id="latch-video" src="assets/cutscene_latch.mp4" playsinline webkit-playsinline preload="auto" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:3;background:#000"></video>
 <audio id="bg-music" src="assets/bg_music.wav" loop preload="auto"></audio>
@@ -204,10 +205,42 @@ let crossfadeTimer = 0;
 const CROSSFADE_DUR = 1.2;
 
 // ─── Cutscene video ───────────────────────────────────────────────────────────
-const VID = document.getElementById('cutscene-video');
-const MUS = document.getElementById('bg-music');
+const VID  = document.getElementById('cutscene-video');
+const MUS  = document.getElementById('bg-music');
 const LVID = document.getElementById('latch-video');
+const IVID = document.getElementById('intro-video');
 let musicMuted = false;
+
+// ─── Intro video ──────────────────────────────────────────────────────────────
+// Plays as the very first thing — muted so autoplay works on mobile.
+// On end (or tap) → fade to title screen.
+let introVideoFade = 0;  // 0=video fully visible, 1=title fully visible
+
+function playIntroVideo() {
+  IVID.style.display = 'block';
+  IVID.style.opacity = 1;
+  IVID.currentTime = 0;
+  IVID.play().catch(() => { endIntroVideo(); });
+}
+
+function endIntroVideo() {
+  // Fade the intro video out, canvas title fades in
+  IVID.pause();
+  const fadeOut = setInterval(() => {
+    introVideoFade = Math.min(1, introVideoFade + 0.06);
+    IVID.style.opacity = 1 - introVideoFade;
+    if (introVideoFade >= 1) {
+      clearInterval(fadeOut);
+      IVID.style.display = 'none';
+      IVID.style.opacity = 1;
+      introVideoFade = 0;
+      phase = PH.TITLE;
+      startMusic();
+    }
+  }, 16);
+}
+
+IVID.addEventListener('ended', endIntroVideo);
 
 // ─── Latch scene system ───────────────────────────────────────────────────────
 // Add clips here as the game grows. played=false means not yet triggered.
@@ -426,8 +459,8 @@ function isMuteBtn(x, y)   { return x > VW-110 && x < VW-16 && y > 8 && y < 44; 
 function isJoyZone(x, y)   { return x < VW*0.45 && y > VH*0.42; }
 
 function handleTap() {
-  if (phase === PH.INSTALL)   { return; } // install screen — no tap to proceed
-  if (phase === PH.INTRO)     { phase = PH.TITLE; startMusic(); return; }
+  if (phase === PH.INSTALL)   { return; }
+  if (phase === PH.INTRO)     { endIntroVideo(); return; }  // tap skips intro video
   if (phase === PH.TITLE)     { phase = PH.DLG; return; }
   if (phase === PH.DLG)       { dlgIdx++; if (dlgIdx >= DLG.length) playCutscene(); return; }
   if (phase === PH.CUTSCENE)  { chainLatch(); return; }
@@ -545,10 +578,10 @@ function update(ts) {
   lastTs = ts;
   pulse += dt;
 
-  // Intro auto-advance
+  // Intro — play video, video's ended event handles transition to title
   if (phase === PH.INTRO) {
-    introTimer += dt;
-    if (introTimer >= INTRO_TOTAL) { phase = PH.TITLE; startMusic(); }
+    playIntroVideo();
+    phase = PH.TITLE; // prevent re-triggering; video runs independently
     return;
   }
 
@@ -1671,7 +1704,9 @@ function render(ts) {
       break;
 
     case PH.INTRO:
-      drawIntro();
+      // Intro video plays above canvas — canvas stays black underneath
+      cx.fillStyle = '#000';
+      cx.fillRect(0, 0, VW, VH);
       break;
 
     case PH.TITLE:
