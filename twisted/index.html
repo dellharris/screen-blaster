@@ -939,9 +939,9 @@ function drawEntities() {
     { type:'bin',    wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 2.2) },
     { type:'bin',    wz: DUMP_A.wz, draw: () => drawDumpster(DUMP_A.wx, DUMP_A.wz, 2.2) },
     { type:'npc',    wz: NPC.renderWz, draw: () => {
-      // Pass active sequence sprite key when gum is running
       const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
-      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, gumSprKey, 0);
+      // sqBoost=1.22 makes Sierra's squat match Naomi's visual size — gum/transition frames unaffected
+      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, gumSprKey, 0, 1.22);
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
@@ -996,7 +996,7 @@ function getSpriteKey(charKey, mvx, mvz, walkFrame, crouch) {
   return { k: charKey + '_front' + suf, flip: goLeft };
 }
 
-function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase, gumSprKey, gumFade) {
+function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase, gumSprKey, gumFade, sqBoost) {
   const sp  = w2s(wx, wz);
   const s   = dScale(wz);
   const crouchBinary = crouchLerp > 0.5;
@@ -1006,15 +1006,16 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   const baseDir = sprKey.replace(/_a$|_b$/, '');
   let spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
 
-  // Active gum sequence key overrides base sprite entirely
+  // Active gum/transition sequence key overrides base sprite entirely
   if (gumSprKey) {
     spr = SPR[gumSprKey] || IMG[gumSprKey] || spr;
   }
 
   const baseH = 360;
   const heightMul = lerp(1.0, 0.70, crouchLerp);
-  // Gum frames are drawn at same physical scale as squat — no size jump
-  const sh = baseH * s * SQUISH * heightMul;
+  // sqBoost only applies when showing the plain squat sprite — gum/transition frames stay untouched
+  const boost = (!gumSprKey && crouchBinary && sqBoost) ? sqBoost : 1.0;
+  const sh = baseH * s * SQUISH * heightMul * boost;
   const ar = spr ? (spr.width / spr.height) : 0.5;
   const sw = sh * ar;
 
