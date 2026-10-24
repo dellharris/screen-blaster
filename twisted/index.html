@@ -381,11 +381,11 @@ const NPC = {
   lastMvx: 0, lastMvz: 1,        // facing camera
   walkTimer: 0, walkFrame: 0, walkStep: 0,
   moving: false, idlePhase: 1.8,
+  crouchLerp: 1,         // Sierra's own independent crouch interpolation
   // Gum idle animation
   idleTimer: 0, gumActive: false, gumFrame: 0, gumFrameTimer: 0,
   // Crossfade transition: blends squat sprite → gum frame 1
-  gumFade: 0,          // 0=fully squat, 1=fully gum
-  gumFading: false,    // true while transition is running
+  gumFade: 0, gumFading: false,
 };
 
 // ─── Patrol car ───────────────────────────────────────────────────────────────
@@ -541,7 +541,7 @@ function startGame() {
   P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false;
   P.lastMvx=0; P.lastMvz=1;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
-  NPC.targetWx=0.80; NPC.targetWz=0.62;
+  NPC.targetWx=0.80; NPC.targetWz=0.62; NPC.crouchLerp=1;
   NPC.walkTimer=0; NPC.walkFrame=0; NPC.walkStep=0; NPC.moving=false;
   NPC.lastMvx=0; NPC.lastMvz=1;
   CAR.la=0; CAR.ldir=1; CAR.ft=0;
@@ -659,8 +659,9 @@ function update(ts) {
   P.wx = clamp(pRes.wx, 0.02, 0.98);
   P.wz = clamp(pRes.wz, 0.01, 0.98);
 
-  // Smooth crouch interpolation
-  P.crouchLerp = lerp(P.crouchLerp, P.crouch ? 1 : 0, Math.min(1, dt * 9));
+  // Smooth crouch interpolation — player and Sierra each independent
+  P.crouchLerp   = lerp(P.crouchLerp,   P.crouch ? 1 : 0, Math.min(1, dt * 9));
+  NPC.crouchLerp = lerp(NPC.crouchLerp, P.crouch ? 1 : 0, Math.min(1, dt * 9));
 
   // Smooth render positions — tiny lag makes motion feel organic
   P.renderWx = lerp(P.renderWx, P.wx, Math.min(1, dt * 14));
@@ -716,13 +717,10 @@ function update(ts) {
       NPC.idleTimer = 0;
     }
   } else if (!P.crouch || NPC.moving) {
-    // Interrupted — fade back to squat and cancel
-    NPC.gumFading  = false;
-    NPC.gumFade    = lerp(NPC.gumFade, 0, Math.min(1, dt * GUM_FADE_SPEED * 2));
-    NPC.gumActive  = false;
-    NPC.gumFrame   = 0;
-    NPC.gumFrameTimer = 0;
-    NPC.idleTimer  = 0;
+    // Interrupted — cancel everything immediately
+    NPC.gumFading = false; NPC.gumFade = 0;
+    NPC.gumActive = false; NPC.gumFrame = 0; NPC.gumFrameTimer = 0;
+    NPC.idleTimer = 0;
   }
 
   // Tick crossfade
@@ -885,7 +883,7 @@ function drawEntities() {
     { type:'bin',    wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 2.2) },
     { type:'bin',    wz: DUMP_A.wz, draw: () => drawDumpster(DUMP_A.wx, DUMP_A.wz, 2.2) },
     { type:'npc',    wz: NPC.renderWz, draw: () => {
-      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, P.crouchLerp, NPC.idlePhase, NPC.gumActive ? NPC.gumFrame : -1, NPC.gumFade);
+      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, NPC.gumActive ? NPC.gumFrame : -1, NPC.gumFade);
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
