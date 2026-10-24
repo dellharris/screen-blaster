@@ -901,8 +901,9 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   const { k: _sk, flip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
 
   const baseH = 360;
-  const hasSquatSprite = crouchBinary && (SPR[key + '_squat'] || IMG[key + '_squat']);
-  const heightMul = hasSquatSprite ? 1.0 : lerp(1.0, 0.62, crouchLerp);
+  // Always compress height when crouching — squat sprite handles the pose,
+  // heightMul handles the physical scale. Crouching = 70%, standing = 100%.
+  const heightMul = lerp(1.0, 0.70, crouchLerp);
   const sh = baseH * s * SQUISH * heightMul;
   const ar = spr ? (spr.width / spr.height) : 0.5;
   const sw = sh * ar;
