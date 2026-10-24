@@ -1146,13 +1146,13 @@ function drawEntities() {
     { type:'npc',    wz: NPC.renderWz, draw: () => {
       const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
       // sqBoost=1.22 makes Sierra's squat match Naomi's visual size — gum/transition frames unaffected
-      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, gumSprKey, 0, 1.22);
+      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, gumSprKey, 0, 1.22, NPC.moving);
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
       let naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
       if (!naomiSprKey && P.sqIdleActive) naomiSprKey = NAOMI_SQUAT_IDLE[P.sqIdleFrame].key;
-      drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, naomiSprKey, 0);
+      drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, naomiSprKey, 0, undefined, P.moving);
     }},
   ];
   ents.sort((a, b) => a.wz - b.wz);
@@ -1179,17 +1179,12 @@ function drawWinGlow() {
 // ─── Character rendering ──────────────────────────────────────────────────────
 // Pick the right sprite key + flip flag based on movement direction and state
 // walkFrame: 0=_a, 1=_b. crouch overrides to _squat.
-function getSpriteKey(charKey, mvx, mvz, walkFrame, crouch) {
-  const ax = Math.abs(mvx), az = Math.abs(mvz);
-  const moving = ax > 0.001 || az > 0.001;
+function getSpriteKey(charKey, mvx, mvz, walkFrame, crouch, isMoving) {
+  // Crouching idle → squat. Crouching + moving → walk frames (compressed by heightMul).
+  if (crouch && !isMoving) return { k: charKey + '_squat', flip: mvx < -0.01 };
 
-  // Crouching idle → squat sprite. Crouching + moving → walk frames scaled by heightMul.
-  if (crouch && !moving) return { k: charKey + '_squat', flip: mvx < -0.01 };
-
-  // walkFrame: 0=base(no suffix), 1=_a, 2=_b
-  const suf = !moving || walkFrame === 0 ? '' : walkFrame === 1 ? '_a' : '_b';
-
-  if (!moving) return { k: charKey + '_front', flip: false };
+  const suf = !isMoving || walkFrame === 0 ? '' : walkFrame === 1 ? '_a' : '_b';
+  if (!isMoving) return { k: charKey + '_front', flip: false };
 
   const goBack  = mvz < -0.01;
   const goFront = mvz >  0.01;
@@ -1204,13 +1199,13 @@ function getSpriteKey(charKey, mvx, mvz, walkFrame, crouch) {
   return { k: charKey + '_front' + suf, flip: goLeft };
 }
 
-function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase, gumSprKey, gumFade, sqBoost) {
+function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase, gumSprKey, gumFade, sqBoost, isMoving) {
   const sp  = w2s(wx, wz);
   const s   = dScale(wz);
   const crouchBinary = crouchLerp > 0.5;
 
-  // Resolve sprites
-  const { k: sprKey, flip: baseFlip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
+  // Resolve sprites — pass explicit isMoving so direction vector doesn't fake movement
+  const { k: sprKey, flip: baseFlip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary, !!isMoving);
   const baseDir = sprKey.replace(/_a$|_b$/, '');
   let spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
 
@@ -1230,12 +1225,10 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   const ar = spr ? (spr.width / spr.height) : 0.5;
   const sw = sh * ar;
 
-  const moving = Math.abs(mvx) > 0.001 || Math.abs(mvz) > 0.001;
-  // Calm breathing — very subtle, same amplitude crouched or standing
   const breathAmp   = crouchBinary ? 0.8 : 1.6;
   const breathFreq  = crouchBinary ? 0.45 : 0.85;
-  const breathY     = moving ? 0 : Math.sin(idlePhase * breathFreq) * breathAmp;
-  const breathScale = 1; // removed micro-scale pulse — was causing fidget look
+  const breathY     = isMoving ? 0 : Math.sin(idlePhase * breathFreq) * breathAmp;
+  const breathScale = 1;
 
   cx.save();
   cx.translate(sp.x, sp.y + breathY);
