@@ -801,13 +801,19 @@ function update(ts) {
   // Walk animation tick — 3-frame cycle: neutral(0) → a(1) → neutral(0) → b(2)
   P.moving = !!(mx || mz);
   if (P.moving) {
-    const fps = P.crouch ? 4.0 : 7.0;
+    const fps = P.crouch ? 4.0 : P.running ? 13.0 : 7.0;
     P.walkTimer += dt * fps;
     if (P.walkTimer >= 1) {
       P.walkTimer -= 1;
-      // 0=neutral, 1=_a, 2=neutral, 3=_b → maps to walkFrame 0,1,0,2
-      P.walkStep = (P.walkStep + 1) % 4;
-      P.walkFrame = [0, 1, 0, 2][P.walkStep];
+      if (P.running) {
+        // Run: skip neutral frame — cycles a→b→a→b directly for bigger stride look
+        P.walkStep = (P.walkStep + 1) % 2;
+        P.walkFrame = P.walkStep === 0 ? 1 : 2;
+      } else {
+        // Walk: neutral between each stride — 0=neutral, 1=_a, 2=neutral, 3=_b
+        P.walkStep = (P.walkStep + 1) % 4;
+        P.walkFrame = [0, 1, 0, 2][P.walkStep];
+      }
     }
   } else {
     P.walkTimer = 0; P.walkStep = 0; P.walkFrame = 0;
