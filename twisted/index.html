@@ -128,7 +128,7 @@ function loadImg(k, src) {
 }
 
 loadImg('intro',        'assets/intro.jpg');
-loadImg('scene',        'assets/scene.png');
+loadImg('scene',        'assets/scene.png?v=2');
 loadImg('fg',           'assets/foreground.png');
 loadImg('police',       'assets/police.png');
 // Dialogue comic portraits (used as-is, no black removal needed)
@@ -649,8 +649,10 @@ function update(ts) {
     P.walkTimer = 0; P.walkStep = 0; P.walkFrame = 0;
   }
 
-  // NPC walk animation tick
-  NPC.moving = Math.hypot(NPC.wx - NPC.targetWx, NPC.wz - NPC.targetWz) > 0.004;
+  // NPC walk animation tick — use actual position change, not target distance
+  // (target shifts every frame from sideWeave so distance-to-target is never zero)
+  const npcActualMove = Math.hypot(NPC.wx - NPC.renderWx, NPC.wz - NPC.renderWz);
+  NPC.moving = npcActualMove > 0.003;
   if (NPC.moving) {
     NPC.walkTimer += dt * 7.0;
     if (NPC.walkTimer >= 1) {
@@ -663,18 +665,16 @@ function update(ts) {
   }
 
   // ─── Sierra gum idle animation ────────────────────────────────────────────
-  // Frame durations (seconds): frames 1-5 build slowly, 6 is quick pop, 7-8 recover
   const GUM_FRAME_DUR = [0.55, 0.45, 0.55, 0.55, 0.65, 0.22, 0.55, 0.90];
-  const GUM_TRIGGER   = 5.0;   // seconds of idle before sequence starts
+  const GUM_TRIGGER   = 5.0;
 
-  if (P.crouch && !NPC.moving) {
+  if (P.crouch && !NPC.moving && !NPC.gumActive) {
     NPC.idleTimer += dt;
-    if (!NPC.gumActive && NPC.idleTimer >= GUM_TRIGGER) {
+    if (NPC.idleTimer >= GUM_TRIGGER) {
       NPC.gumActive = true; NPC.gumFrame = 0; NPC.gumFrameTimer = 0;
     }
-  } else {
-    // Moving or not crouching — reset idle, stop gum mid-sequence
-    NPC.idleTimer = 0;
+  } else if (!P.crouch || NPC.moving) {
+    // Moving or standing — reset idle, cancel gum
     NPC.gumActive = false; NPC.gumFrame = 0; NPC.gumFrameTimer = 0;
   }
 
