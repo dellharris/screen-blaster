@@ -275,9 +275,9 @@ function endCutscene() {
   LVID.style.display = 'none';
   startGame();
   P.crouch = true; P.crouchLerp = 1;
-  P.wx = 0.72; P.wz = 0.58; P.renderWx = 0.72; P.renderWz = 0.58;
+  P.wx = 0.78; P.wz = 0.60; P.renderWx = 0.78; P.renderWz = 0.60;
   P.lastMvx = 0; P.lastMvz = 1;
-  NPC.wx = 0.85; NPC.wz = 0.54; NPC.renderWx = 0.85; NPC.renderWz = 0.54;
+  NPC.wx = 0.57; NPC.wz = 0.62; NPC.renderWx = 0.57; NPC.renderWz = 0.62;
   NPC.lastMvx = 0; NPC.lastMvz = 1;
   phase = PH.CROSSFADE;
   crossfadeTimer = 0;
@@ -326,30 +326,26 @@ const DLG = [
 // ─── Player: Naomi ────────────────────────────────────────────────────────────
 // wx: 0=left wall, 1=right wall  |  wz: 0=far, 1=near camera
 const P = {
-  wx: 0.85, wz: 0.46,
-  renderWx: 0.85, renderWz: 0.46,
+  wx: 0.78, wz: 0.60,           // Naomi — RIGHT side, in front of bin B
+  renderWx: 0.78, renderWz: 0.60,
   sx: 0, sy: 0,
   vwx: 0, vwz: 0,
   wxSpeed: 0.55, wzSpeed: 0.48,
-  crouch: true,
-  crouchLerp: 1,       // 0=standing 1=crouched, interpolated
-  det: 0,
-  catches: 0, maxCatches: 3,
-  lastMvx: 0, lastMvz: 1,
+  crouch: true, crouchLerp: 1,
+  det: 0, catches: 0, maxCatches: 3,
+  lastMvx: 0, lastMvz: 1,        // facing camera
   walkTimer: 0, walkFrame: 0, walkStep: 0,
-  moving: false,
-  idlePhase: 0,        // per-character breathing phase offset
+  moving: false, idlePhase: 0,
 };
 
 // ─── NPC: Sierra ─────────────────────────────────────────────────────────────
 const NPC = {
-  wx: 0.78, wz: 0.38,
-  renderWx: 0.78, renderWz: 0.38,
-  targetWx: 0.78, targetWz: 0.38,
-  lastMvx: 0, lastMvz: 1,
+  wx: 0.57, wz: 0.62,            // Sierra — LEFT side, in front of bin A
+  renderWx: 0.57, renderWz: 0.62,
+  targetWx: 0.57, targetWz: 0.62,
+  lastMvx: 0, lastMvz: 1,        // facing camera
   walkTimer: 0, walkFrame: 0, walkStep: 0,
-  moving: false,
-  idlePhase: 1.8,      // offset so breathing is out of phase with Naomi
+  moving: false, idlePhase: 1.8,
 };
 
 // ─── Patrol car ───────────────────────────────────────────────────────────────
@@ -363,14 +359,39 @@ const CAR = {
 };
 
 // ─── Dumpster world anchors ───────────────────────────────────────────────────
-// Two bins side by side — A is left/slightly closer, B is right/slightly further
-const DUMP_A = { wx: 0.62, wz: 0.46 };
-const DUMP_B = { wx: 0.80, wz: 0.38 };
+// A = left bin (closer to camera), B = right bin (slightly further back)
+const DUMP_A = { wx: 0.60, wz: 0.44 };
+const DUMP_B = { wx: 0.77, wz: 0.37 };
+
+// Physical obstacle footprints — characters cannot enter these rectangles
+// Sized to match actual bin silhouettes (~0.25 wx wide, ~0.07 wz deep)
+const OBSTACLES = [
+  { id:'binA', wxMin:0.47, wxMax:0.72, wzMin:0.36, wzMax:0.52 },
+  { id:'binB', wxMin:0.67, wxMax:0.89, wzMin:0.28, wzMax:0.44 },
+];
+
+// Slide character around obstacles — called after every movement update
+function resolveObstacles(newWx, newWz, prevWx, prevWz) {
+  for (const o of OBSTACLES) {
+    if (newWx >= o.wxMin && newWx <= o.wxMax &&
+        newWz >= o.wzMin && newWz <= o.wzMax) {
+      const prevInX = prevWx >= o.wxMin && prevWx <= o.wxMax;
+      if (!prevInX) {
+        // Entered from the side — slide along X edge, keep Z
+        newWx = prevWx < (o.wxMin + o.wxMax) * 0.5 ? o.wxMin - 0.005 : o.wxMax + 0.005;
+      } else {
+        // Entered from front/back — slide along Z edge, keep X
+        newWz = prevWz < (o.wzMin + o.wzMax) * 0.5 ? o.wzMin - 0.005 : o.wzMax + 0.005;
+      }
+    }
+  }
+  return { wx: newWx, wz: newWz };
+}
 
 // ─── Cover zones (world space) ────────────────────────────────────────────────
-// Girls hide IN FRONT of bins (between bins and camera) — higher wz = in front
+// Detection immunity: in front of bins (wz > bin) or behind bins (wz < bin)
 const COVERS = [
-  { wxMin: 0.54, wxMax: 0.94, wzMin: 0.44, wzMax: 0.72, name:'dumpster' },
+  { wxMin: 0.47, wxMax: 0.92, wzMin: 0.28, wzMax: 0.68, name:'dumpster' },
   { wxMin: 0.00, wxMax: 0.10, wzMin: 0.10, wzMax: 0.65, name:'fire_escape' },
 ];
 
@@ -475,12 +496,12 @@ window.addEventListener('keyup', e => { KEYS[e.key]=false; });
 // ─── Game control ─────────────────────────────────────────────────────────────
 function startGame() {
   phase = PH.PLAY;
-  P.wx=0.72; P.wz=0.58; P.renderWx=0.72; P.renderWz=0.58;
+  P.wx=0.78; P.wz=0.60; P.renderWx=0.78; P.renderWz=0.60;
   P.vwx=P.vwz=0; P.crouch=true; P.crouchLerp=1; P.det=0; P.catches=0;
   P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false;
   P.lastMvx=0; P.lastMvz=1;
-  NPC.wx=0.85; NPC.wz=0.54; NPC.renderWx=0.85; NPC.renderWz=0.54;
-  NPC.targetWx=0.85; NPC.targetWz=0.54;
+  NPC.wx=0.57; NPC.wz=0.62; NPC.renderWx=0.57; NPC.renderWz=0.62;
+  NPC.targetWx=0.57; NPC.targetWz=0.62;
   NPC.walkTimer=0; NPC.walkFrame=0; NPC.walkStep=0; NPC.moving=false;
   NPC.lastMvx=0; NPC.lastMvz=1;
   CAR.la=0; CAR.ldir=1; CAR.ft=0;
@@ -555,9 +576,9 @@ function update(ts) {
   const sideWeave = Math.sin(pulse * 1.3) * 0.022;
 
   if (P.crouch) {
-    // Both crouching — Sierra stays in front of bin B (to Naomi's right)
-    NPC.targetWx = clamp(P.wx + 0.12 + sideWeave * 0.3, 0.58, 0.92);
-    NPC.targetWz = clamp(P.wz - 0.04, 0.44, 0.70);
+    // Crouching — Sierra stays to Naomi's LEFT, both in front of bins
+    NPC.targetWx = clamp(P.wx - 0.20 + sideWeave * 0.3, 0.46, 0.74);
+    NPC.targetWz = clamp(P.wz + 0.02, 0.52, 0.70);
   } else {
     // Running — Sierra leads slightly ahead-left
     NPC.targetWx = clamp(P.wx - 0.15 + sideWeave, 0.03, 0.90);
@@ -565,13 +586,16 @@ function update(ts) {
   }
 
   const prevNx = NPC.wx, prevNz = NPC.wz;
-  const npcSpeed = P.crouch ? 1.2 : 2.2;
+  const npcSpeed = P.crouch ? 1.4 : 2.4;
   NPC.wx = lerp(NPC.wx, NPC.targetWx, Math.min(1, dt * npcSpeed));
   NPC.wz = lerp(NPC.wz, NPC.targetWz, Math.min(1, dt * npcSpeed));
+  // Resolve NPC obstacles too
+  const npcRes = resolveObstacles(NPC.wx, NPC.wz, prevNx, prevNz);
+  NPC.wx = npcRes.wx; NPC.wz = npcRes.wz;
   const ndx = NPC.wx - prevNx, ndz = NPC.wz - prevNz;
   const nmag = Math.hypot(ndx, ndz);
   if (nmag > 0.00003) { NPC.lastMvx = ndx / nmag; NPC.lastMvz = ndz / nmag; }
-  else if (!P.crouch) { NPC.lastMvx = 0; NPC.lastMvz = 1; } // idle faces camera
+  else if (!P.crouch) { NPC.lastMvx = 0; NPC.lastMvz = 1; }
 
   // Player world-space movement from joystick
   let mx = 0, mz = 0;
@@ -584,9 +608,15 @@ function update(ts) {
   const mag = Math.hypot(mx, mz) || 1;
   if (mx || mz) { mx /= mag; mz /= mag; P.lastMvx = mx; P.lastMvz = mz; }
 
-  const spd = P.crouch ? 0.28 : 1.0;
+  const spd = P.crouch ? 0.32 : 1.0;
+  const prevPx = P.wx, prevPz = P.wz;
   P.wx = clamp(P.wx + mx * P.wxSpeed * spd * dt, 0.02, 0.98);
   P.wz = clamp(P.wz + mz * P.wzSpeed * spd * dt, 0.01, 0.98);
+
+  // Resolve player vs obstacles — slide around bins instead of stopping
+  const pRes = resolveObstacles(P.wx, P.wz, prevPx, prevPz);
+  P.wx = clamp(pRes.wx, 0.02, 0.98);
+  P.wz = clamp(pRes.wz, 0.01, 0.98);
 
   // Smooth crouch interpolation
   P.crouchLerp = lerp(P.crouchLerp, P.crouch ? 1 : 0, Math.min(1, dt * 9));
@@ -821,7 +851,9 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   const sh = baseH * s * SQUISH * heightMul;
   const ar = spr ? (spr.width / spr.height) : 0.5;
   const sw = sh * ar;
-  const yOff = hasSquatSprite ? 0 : lerp(0, baseH * s * SQUISH * (1 - 0.62) * 0.5, crouchLerp);
+  // yOff=0 keeps feet pinned to floor. Squat sprites handle visual compression;
+  // fallback height-mul compresses upward from feet naturally (anchor at bottom).
+  const yOff = 0;
 
   // Breathing idle — only when not moving
   const moving = Math.abs(mvx) > 0.001 || Math.abs(mvz) > 0.001;
