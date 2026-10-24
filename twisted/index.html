@@ -463,8 +463,8 @@ const COVERS = [
 
 // Sierra gum animation sequence — t1→t3 in, gum cycle, t3→t1 out (reverse)
 const GUM_SEQ = [
-  { key:'sierra_gum_t1', dur:0.10 },  // transition in — snappy
-  { key:'sierra_gum_t3', dur:0.10 },  // transition in — bridge
+  { key:'sierra_gum_t1', dur:0.10 },  // entry — snappy
+  { key:'sierra_gum_t3', dur:0.10 },  // entry bridge — snappy
   { key:'sierra_gum_1',  dur:0.25 },
   { key:'sierra_gum_2',  dur:0.18 },
   { key:'sierra_gum_3',  dur:0.22 },
@@ -473,8 +473,9 @@ const GUM_SEQ = [
   { key:'sierra_gum_6',  dur:0.09 },  // pop — very quick
   { key:'sierra_gum_7',  dur:0.22 },
   { key:'sierra_gum_8',  dur:0.45 },  // chill hold
-  { key:'sierra_gum_t3', dur:0.10 },  // transition out — snappy
-  { key:'sierra_gum_t1', dur:0.10 },  // transition out — back to squat
+  { key:'sierra_gum_8',  dur:0.18 },  // brief pause before exit — body gets a beat
+  { key:'sierra_gum_t3', dur:0.16 },  // exit — slower than entry for smooth settle
+  { key:'sierra_gum_t1', dur:0.18 },  // exit — even slower on last frame back to squat
 ];
 
 // Naomi crouch-in: standing → squat
