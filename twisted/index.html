@@ -1037,13 +1037,16 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   const crouchBinary = crouchLerp > 0.5;
 
   // Resolve sprites
-  const { k: sprKey, flip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
+  const { k: sprKey, flip: baseFlip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
   const baseDir = sprKey.replace(/_a$|_b$/, '');
   let spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
 
-  // Active gum/transition sequence key overrides base sprite entirely
+  // Active gum/transition sequence key overrides base sprite entirely.
+  // Pre-oriented images (step_left is already mirrored) — suppress flip so no double-mirror.
+  let flip = baseFlip;
   if (gumSprKey) {
-    spr = SPR[gumSprKey] || IMG[gumSprKey] || spr;
+    spr  = SPR[gumSprKey] || IMG[gumSprKey] || spr;
+    flip = false;  // sequence images are pre-oriented, never re-flip them
   }
 
   const baseH = 360;
