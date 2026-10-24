@@ -350,6 +350,9 @@ const NPC = {
   moving: false, idlePhase: 1.8,
   // Gum idle animation
   idleTimer: 0, gumActive: false, gumFrame: 0, gumFrameTimer: 0,
+  // Crossfade transition: blends squat sprite → gum frame 1
+  gumFade: 0,          // 0=fully squat, 1=fully gum
+  gumFading: false,    // true while transition is running
 };
 
 // ─── Patrol car ───────────────────────────────────────────────────────────────
@@ -667,27 +670,52 @@ function update(ts) {
   }
 
   // ─── Sierra gum idle animation ────────────────────────────────────────────
-  const GUM_FRAME_DUR = [0.55, 0.45, 0.55, 0.55, 0.65, 0.22, 0.55, 0.90];
-  const GUM_TRIGGER   = 5.0;
+  const GUM_FRAME_DUR  = [0.55, 0.45, 0.55, 0.55, 0.65, 0.22, 0.55, 0.90];
+  const GUM_TRIGGER    = 5.0;
+  const GUM_FADE_SPEED = 2.8;  // crossfade speed (1/s) — ~0.36s transition
 
-  if (P.crouch && !NPC.moving && !NPC.gumActive) {
+  if (P.crouch && !NPC.moving && !NPC.gumActive && !NPC.gumFading) {
     NPC.idleTimer += dt;
     if (NPC.idleTimer >= GUM_TRIGGER) {
-      NPC.gumActive = true; NPC.gumFrame = 0; NPC.gumFrameTimer = 0;
+      // Start crossfade transition first, THEN play frames
+      NPC.gumFading = true;
+      NPC.gumFade   = 0;
+      NPC.idleTimer = 0;
     }
   } else if (!P.crouch || NPC.moving) {
-    // Moving or standing — reset idle, cancel gum
-    NPC.gumActive = false; NPC.gumFrame = 0; NPC.gumFrameTimer = 0;
+    // Interrupted — fade back to squat and cancel
+    NPC.gumFading  = false;
+    NPC.gumFade    = lerp(NPC.gumFade, 0, Math.min(1, dt * GUM_FADE_SPEED * 2));
+    NPC.gumActive  = false;
+    NPC.gumFrame   = 0;
+    NPC.gumFrameTimer = 0;
+    NPC.idleTimer  = 0;
   }
 
+  // Tick crossfade
+  if (NPC.gumFading) {
+    NPC.gumFade = Math.min(1, NPC.gumFade + dt * GUM_FADE_SPEED);
+    if (NPC.gumFade >= 1) {
+      NPC.gumFading = false;
+      NPC.gumActive = true;
+      NPC.gumFrame  = 0;
+      NPC.gumFrameTimer = 0;
+    }
+  }
+
+  // Tick gum frames once transition is complete
   if (NPC.gumActive) {
     NPC.gumFrameTimer += dt;
     if (NPC.gumFrameTimer >= GUM_FRAME_DUR[NPC.gumFrame]) {
       NPC.gumFrameTimer = 0;
       NPC.gumFrame++;
       if (NPC.gumFrame >= 8) {
-        // Sequence done — reset idle timer so it fires again after 5s
-        NPC.gumActive = false; NPC.gumFrame = 0; NPC.idleTimer = 0;
+        // Sequence done — fade back to squat, reset
+        NPC.gumActive  = false;
+        NPC.gumFrame   = 0;
+        NPC.gumFading  = false;
+        NPC.gumFade    = 0;
+        NPC.idleTimer  = 0;
       }
     }
   }
@@ -824,12 +852,11 @@ function drawEntities() {
     { type:'bin',    wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 2.2) },
     { type:'bin',    wz: DUMP_A.wz, draw: () => drawDumpster(DUMP_A.wx, DUMP_A.wz, 2.2) },
     { type:'npc',    wz: NPC.renderWz, draw: () => {
-      const e = { key:'sierra', wx:NPC.renderWx, wz:NPC.renderWz, mvx:NPC.lastMvx, mvz:NPC.lastMvz, walkFrame:NPC.walkFrame, crouch:P.crouch, crouchLerp:P.crouchLerp, idlePhase:NPC.idlePhase, gumFrame: NPC.gumActive ? NPC.gumFrame : -1 };
-      drawChar(e.key, e.wx, e.wz, e.mvx, e.mvz, e.walkFrame, e.crouch, e.crouchLerp, e.idlePhase, e.gumFrame);
+      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, P.crouchLerp, NPC.idlePhase, NPC.gumActive ? NPC.gumFrame : -1, NPC.gumFade);
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
-      drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, -1);
+      drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, -1, 0);
     }},
   ];
   ents.sort((a, b) => a.wz - b.wz);
@@ -879,48 +906,40 @@ function getSpriteKey(charKey, mvx, mvz, walkFrame, crouch) {
   return { k: charKey + '_front' + suf, flip: goLeft };
 }
 
-function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase, gumFrame) {
+function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase, gumFrame, gumFade) {
   const sp  = w2s(wx, wz);
   const s   = dScale(wz);
-
   const crouchBinary = crouchLerp > 0.5;
 
-  // Gum animation overrides sprite entirely when active
-  let spr;
+  // During crossfade (0 < gumFade < 1): draw squat fading out + gum_1 fading in
+  const inFade = gumFade > 0 && gumFade < 1 && gumFrame < 0;
+
+  // Resolve sprites
+  const { k: sprKey, flip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
+  const baseDir = sprKey.replace(/_a$|_b$/, '');
+  let spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
+
+  // Active gum frame overrides base sprite
   if (gumFrame >= 0 && gumFrame < 8) {
     const gKey = `${key}_gum_${gumFrame + 1}`;
-    spr = SPR[gKey] || IMG[gKey];
+    spr = SPR[gKey] || IMG[gKey] || spr;
   }
 
-  if (!spr) {
-    const { k: sprKey, flip: sprFlip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
-    const baseDir = sprKey.replace(/_a$|_b$/, '');
-    spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
-  }
-
-  const { k: _sk, flip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
-
-  const baseH = 360;
-  // Always compress height when crouching — squat sprite handles the pose,
-  // heightMul handles the physical scale. Crouching = 70%, standing = 100%.
+  const baseH    = 360;
   const heightMul = lerp(1.0, 0.70, crouchLerp);
   const sh = baseH * s * SQUISH * heightMul;
   const ar = spr ? (spr.width / spr.height) : 0.5;
   const sw = sh * ar;
-  // yOff=0 keeps feet pinned to floor. Squat sprites handle visual compression;
-  // fallback height-mul compresses upward from feet naturally (anchor at bottom).
-  const yOff = 0;
 
-  // Breathing idle — only when not moving
   const moving = Math.abs(mvx) > 0.001 || Math.abs(mvz) > 0.001;
-  const breathY     = moving ? 0 : Math.sin(idlePhase * (crouchLerp > 0.5 ? 0.55 : 0.95)) * (crouchLerp > 0.5 ? 1.2 : 2.2);
+  const breathY     = moving ? 0 : Math.sin(idlePhase * (crouchBinary ? 0.55 : 0.95)) * (crouchBinary ? 1.2 : 2.2);
   const breathScale = moving ? 1 : 1 + Math.sin(idlePhase * 0.48) * 0.005;
 
   cx.save();
-  cx.translate(sp.x, sp.y + yOff + breathY);
+  cx.translate(sp.x, sp.y + breathY);
   cx.scale(breathScale, breathScale);
 
-  // Ground shadow
+  // Shadow
   cx.globalAlpha = 0.35;
   cx.fillStyle = '#000';
   cx.beginPath();
@@ -928,14 +947,33 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   cx.fill();
   cx.globalAlpha = 1;
 
-  if (flip) cx.scale(-1, 1);
+  if (inFade) {
+    // Crossfade: squat sprite fades out, gum_1 fades in
+    const sqKey  = `${key}_squat`;
+    const sqSpr  = SPR[sqKey] || IMG[sqKey] || spr;
+    const gumSpr = SPR[`${key}_gum_1`] || IMG[`${key}_gum_1`] || spr;
 
-  if (spr) {
-    cx.drawImage(spr, -sw / 2, -sh, sw, sh);
+    const sqAr  = sqSpr  ? sqSpr.width  / sqSpr.height  : ar;
+    const gmAr  = gumSpr ? gumSpr.width / gumSpr.height : ar;
+    const sqW = sh * sqAr, gmW = sh * gmAr;
+
+    if (flip) cx.scale(-1, 1);
+
+    // Squat fading out
+    cx.globalAlpha = 1 - gumFade;
+    cx.drawImage(sqSpr,  -sqW/2, -sh, sqW, sh);
+    // Gum frame 1 fading in
+    cx.globalAlpha = gumFade;
+    cx.drawImage(gumSpr, -gmW/2, -sh, gmW, sh);
   } else {
-    cx.globalAlpha = 0.85;
-    cx.fillStyle = key === 'naomi' ? '#a08070' : '#804040';
-    cx.fillRect(-sw / 2, -sh, sw, sh);
+    if (flip) cx.scale(-1, 1);
+    if (spr) {
+      cx.drawImage(spr, -sw/2, -sh, sw, sh);
+    } else {
+      cx.globalAlpha = 0.85;
+      cx.fillStyle = key === 'naomi' ? '#a08070' : '#804040';
+      cx.fillRect(-sw/2, -sh, sw, sh);
+    }
   }
 
   cx.restore();
