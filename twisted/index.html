@@ -171,6 +171,15 @@ loadImg('naomi_side_b',   'assets/naomi_side_b.png');
 loadImg('naomi_backq_a',  'assets/naomi_backq_a.png');
 loadImg('naomi_backq_b',  'assets/naomi_backq_b.png');
 loadImg('naomi_squat',    'assets/naomi_squat.png');
+// Naomi transition frames — stand steps and crouch bridge
+loadImg('naomi_stand_step1', 'assets/naomi_stand_step1.png');
+loadImg('naomi_stand_step2', 'assets/naomi_stand_step2.png');
+loadImg('naomi_stand_step3', 'assets/naomi_stand_step3.png');
+loadImg('naomi_stand_step4', 'assets/naomi_stand_step4.png');
+loadImg('naomi_crouch_t1',   'assets/naomi_crouch_t1.png');
+loadImg('naomi_crouch_t2',   'assets/naomi_crouch_t2.png');
+loadImg('naomi_crouch_t3',   'assets/naomi_crouch_t3.png');
+loadImg('naomi_crouch_t4',   'assets/naomi_crouch_t4.png');
 
 // ─── Perspective floor definition ─────────────────────────────────────────────
 // Calibrated against the Miami alley backdrop:
@@ -279,6 +288,10 @@ LVID.addEventListener('ended', endLatch);
 function triggerCrouch() {
   const wasStanding = !P.crouch;
   P.crouch = !P.crouch;
+  // Play transition sequence
+  P.transSeq   = wasStanding ? NAOMI_CROUCH_IN : NAOMI_CROUCH_OUT;
+  P.transFrame = 0;
+  P.transTimer = 0;
   if (wasStanding) {
     playLatch('squat', () => { P.crouch = true; P.crouchLerp = 1; });
   }
@@ -375,6 +388,11 @@ const P = {
   lastMvx: 0, lastMvz: 1,        // facing camera
   walkTimer: 0, walkFrame: 0, walkStep: 0,
   moving: false, idlePhase: 0,
+  // Transition animation state
+  transSeq: null,      // active sequence array (NAOMI_CROUCH_IN/OUT or STEP)
+  transFrame: 0,
+  transTimer: 0,
+  stepPending: false,  // true when a micro-step should fire
 };
 
 // ─── NPC: Sierra ─────────────────────────────────────────────────────────────
@@ -452,6 +470,28 @@ const GUM_SEQ = [
   { key:'sierra_gum_8',  dur:0.50 },
   { key:'sierra_gum_t3', dur:0.20 },  // transition out — reverse frame 2
   { key:'sierra_gum_t1', dur:0.20 },  // transition out — reverse frame 1 back to squat
+];
+
+// Naomi crouch-in: standing → squat
+const NAOMI_CROUCH_IN  = [
+  { key:'naomi_crouch_t1', dur:0.10 },
+  { key:'naomi_crouch_t2', dur:0.10 },
+  { key:'naomi_crouch_t3', dur:0.10 },
+  { key:'naomi_crouch_t4', dur:0.10 },
+];
+// Naomi crouch-out: squat → standing (same frames reversed)
+const NAOMI_CROUCH_OUT = [
+  { key:'naomi_crouch_t4', dur:0.08 },
+  { key:'naomi_crouch_t3', dur:0.08 },
+  { key:'naomi_crouch_t2', dur:0.08 },
+  { key:'naomi_crouch_t1', dur:0.08 },
+];
+// Naomi micro-step: single tap while standing
+const NAOMI_STEP_SEQ = [
+  { key:'naomi_stand_step1', dur:0.09 },
+  { key:'naomi_stand_step2', dur:0.09 },
+  { key:'naomi_stand_step3', dur:0.09 },
+  { key:'naomi_stand_step4', dur:0.09 },
 ];
 
 // Win zone: far-left door
@@ -559,6 +599,7 @@ function startGame() {
   P.wx=0.62; P.wz=0.65; P.renderWx=0.62; P.renderWz=0.65;
   P.vwx=P.vwz=0; P.crouch=true; P.crouchLerp=1; P.det=0; P.catches=0;
   P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false;
+  P.transSeq=null; P.transFrame=0; P.transTimer=0;
   P.lastMvx=0; P.lastMvz=1;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
   NPC.targetWx=0.80; NPC.targetWz=0.62; NPC.crouchLerp=1;
@@ -668,6 +709,23 @@ function update(ts) {
 
   const mag = Math.hypot(mx, mz) || 1;
   if (mx || mz) { mx /= mag; mz /= mag; P.lastMvx = mx; P.lastMvz = mz; }
+
+  // Detect micro-step: input exists but movement is tiny (quick tap, not sustained)
+  const inputMag = Math.hypot(mx, mz);
+  if (inputMag > 0.05 && !P.crouch && !P.transSeq) {
+    P.transSeq = NAOMI_STEP_SEQ; P.transFrame = 0; P.transTimer = 0;
+  }
+
+  // Tick Naomi's transition sequence
+  if (P.transSeq) {
+    P.transTimer += dt;
+    const cur = P.transSeq[P.transFrame];
+    if (P.transTimer >= cur.dur) {
+      P.transTimer = 0;
+      P.transFrame++;
+      if (P.transFrame >= P.transSeq.length) P.transSeq = null;
+    }
+  }
 
   const spd = P.crouch ? 0.32 : 1.0;
   const prevPx = P.wx, prevPz = P.wz;
@@ -887,7 +945,8 @@ function drawEntities() {
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
-      drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, -1, 0);
+      const naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
+      drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, naomiSprKey, 0);
     }},
   ];
   ents.sort((a, b) => a.wz - b.wz);
