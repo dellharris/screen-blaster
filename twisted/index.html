@@ -150,6 +150,8 @@ loadImg('sierra_side_b',  'assets/sierra_side_b.png');
 loadImg('sierra_backq_a', 'assets/sierra_backq_a.png');
 loadImg('sierra_backq_b', 'assets/sierra_backq_b.png');
 loadImg('sierra_squat',   'assets/sierra_squat.png');
+// Sierra bubble gum idle animation frames
+for (let _gi = 1; _gi <= 8; _gi++) loadImg(`sierra_gum_${_gi}`, `assets/sierra_gum_${_gi}.png`);
 // Naomi directional sprites (base + walk frames a/b + squat)
 loadImg('naomi_front',    'assets/naomi_front.png');
 loadImg('naomi_back',     'assets/naomi_back.png');
@@ -346,6 +348,8 @@ const NPC = {
   lastMvx: 0, lastMvz: 1,        // facing camera
   walkTimer: 0, walkFrame: 0, walkStep: 0,
   moving: false, idlePhase: 1.8,
+  // Gum idle animation
+  idleTimer: 0, gumActive: false, gumFrame: 0, gumFrameTimer: 0,
 };
 
 // ─── Patrol car ───────────────────────────────────────────────────────────────
@@ -659,6 +663,34 @@ function update(ts) {
     NPC.walkTimer = 0; NPC.walkStep = 0; NPC.walkFrame = 0;
   }
 
+  // ─── Sierra gum idle animation ────────────────────────────────────────────
+  // Frame durations (seconds): frames 1-5 build slowly, 6 is quick pop, 7-8 recover
+  const GUM_FRAME_DUR = [0.55, 0.45, 0.55, 0.55, 0.65, 0.22, 0.55, 0.90];
+  const GUM_TRIGGER   = 5.0;   // seconds of idle before sequence starts
+
+  if (P.crouch && !NPC.moving) {
+    NPC.idleTimer += dt;
+    if (!NPC.gumActive && NPC.idleTimer >= GUM_TRIGGER) {
+      NPC.gumActive = true; NPC.gumFrame = 0; NPC.gumFrameTimer = 0;
+    }
+  } else {
+    // Moving or not crouching — reset idle, stop gum mid-sequence
+    NPC.idleTimer = 0;
+    NPC.gumActive = false; NPC.gumFrame = 0; NPC.gumFrameTimer = 0;
+  }
+
+  if (NPC.gumActive) {
+    NPC.gumFrameTimer += dt;
+    if (NPC.gumFrameTimer >= GUM_FRAME_DUR[NPC.gumFrame]) {
+      NPC.gumFrameTimer = 0;
+      NPC.gumFrame++;
+      if (NPC.gumFrame >= 8) {
+        // Sequence done — reset idle timer so it fires again after 5s
+        NPC.gumActive = false; NPC.gumFrame = 0; NPC.idleTimer = 0;
+      }
+    }
+  }
+
   // Derive screen pos for this frame
   const sp = w2s(P.wx, P.wz);
   P.sx = sp.x; P.sy = sp.y;
@@ -836,14 +868,26 @@ function getSpriteKey(charKey, mvx, mvz, walkFrame, crouch) {
   return { k: charKey + '_front' + suf, flip: goLeft };
 }
 
-function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase) {
+function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhase, gumFrame) {
   const sp  = w2s(wx, wz);
   const s   = dScale(wz);
 
   const crouchBinary = crouchLerp > 0.5;
-  const { k: sprKey, flip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
-  const baseDir = sprKey.replace(/_a$|_b$/, '');
-  const spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
+
+  // Gum animation overrides sprite entirely when active
+  let spr;
+  if (gumFrame >= 0 && gumFrame < 8) {
+    const gKey = `${key}_gum_${gumFrame + 1}`;
+    spr = SPR[gKey] || IMG[gKey];
+  }
+
+  if (!spr) {
+    const { k: sprKey, flip: sprFlip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
+    const baseDir = sprKey.replace(/_a$|_b$/, '');
+    spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
+  }
+
+  const { k: _sk, flip } = getSpriteKey(key, mvx, mvz, walkFrame, crouchBinary);
 
   const baseH = 360;
   const hasSquatSprite = crouchBinary && (SPR[key + '_squat'] || IMG[key + '_squat']);
@@ -907,13 +951,13 @@ function drawPlayerDetectGlow() {
 // Draws characters in correct z-order (back first, front last = GTA style)
 function drawEntities() {
   const ents = [
-    { type:'npc',    wx:NPC.renderWx, wz:NPC.renderWz, key:'sierra', mvx:NPC.lastMvx, mvz:NPC.lastMvz, walkFrame:NPC.walkFrame, crouch:P.crouch,   crouchLerp:P.crouchLerp, idlePhase:NPC.idlePhase },
-    { type:'player', wx:P.renderWx,   wz:P.renderWz,   key:'naomi',  mvx:P.lastMvx,   mvz:P.lastMvz,   walkFrame:P.walkFrame,   crouch:P.crouch,   crouchLerp:P.crouchLerp, idlePhase:P.idlePhase   },
+    { type:'npc',    wx:NPC.renderWx, wz:NPC.renderWz, key:'sierra', mvx:NPC.lastMvx, mvz:NPC.lastMvz, walkFrame:NPC.walkFrame, crouch:P.crouch, crouchLerp:P.crouchLerp, idlePhase:NPC.idlePhase, gumFrame: NPC.gumActive ? NPC.gumFrame : -1 },
+    { type:'player', wx:P.renderWx,   wz:P.renderWz,   key:'naomi',  mvx:P.lastMvx,   mvz:P.lastMvz,   walkFrame:P.walkFrame,   crouch:P.crouch, crouchLerp:P.crouchLerp, idlePhase:P.idlePhase,   gumFrame:-1 },
   ];
   ents.sort((a,b) => a.wz - b.wz);
   for (const e of ents) {
     if (e.type === 'player') drawPlayerDetectGlow();
-    drawChar(e.key, e.wx, e.wz, e.mvx, e.mvz, e.walkFrame, e.crouch, e.crouchLerp, e.idlePhase);
+    drawChar(e.key, e.wx, e.wz, e.mvx, e.mvz, e.walkFrame, e.crouch, e.crouchLerp, e.idlePhase, e.gumFrame);
   }
 }
 
