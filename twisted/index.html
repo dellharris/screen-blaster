@@ -134,6 +134,11 @@ loadImg('fg',           'assets/foreground.png');
 loadImg('police',       'assets/police.png');
 // Dialogue comic portraits (used as-is, no black removal needed)
 loadImg('dumpster',     'assets/dumpster.png');
+// Dumpster mission frames
+['dumpster_closed','dumpster_cracking','dumpster_ajar',
+ 'dumpster_open_key_far','dumpster_open_key_a','dumpster_open_key_b',
+ 'dumpster_open_key_c','dumpster_open_key_d','dumpster_open_empty']
+  .forEach(k => loadImg(k, `assets/${k}.png`));
 loadImg('dlg_naomi1',   'assets/dlg_naomi1.png');
 loadImg('dlg_naomi2',   'assets/dlg_naomi2.png');
 loadImg('dlg_sierra1',  'assets/dlg_sierra1.png');
@@ -466,6 +471,72 @@ const COVERS = [
   { wxMin: 0.00, wxMax: 0.10, wzMin: 0.10, wzMax: 0.65, name:'fire_escape' },
 ];
 
+
+// ─── Mission dumpster (DUMP_A) — interactive ──────────────────────────────────
+// States: 'closed' → 'opening' (animation) → 'open_key' (key glows) → 'open_empty'
+const MISSION_DUMP = {
+  wx: DUMP_A.wx, wz: DUMP_A.wz,  // same world position as DUMP_A visual
+  state: 'closed',               // closed | opening | open_key | open_empty
+  frame: 0,                      // index into OPENING_SEQ or KEY_IDLE_SEQ
+  timer: 0,
+  interactRange: 0.18,           // world-unit proximity to trigger interact
+};
+
+// Opening animation: closed → cracking → ajar → fully open with key
+const OPENING_SEQ = [
+  { key:'dumpster_closed',       dur:0.10 },
+  { key:'dumpster_cracking',     dur:0.18 },
+  { key:'dumpster_cracking',     dur:0.14 },
+  { key:'dumpster_ajar',         dur:0.18 },
+  { key:'dumpster_open_key_far', dur:0.14 },
+  { key:'dumpster_open_key_a',   dur:0.20 },
+];
+
+// Idle key glow cycle (loops while key is available)
+const KEY_IDLE_SEQ = [
+  { key:'dumpster_open_key_a', dur:0.22 },
+  { key:'dumpster_open_key_b', dur:0.22 },
+  { key:'dumpster_open_key_c', dur:0.22 },
+  { key:'dumpster_open_key_d', dur:0.22 },
+  { key:'dumpster_open_key_c', dur:0.22 },
+  { key:'dumpster_open_key_b', dur:0.22 },
+];
+
+// ─── Inventory ────────────────────────────────────────────────────────────────
+const INVENTORY = {
+  items: [],           // { id, label, emoji }
+  open: false,         // bag drawer open/closed
+  anim: 0,             // open/close animation 0-1
+};
+
+function addItem(id, label, emoji) {
+  if (!INVENTORY.items.find(i => i.id === id)) {
+    INVENTORY.items.push({ id, label, emoji });
+  }
+}
+
+function hasItem(id) { return !!INVENTORY.items.find(i => i.id === id); }
+
+// ─── Interact: try to open/loot the mission dumpster ─────────────────────────
+function tryInteract() {
+  if (phase !== PH.PLAY) return;
+  const dx = P.wx - MISSION_DUMP.wx;
+  const dz = P.wz - MISSION_DUMP.wz;
+  const dist = Math.hypot(dx, dz);
+  if (dist > MISSION_DUMP.interactRange) return;
+
+  if (MISSION_DUMP.state === 'closed') {
+    // TODO: check for crowbar when it's seeded — for now open directly
+    MISSION_DUMP.state = 'opening';
+    MISSION_DUMP.frame = 0;
+    MISSION_DUMP.timer = 0;
+  } else if (MISSION_DUMP.state === 'open_key') {
+    // Collect the key
+    addItem('key', 'Door Key', '🗝️');
+    MISSION_DUMP.state = 'open_empty';
+  }
+}
+
 // Sierra gum animation sequence — t1→t3 in, gum cycle, t3→t1 out (reverse)
 const GUM_SEQ = [
   { key:'sierra_gum_t1', dur:0.10 },  // entry — snappy
@@ -571,6 +642,7 @@ cv.addEventListener('touchstart', e => {
       if (isCrouchBtn(p.x, p.y) && crouchId === null) { crouchId = t.identifier; triggerCrouch(); }
       else if (isRunBtn(p.x, p.y) && runId === null)  { runId = t.identifier; P.running = true; }
       else if (isMuteBtn(p.x, p.y)) { toggleMute(); }
+      else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; }
       else if (isJoyZone(p.x, p.y) && !JOY.on) {
         JOY.on = true; JOY.id = t.identifier;
         JOY.sx = p.x; JOY.sy = p.y; JOY.dx = JOY.dy = 0;
@@ -608,6 +680,8 @@ cv.addEventListener('mousedown', e => {
     if (isCrouchBtn(x,y)) { triggerCrouch(); return; }
     if (isRunBtn(x,y))    { P.running = true; return; }
     if (isMuteBtn(x,y))   { toggleMute(); return; }
+    if (x > VW-116 && x < VW-16 && y > 56 && y < 96) { INVENTORY.open = !INVENTORY.open; return; }
+    tryInteract();
     if (isJoyZone(x,y)) { mouseDrag=true; JOY.on=true; JOY.sx=x; JOY.sy=y; JOY.dx=JOY.dy=0; }
   } else handleTap();
 });
@@ -624,7 +698,9 @@ cv.addEventListener('mousemove', e => {
 window.addEventListener('keydown', e => {
   KEYS[e.key] = true;
   if ((e.key===' '||e.key==='c') && phase===PH.PLAY) triggerCrouch();
+  if ((e.key==='e'||e.key==='E') && phase===PH.PLAY) tryInteract();
   if ((e.key==='Shift') && phase===PH.PLAY) P.running = true;
+  if ((e.key==='b'||e.key==='B') && phase===PH.PLAY) INVENTORY.open = !INVENTORY.open;
   if (phase!==PH.PLAY) handleTap();
 });
 window.addEventListener('keyup', e => {
@@ -651,6 +727,8 @@ function startGame() {
 function resetGame() {
   phase=PH.TITLE; pulse=0; dlgIdx=0; winDlgIdx=0; endTimer=0;
   LATCH_CLIPS.forEach(c => c.played = false);
+  MISSION_DUMP.state='closed'; MISSION_DUMP.frame=0; MISSION_DUMP.timer=0;
+  INVENTORY.items=[]; INVENTORY.open=false; INVENTORY.anim=0;
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -797,6 +875,31 @@ function update(ts) {
   // Idle phase ticks (breathing animation)
   P.idlePhase   = (P.idlePhase   + dt) % (Math.PI * 200);
   NPC.idlePhase = (NPC.idlePhase + dt) % (Math.PI * 200);
+
+  // ─── Mission dumpster tick ────────────────────────────────────────────────
+  if (MISSION_DUMP.state === 'opening') {
+    MISSION_DUMP.timer += dt;
+    const cur = OPENING_SEQ[MISSION_DUMP.frame];
+    if (MISSION_DUMP.timer >= cur.dur) {
+      MISSION_DUMP.timer = 0;
+      MISSION_DUMP.frame++;
+      if (MISSION_DUMP.frame >= OPENING_SEQ.length) {
+        MISSION_DUMP.state = 'open_key';
+        MISSION_DUMP.frame = 0;
+      }
+    }
+  } else if (MISSION_DUMP.state === 'open_key') {
+    MISSION_DUMP.timer += dt;
+    const cur = KEY_IDLE_SEQ[MISSION_DUMP.frame % KEY_IDLE_SEQ.length];
+    if (MISSION_DUMP.timer >= cur.dur) {
+      MISSION_DUMP.timer = 0;
+      MISSION_DUMP.frame = (MISSION_DUMP.frame + 1) % KEY_IDLE_SEQ.length;
+    }
+  }
+
+  // Inventory bag animation
+  const bagOpen = INVENTORY.open;
+  INVENTORY.anim = lerp(INVENTORY.anim, bagOpen ? 1 : 0, Math.min(1, dt * 10));
 
   // Walk animation tick — 3-frame cycle: neutral(0) → a(1) → neutral(0) → b(2)
   P.moving = !!(mx || mz);
@@ -976,9 +1079,10 @@ function drawCar() {
 }
 
 // Draw a single dumpster at world position
-function drawDumpster(wx, wz, scale2) {
-  if (!IMG['dumpster']) return;
-  const img = IMG['dumpster'];
+function drawDumpster(wx, wz, scale2, spriteKey) {
+  const key = spriteKey || 'dumpster';
+  const img = IMG[key] || IMG['dumpster'];
+  if (!img) return;
   const ar  = img.naturalWidth / img.naturalHeight;
   const ds  = w2s(wx, wz);
   const sc  = dScale(wz) * (scale2 || 2.0);
@@ -989,8 +1093,16 @@ function drawDumpster(wx, wz, scale2) {
 // Depth-sorted render: bins AND characters in one list so depth is always correct
 function drawEntities() {
   const ents = [
-    { type:'bin',    wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 2.2) },
-    { type:'bin',    wz: DUMP_A.wz, draw: () => drawDumpster(DUMP_A.wx, DUMP_A.wz, 2.2) },
+    { type:'bin', wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 2.2) },
+    { type:'bin', wz: DUMP_A.wz, draw: () => {
+      // Mission dumpster — show correct state sprite
+      let sprKey = 'dumpster_closed';
+      if (MISSION_DUMP.state === 'closed')    sprKey = 'dumpster_closed';
+      if (MISSION_DUMP.state === 'opening')   sprKey = OPENING_SEQ[MISSION_DUMP.frame]?.key || 'dumpster_closed';
+      if (MISSION_DUMP.state === 'open_key')  sprKey = KEY_IDLE_SEQ[MISSION_DUMP.frame % KEY_IDLE_SEQ.length]?.key;
+      if (MISSION_DUMP.state === 'open_empty') sprKey = 'dumpster_open_empty';
+      drawDumpster(DUMP_A.wx, DUMP_A.wz, 2.2, sprKey);
+    }},
     { type:'npc',    wz: NPC.renderWz, draw: () => {
       const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
       // sqBoost=1.22 makes Sierra's squat match Naomi's visual size — gum/transition frames unaffected
@@ -1300,6 +1412,61 @@ function drawHUD() {
       cx.closePath(); cx.fill();
     });
     cx.restore();
+  }
+  cx.restore();
+}
+
+function drawInteractPrompt() {
+  const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
+  if (dist > MISSION_DUMP.interactRange) return;
+  if (MISSION_DUMP.state === 'opening') return;
+
+  const ds = w2s(MISSION_DUMP.wx, MISSION_DUMP.wz);
+  const prompt = MISSION_DUMP.state === 'closed'     ? '[ E ]  Open' :
+                 MISSION_DUMP.state === 'open_key'   ? '[ E ]  Take Key 🗝️' : null;
+  if (!prompt) return;
+
+  cx.save();
+  cx.globalAlpha = 0.75 + Math.sin(pulse * 4) * 0.2;
+  cx.font = 'bold 13px monospace';
+  cx.textAlign = 'center';
+  const tw = cx.measureText(prompt).width + 20;
+  cx.fillStyle = '#0a0816'; cx.strokeStyle = '#00ffcc'; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.roundRect(ds.x - tw/2, ds.y - 120, tw, 28, 6); cx.fill(); cx.stroke();
+  cx.fillStyle = '#00ffcc';
+  cx.fillText(prompt, ds.x, ds.y - 101);
+  cx.restore();
+}
+
+function drawInventoryBag() {
+  if (INVENTORY.items.length === 0) return;
+  const bx = VW - 16, by = 56;   // top-right, below mute button
+  const itemCount = INVENTORY.items.length;
+  const bagH = 44 + INVENTORY.anim * (itemCount * 36 + 8);
+
+  cx.save();
+  // Bag button
+  cx.globalAlpha = 0.9;
+  cx.fillStyle = INVENTORY.open ? '#ff2d7830' : '#07050c';
+  cx.strokeStyle = '#ff2d78'; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.roundRect(bx - 104, by, 96, 36, 5); cx.fill(); cx.stroke();
+  cx.globalAlpha = 1; cx.font = 'bold 11px monospace'; cx.textAlign = 'center';
+  cx.fillStyle = '#ff2d78';
+  cx.fillText(`🎒 BAG (${itemCount})`, bx - 56, by + 23);
+
+  // Drawer
+  if (INVENTORY.anim > 0.02) {
+    cx.globalAlpha = INVENTORY.anim * 0.95;
+    cx.fillStyle = '#0a0816'; cx.strokeStyle = '#ff2d78'; cx.lineWidth = 1;
+    cx.beginPath(); cx.roundRect(bx - 112, by + 38, 104, itemCount * 36 + 8, 5); cx.fill(); cx.stroke();
+    cx.globalAlpha = INVENTORY.anim;
+    INVENTORY.items.forEach((item, i) => {
+      const iy = by + 50 + i * 36;
+      cx.font = '20px sans-serif'; cx.textAlign = 'left';
+      cx.fillText(item.emoji, bx - 104, iy);
+      cx.font = '10px monospace'; cx.fillStyle = '#ccc';
+      cx.fillText(item.label, bx - 78, iy - 2);
+    });
   }
   cx.restore();
 }
@@ -1877,6 +2044,8 @@ function render(ts) {
       }
       drawMinimap();
       drawHUD();
+      drawInteractPrompt();
+      drawInventoryBag();
       drawJoystick();
       break;
 
