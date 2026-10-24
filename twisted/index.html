@@ -614,11 +614,11 @@ function update(ts) {
   CAR.ft += dt;
 
   // Sierra mirrors Naomi's crouch
-  const sideWeave = Math.sin(pulse * 1.3) * 0.022;
+  // No lateral weave when crouching — Sierra stays perfectly still beside Naomi
+  const sideWeave = P.crouch ? 0 : Math.sin(pulse * 1.3) * 0.022;
 
   if (P.crouch) {
-    // Crouching — Sierra stays behind bin B (same wz range as bins), Naomi behind bin A
-    NPC.targetWx = clamp(P.wx + 0.18 + sideWeave * 0.2, 0.72, 0.92);
+    NPC.targetWx = clamp(P.wx + 0.18, 0.72, 0.92);
     NPC.targetWz = clamp(P.wz + 0.01, 0.30, 0.46);
   } else {
     // Running — Sierra leads slightly ahead-left
@@ -627,7 +627,7 @@ function update(ts) {
   }
 
   const prevNx = NPC.wx, prevNz = NPC.wz;
-  const npcSpeed = P.crouch ? 1.4 : 2.4;
+  const npcSpeed = P.crouch ? 0.6 : 2.4;
   NPC.wx = lerp(NPC.wx, NPC.targetWx, Math.min(1, dt * npcSpeed));
   NPC.wz = lerp(NPC.wz, NPC.targetWz, Math.min(1, dt * npcSpeed));
   // Resolve NPC obstacles too
@@ -958,15 +958,19 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
     spr = SPR[gKey] || IMG[gKey] || spr;
   }
 
-  const baseH    = 360;
+  const baseH = 360;
   const heightMul = lerp(1.0, 0.70, crouchLerp);
+  // Gum frames are drawn at same physical scale as squat — no size jump
   const sh = baseH * s * SQUISH * heightMul;
   const ar = spr ? (spr.width / spr.height) : 0.5;
   const sw = sh * ar;
 
   const moving = Math.abs(mvx) > 0.001 || Math.abs(mvz) > 0.001;
-  const breathY     = moving ? 0 : Math.sin(idlePhase * (crouchBinary ? 0.55 : 0.95)) * (crouchBinary ? 1.2 : 2.2);
-  const breathScale = moving ? 1 : 1 + Math.sin(idlePhase * 0.48) * 0.005;
+  // Calm breathing — very subtle, same amplitude crouched or standing
+  const breathAmp   = crouchBinary ? 0.8 : 1.6;
+  const breathFreq  = crouchBinary ? 0.45 : 0.85;
+  const breathY     = moving ? 0 : Math.sin(idlePhase * breathFreq) * breathAmp;
+  const breathScale = 1; // removed micro-scale pulse — was causing fidget look
 
   cx.save();
   cx.translate(sp.x, sp.y + breathY);
