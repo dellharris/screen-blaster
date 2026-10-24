@@ -277,9 +277,9 @@ function endCutscene() {
   LVID.style.display = 'none';
   startGame();
   P.crouch = true; P.crouchLerp = 1;
-  P.wx = 0.78; P.wz = 0.60; P.renderWx = 0.78; P.renderWz = 0.60;
+  P.wx = 0.62; P.wz = 0.44; P.renderWx = 0.62; P.renderWz = 0.44;
   P.lastMvx = 0; P.lastMvz = 1;
-  NPC.wx = 0.57; NPC.wz = 0.62; NPC.renderWx = 0.57; NPC.renderWz = 0.62;
+  NPC.wx = 0.82; NPC.wz = 0.36; NPC.renderWx = 0.82; NPC.renderWz = 0.36;
   NPC.lastMvx = 0; NPC.lastMvz = 1;
   phase = PH.CROSSFADE;
   crossfadeTimer = 0;
@@ -363,14 +363,14 @@ const CAR = {
 };
 
 // ─── Dumpster world anchors ───────────────────────────────────────────────────
-// Right side of alley against the wall — two bins side by side
-const DUMP_A = { wx: 0.72, wz: 0.48 };  // left/closer bin
-const DUMP_B = { wx: 0.87, wz: 0.40 };  // right/further bin against wall
+const DUMP_A = { wx: 0.63, wz: 0.50 };  // left bin — more spaced, slightly closer
+const DUMP_B = { wx: 0.84, wz: 0.38 };  // right bin — against right wall, further back
 
 // Physical obstacle footprints
+// Bin B extends all the way to wx=1.0 so characters CANNOT sneak past it along the wall
 const OBSTACLES = [
-  { id:'binA', wxMin:0.60, wxMax:0.82, wzMin:0.38, wzMax:0.57 },
-  { id:'binB', wxMin:0.77, wxMax:0.97, wzMin:0.30, wzMax:0.49 },
+  { id:'binA', wxMin:0.50, wxMax:0.74, wzMin:0.39, wzMax:0.59 },
+  { id:'binB', wxMin:0.72, wxMax:1.00, wzMin:0.26, wzMax:0.48 }, // wall-sealed right edge
 ];
 
 // Slide character around obstacles — called after every movement update
@@ -394,7 +394,7 @@ function resolveObstacles(newWx, newWz, prevWx, prevWz) {
 // ─── Cover zones (world space) ────────────────────────────────────────────────
 // Detection immunity: in front of bins (wz > bin) or behind bins (wz < bin)
 const COVERS = [
-  { wxMin: 0.58, wxMax: 0.98, wzMin: 0.30, wzMax: 0.70, name:'dumpster' },
+  { wxMin: 0.50, wxMax: 1.00, wzMin: 0.26, wzMax: 0.60, name:'dumpster' },
   { wxMin: 0.00, wxMax: 0.10, wzMin: 0.10, wzMax: 0.65, name:'fire_escape' },
 ];
 
@@ -499,12 +499,14 @@ window.addEventListener('keyup', e => { KEYS[e.key]=false; });
 // ─── Game control ─────────────────────────────────────────────────────────────
 function startGame() {
   phase = PH.PLAY;
-  P.wx=0.78; P.wz=0.60; P.renderWx=0.78; P.renderWz=0.60;
+  // Girls start BEHIND bins (lower wz = further from camera = behind the dumpsters)
+  // Naomi behind bin A (left), Sierra behind bin B (right against wall)
+  P.wx=0.62; P.wz=0.44; P.renderWx=0.62; P.renderWz=0.44;
   P.vwx=P.vwz=0; P.crouch=true; P.crouchLerp=1; P.det=0; P.catches=0;
   P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false;
   P.lastMvx=0; P.lastMvz=1;
-  NPC.wx=0.57; NPC.wz=0.62; NPC.renderWx=0.57; NPC.renderWz=0.62;
-  NPC.targetWx=0.57; NPC.targetWz=0.62;
+  NPC.wx=0.82; NPC.wz=0.36; NPC.renderWx=0.82; NPC.renderWz=0.36;
+  NPC.targetWx=0.82; NPC.targetWz=0.36;
   NPC.walkTimer=0; NPC.walkFrame=0; NPC.walkStep=0; NPC.moving=false;
   NPC.lastMvx=0; NPC.lastMvz=1;
   CAR.la=0; CAR.ldir=1; CAR.ft=0;
@@ -579,9 +581,9 @@ function update(ts) {
   const sideWeave = Math.sin(pulse * 1.3) * 0.022;
 
   if (P.crouch) {
-    // Crouching — Sierra stays to Naomi's LEFT, both in front of bins
-    NPC.targetWx = clamp(P.wx - 0.20 + sideWeave * 0.3, 0.46, 0.74);
-    NPC.targetWz = clamp(P.wz + 0.02, 0.52, 0.70);
+    // Crouching — Sierra stays behind bin B (same wz range as bins), Naomi behind bin A
+    NPC.targetWx = clamp(P.wx + 0.18 + sideWeave * 0.2, 0.72, 0.92);
+    NPC.targetWz = clamp(P.wz + 0.01, 0.30, 0.46);
   } else {
     // Running — Sierra leads slightly ahead-left
     NPC.targetWx = clamp(P.wx - 0.15 + sideWeave, 0.03, 0.90);
@@ -805,23 +807,33 @@ function drawCar() {
   cx.restore();
 }
 
-// Draw both dumpsters — called BEFORE characters so girls render on top
-function drawDumpsters() {
+// Draw a single dumpster at world position
+function drawDumpster(wx, wz, scale2) {
   if (!IMG['dumpster']) return;
   const img = IMG['dumpster'];
-  const ar = img.naturalWidth / img.naturalHeight;
+  const ar  = img.naturalWidth / img.naturalHeight;
+  const ds  = w2s(wx, wz);
+  const sc  = dScale(wz) * (scale2 || 2.0);
+  const dh  = 220 * sc * SQUISH;
+  cx.drawImage(img, ds.x - dh*ar*0.46, ds.y - dh*0.92, dh*ar, dh);
+}
 
-  // Draw back bin first (B = further, smaller)
-  const db = w2s(DUMP_B.wx, DUMP_B.wz);
-  const scb = dScale(DUMP_B.wz) * 2.0;
-  const dhb = 220 * scb * SQUISH;
-  cx.drawImage(img, db.x - dhb*ar*0.46, db.y - dhb*0.92, dhb*ar, dhb);
-
-  // Draw front bin (A = closer, bigger)
-  const da = w2s(DUMP_A.wx, DUMP_A.wz);
-  const sca = dScale(DUMP_A.wz) * 2.0;
-  const dha = 220 * sca * SQUISH;
-  cx.drawImage(img, da.x - dha*ar*0.46, da.y - dha*0.92, dha*ar, dha);
+// Depth-sorted render: bins AND characters in one list so depth is always correct
+function drawEntities() {
+  const ents = [
+    { type:'bin',    wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 2.2) },
+    { type:'bin',    wz: DUMP_A.wz, draw: () => drawDumpster(DUMP_A.wx, DUMP_A.wz, 2.2) },
+    { type:'npc',    wz: NPC.renderWz, draw: () => {
+      const e = { key:'sierra', wx:NPC.renderWx, wz:NPC.renderWz, mvx:NPC.lastMvx, mvz:NPC.lastMvz, walkFrame:NPC.walkFrame, crouch:P.crouch, crouchLerp:P.crouchLerp, idlePhase:NPC.idlePhase, gumFrame: NPC.gumActive ? NPC.gumFrame : -1 };
+      drawChar(e.key, e.wx, e.wz, e.mvx, e.mvz, e.walkFrame, e.crouch, e.crouchLerp, e.idlePhase, e.gumFrame);
+    }},
+    { type:'player', wz: P.renderWz,   draw: () => {
+      drawPlayerDetectGlow();
+      drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, -1);
+    }},
+  ];
+  ents.sort((a, b) => a.wz - b.wz);
+  for (const e of ents) e.draw();
 }
 
 // Draw win glow only — called AFTER characters
@@ -1649,7 +1661,6 @@ function render(ts) {
       drawBg();
       drawSpotlight();
       drawCar();
-      drawDumpsters();
       drawEntities();
       drawWinGlow();
       cx.restore();
@@ -1664,9 +1675,8 @@ function render(ts) {
       drawBg();
       drawSpotlight();
       drawCar();
-      drawDumpsters();          // bins drawn BEFORE characters
-      drawEntities();           // girls on top of bins
-      drawWinGlow();            // safe zone glow on top
+      drawEntities();    // bins + characters depth-sorted together
+      drawWinGlow();
       // Spotted flash
       if (catchFlash > 0) {
         cx.save();
