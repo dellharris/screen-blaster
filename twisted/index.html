@@ -168,12 +168,12 @@ loadImg('naomi_backq_b',  'assets/naomi_backq_b.png');
 loadImg('naomi_squat',    'assets/naomi_squat.png');
 
 // ─── Perspective floor definition ─────────────────────────────────────────────
-// The alley floor is a trapezoid. Top = far from camera (narrow). Bot = near (wide).
-// These values are tuned to match the scene image's vanishing lines.
+// Calibrated against the Miami alley backdrop:
+// Vanishing point ~center at y≈52%, left wall converges harder than right.
 const FL = {
-  topY: VH * 0.555, botY: VH * 0.96,   // Y range of playable floor
-  topXL: VW * 0.28, topXR: VW * 0.72,  // left/right edge at far end
-  botXL: VW * 0.04, botXR: VW * 0.96,  // left/right edge at near end
+  topY: VH * 0.52,  botY: VH * 0.97,   // floor y range (far → near)
+  topXL: VW * 0.36, topXR: VW * 0.64,  // alley mouth at far end (narrow)
+  botXL: VW * 0.00, botXR: VW * 1.00,  // full width at near camera
 };
 
 // World → screen. wx=0..1 (left→right on floor), wz=0..1 (far→near = small→big)
@@ -184,8 +184,8 @@ function w2s(wx, wz) {
   return { x: lx + wx * (rx - lx), y: sy };
 }
 
-// Depth scale: far=0.28, near=1.15  (GTA-style dramatic depth)
-function dScale(wz) { return lerp(0.28, 1.15, wz); }
+// Depth scale: far=0.22 (tiny at vanishing point), near=1.20 (fills frame)
+function dScale(wz) { return lerp(0.22, 1.20, wz); }
 
 // Overhead squish: simulates camera looking down at ~40° angle
 const SQUISH = 0.66;
@@ -363,15 +363,14 @@ const CAR = {
 };
 
 // ─── Dumpster world anchors ───────────────────────────────────────────────────
-// A = left bin (closer to camera), B = right bin (slightly further back)
-const DUMP_A = { wx: 0.60, wz: 0.44 };
-const DUMP_B = { wx: 0.77, wz: 0.37 };
+// Right side of alley against the wall — two bins side by side
+const DUMP_A = { wx: 0.72, wz: 0.48 };  // left/closer bin
+const DUMP_B = { wx: 0.87, wz: 0.40 };  // right/further bin against wall
 
-// Physical obstacle footprints — characters cannot enter these rectangles
-// Sized to match actual bin silhouettes (~0.25 wx wide, ~0.07 wz deep)
+// Physical obstacle footprints
 const OBSTACLES = [
-  { id:'binA', wxMin:0.47, wxMax:0.72, wzMin:0.36, wzMax:0.52 },
-  { id:'binB', wxMin:0.67, wxMax:0.89, wzMin:0.28, wzMax:0.44 },
+  { id:'binA', wxMin:0.60, wxMax:0.82, wzMin:0.38, wzMax:0.57 },
+  { id:'binB', wxMin:0.77, wxMax:0.97, wzMin:0.30, wzMax:0.49 },
 ];
 
 // Slide character around obstacles — called after every movement update
@@ -395,7 +394,7 @@ function resolveObstacles(newWx, newWz, prevWx, prevWz) {
 // ─── Cover zones (world space) ────────────────────────────────────────────────
 // Detection immunity: in front of bins (wz > bin) or behind bins (wz < bin)
 const COVERS = [
-  { wxMin: 0.47, wxMax: 0.92, wzMin: 0.28, wzMax: 0.68, name:'dumpster' },
+  { wxMin: 0.58, wxMax: 0.98, wzMin: 0.30, wzMax: 0.70, name:'dumpster' },
   { wxMin: 0.00, wxMax: 0.10, wzMin: 0.10, wzMax: 0.65, name:'fire_escape' },
 ];
 
