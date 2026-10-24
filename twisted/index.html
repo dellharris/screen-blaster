@@ -310,9 +310,9 @@ function endCutscene() {
   LVID.style.display = 'none';
   startGame();
   P.crouch = true; P.crouchLerp = 1;
-  P.wx = 0.62; P.wz = 0.44; P.renderWx = 0.62; P.renderWz = 0.44;
+  P.wx = 0.62; P.wz = 0.65; P.renderWx = 0.62; P.renderWz = 0.65;
   P.lastMvx = 0; P.lastMvz = 1;
-  NPC.wx = 0.82; NPC.wz = 0.36; NPC.renderWx = 0.82; NPC.renderWz = 0.36;
+  NPC.wx = 0.80; NPC.wz = 0.62; NPC.renderWx = 0.80; NPC.renderWz = 0.62;
   NPC.lastMvx = 0; NPC.lastMvz = 1;
   phase = PH.CROSSFADE;
   crossfadeTimer = 0;
@@ -535,14 +535,13 @@ window.addEventListener('keyup', e => { KEYS[e.key]=false; });
 // ─── Game control ─────────────────────────────────────────────────────────────
 function startGame() {
   phase = PH.PLAY;
-  // Girls start BEHIND bins (lower wz = further from camera = behind the dumpsters)
-  // Naomi behind bin A (left), Sierra behind bin B (right against wall)
-  P.wx=0.62; P.wz=0.44; P.renderWx=0.62; P.renderWz=0.44;
+  // Girls start IN FRONT of bins (higher wz = closer to camera = visible on camera side)
+  P.wx=0.62; P.wz=0.65; P.renderWx=0.62; P.renderWz=0.65;
   P.vwx=P.vwz=0; P.crouch=true; P.crouchLerp=1; P.det=0; P.catches=0;
   P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false;
   P.lastMvx=0; P.lastMvz=1;
-  NPC.wx=0.82; NPC.wz=0.36; NPC.renderWx=0.82; NPC.renderWz=0.36;
-  NPC.targetWx=0.82; NPC.targetWz=0.36;
+  NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
+  NPC.targetWx=0.80; NPC.targetWz=0.62;
   NPC.walkTimer=0; NPC.walkFrame=0; NPC.walkStep=0; NPC.moving=false;
   NPC.lastMvx=0; NPC.lastMvz=1;
   CAR.la=0; CAR.ldir=1; CAR.ft=0;
@@ -618,8 +617,9 @@ function update(ts) {
   const sideWeave = P.crouch ? 0 : Math.sin(pulse * 1.3) * 0.022;
 
   if (P.crouch) {
+    // In front of bins, camera-facing side — Sierra to Naomi's right
     NPC.targetWx = clamp(P.wx + 0.18, 0.72, 0.92);
-    NPC.targetWz = clamp(P.wz + 0.01, 0.30, 0.46);
+    NPC.targetWz = clamp(P.wz - 0.02, 0.58, 0.72);
   } else {
     // Running — Sierra leads slightly ahead-left
     NPC.targetWx = clamp(P.wx - 0.15 + sideWeave, 0.03, 0.90);
