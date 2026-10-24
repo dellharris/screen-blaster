@@ -525,18 +525,28 @@ function hasItem(id) { return !!INVENTORY.items.find(i => i.id === id); }
 // ─── Interact: try to open/loot the mission dumpster ─────────────────────────
 function tryInteract() {
   if (phase !== PH.PLAY) return;
-  const dx = P.wx - MISSION_DUMP.wx;
-  const dz = P.wz - MISSION_DUMP.wz;
-  const dist = Math.hypot(dx, dz);
-  if (dist > MISSION_DUMP.interactRange) return;
+
+  // Door interaction — use key to unlock
+  const doorDist = Math.hypot(P.wx - DOOR.wx, P.wz - DOOR.wz);
+  if (doorDist <= DOOR_INTERACT_RANGE && DOOR_STATE.state === 'locked') {
+    if (hasItem('key')) {
+      // Use key — start unlock animation, consume key
+      DOOR_STATE.state = 'unlocking';
+      DOOR_STATE.timer = 0;
+      INVENTORY.items = INVENTORY.items.filter(i => i.id !== 'key');
+    }
+    return; // don't check dumpster if near door
+  }
+
+  // Dumpster interaction
+  const dumpDist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
+  if (dumpDist > MISSION_DUMP.interactRange) return;
 
   if (MISSION_DUMP.state === 'closed') {
-    // TODO: check for crowbar when it's seeded — for now open directly
     MISSION_DUMP.state = 'opening';
     MISSION_DUMP.frame = 0;
     MISSION_DUMP.timer = 0;
   } else if (MISSION_DUMP.state === 'open_key') {
-    // Collect the key
     addItem('key', 'Door Key', '🗝️');
     MISSION_DUMP.state = 'open_empty';
   }
@@ -614,6 +624,16 @@ const NAOMI_SQUAT_IDLE = [
 
 // Win zone: far-left door
 const WIN = { wxMin: 0.00, wxMax: 0.14, wzMin: 0.00, wzMax: 0.32 };
+
+// Door world anchor — left wall, mid-depth
+const DOOR = { wx: 0.05, wz: 0.18 };
+const DOOR_INTERACT_RANGE = 0.20;
+
+// Door states: locked → unlocking → open
+const DOOR_STATE = { state: 'locked', timer: 0 };
+// 'locked' = padlock shown, can't enter
+// 'unlocking' = flash animation playing (~0.8s)
+// 'open' = door open, WIN zone active
 
 // ─── State flags ──────────────────────────────────────────────────────────────
 let isCaught = false, catchFlash = 0;
@@ -745,6 +765,7 @@ function resetGame() {
   phase=PH.TITLE; pulse=0; dlgIdx=0; winDlgIdx=0; endTimer=0;
   LATCH_CLIPS.forEach(c => c.played = false);
   MISSION_DUMP.state='closed'; MISSION_DUMP.frame=0; MISSION_DUMP.timer=0;
+  DOOR_STATE.state='locked'; DOOR_STATE.timer=0;
   INVENTORY.items=[]; INVENTORY.open=false; INVENTORY.anim=0;
 }
 
@@ -1024,12 +1045,21 @@ function update(ts) {
   }
   if (catchFlash > 0) catchFlash = Math.max(0, catchFlash - dt * 2.5);
 
-  // Win
-  if (P.wx >= WIN.wxMin && P.wx <= WIN.wxMax &&
+  // Win — only if door is open
+  if (DOOR_STATE.state === 'open' &&
+      P.wx >= WIN.wxMin && P.wx <= WIN.wxMax &&
       P.wz >= WIN.wzMin && P.wz <= WIN.wzMax) {
     phase = PH.WIN;
   }
-}
+
+  // Door unlock animation tick
+  if (DOOR_STATE.state === 'unlocking') {
+    DOOR_STATE.timer += dt;
+    if (DOOR_STATE.timer >= 0.9) {
+      DOOR_STATE.state = 'open';
+      DOOR_STATE.timer = 0;
+    }
+  }
 
 // Trigger win dialogue after a brief WIN flash
 let winFlashTimer = 0;
@@ -1162,17 +1192,80 @@ function drawEntities() {
 // Draw win glow only — called AFTER characters
 function drawWinGlow() {
   if (IMG['fg']) cx.drawImage(IMG['fg'], 0, 0, VW, VH);
-  const ws = w2s(WIN.wxMin + 0.07, WIN.wzMin + 0.12);
+
+  // Draw the door at the left wall
+  drawDoor();
+
+  // Safe zone glow — only when door is open
+  if (DOOR_STATE.state === 'open') {
+    const ws = w2s(WIN.wxMin + 0.07, WIN.wzMin + 0.12);
+    cx.save();
+    cx.globalAlpha = 0.45 + Math.sin(pulse * 3) * 0.35;
+    cx.fillStyle = '#00ff88';
+    cx.font = `bold ${16 + Math.sin(pulse*3)*2}px sans-serif`;
+    cx.textAlign = 'center';
+    cx.fillText('→ SAFE', ws.x, ws.y);
+    cx.globalAlpha = 0.18 + Math.sin(pulse*3)*0.1;
+    const gg = cx.createRadialGradient(ws.x, ws.y, 0, ws.x, ws.y, 40);
+    gg.addColorStop(0,'#00ff88'); gg.addColorStop(1,'transparent');
+    cx.fillStyle = gg; cx.fillRect(ws.x-40, ws.y-40, 80, 80);
+    cx.restore();
+  }
+}
+
+function drawDoor() {
+  const ds = w2s(DOOR.wx, DOOR.wz);
+  const s  = dScale(DOOR.wz);
+  const dw = 58 * s, dh = 90 * s * SQUISH;
+
   cx.save();
-  cx.globalAlpha = 0.45 + Math.sin(pulse * 3) * 0.35;
-  cx.fillStyle = '#00ff88';
-  cx.font = `bold ${16 + Math.sin(pulse*3)*2}px sans-serif`;
-  cx.textAlign = 'center';
-  cx.fillText('→ SAFE', ws.x, ws.y);
-  cx.globalAlpha = 0.18 + Math.sin(pulse*3)*0.1;
-  const gg = cx.createRadialGradient(ws.x, ws.y, 0, ws.x, ws.y, 40);
-  gg.addColorStop(0,'#00ff88'); gg.addColorStop(1,'transparent');
-  cx.fillStyle = gg; cx.fillRect(ws.x-40, ws.y-40, 80, 80);
+  cx.translate(ds.x, ds.y);
+
+  if (DOOR_STATE.state === 'open') {
+    // Open door — glowing frame, no panel
+    cx.strokeStyle = '#00ff88'; cx.lineWidth = 3 * s;
+    cx.shadowBlur = 18; cx.shadowColor = '#00ff88';
+    cx.strokeRect(-dw/2, -dh, dw, dh);
+    // Warm light inside
+    const lg = cx.createLinearGradient(-dw/2, -dh, dw/2, 0);
+    lg.addColorStop(0,'rgba(255,220,80,0.35)'); lg.addColorStop(1,'rgba(255,180,40,0)');
+    cx.fillStyle = lg; cx.fillRect(-dw/2, -dh, dw, dh);
+    cx.shadowBlur = 0;
+  } else {
+    // Locked/unlocking door panel
+    const flash = DOOR_STATE.state === 'unlocking'
+      ? Math.sin(pulse * 28) * 0.5 + 0.5  // rapid strobe
+      : 0;
+
+    // Door body
+    cx.fillStyle = `rgba(40,28,20,${0.85 + flash*0.15})`;
+    cx.strokeStyle = flash > 0.5 ? '#ffdd00' : '#553322';
+    cx.lineWidth = 2 * s;
+    cx.beginPath(); cx.roundRect(-dw/2, -dh, dw, dh, 3*s); cx.fill(); cx.stroke();
+
+    // Door panels (decorative lines)
+    cx.strokeStyle = flash > 0.5 ? '#ffdd0055' : '#66442233';
+    cx.lineWidth = 1 * s;
+    cx.strokeRect(-dw/2 + 5*s, -dh + 6*s, dw - 10*s, dh*0.42);
+    cx.strokeRect(-dw/2 + 5*s, -dh + dh*0.48, dw - 10*s, dh*0.44);
+
+    // Padlock
+    const lx = 0, ly = -dh * 0.5;
+    const lr = 7 * s;
+    cx.fillStyle = flash > 0.5 ? '#ffdd00' : '#cc9900';
+    cx.shadowBlur = flash > 0.5 ? 14 : 0; cx.shadowColor = '#ffdd00';
+    cx.beginPath(); cx.roundRect(lx - lr, ly, lr*2, lr*1.6, 2*s); cx.fill();
+    cx.strokeStyle = flash > 0.5 ? '#fff' : '#886600';
+    cx.lineWidth = 2 * s;
+    cx.beginPath(); cx.arc(lx, ly - lr*0.5, lr*0.75, Math.PI, 0); cx.stroke();
+    cx.shadowBlur = 0;
+
+    // Keyhole
+    cx.fillStyle = flash > 0.5 ? '#ffff88' : '#221100';
+    cx.beginPath(); cx.arc(lx, ly + lr*0.5, lr*0.3, 0, Math.PI*2); cx.fill();
+    cx.fillRect(lx - lr*0.15, ly + lr*0.5, lr*0.3, lr*0.5);
+  }
+
   cx.restore();
 }
 
@@ -1451,24 +1544,41 @@ function drawHUD() {
 }
 
 function drawInteractPrompt() {
-  const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
-  if (dist > MISSION_DUMP.interactRange) return;
+  // Door prompt
+  const doorDist = Math.hypot(P.wx - DOOR.wx, P.wz - DOOR.wz);
+  if (doorDist <= DOOR_INTERACT_RANGE && DOOR_STATE.state !== 'open' && DOOR_STATE.state !== 'unlocking') {
+    const ds = w2s(DOOR.wx, DOOR.wz);
+    const prompt = hasItem('key') ? '[ E ]  Use Key 🗝️' : '🔒  Need a key';
+    const col    = hasItem('key') ? '#00ffcc' : '#ff6644';
+    cx.save();
+    cx.globalAlpha = 0.85 + Math.sin(pulse * 4) * 0.12;
+    cx.font = 'bold 13px monospace'; cx.textAlign = 'center';
+    const tw = cx.measureText(prompt).width + 22;
+    cx.fillStyle = '#0a0816'; cx.strokeStyle = col; cx.lineWidth = 1.5;
+    cx.beginPath(); cx.roundRect(ds.x - tw/2, ds.y - 130, tw, 28, 6); cx.fill(); cx.stroke();
+    cx.fillStyle = col;
+    cx.fillText(prompt, ds.x, ds.y - 111);
+    cx.restore();
+  }
+
+  // Dumpster prompt
+  const dumpDist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
+  if (dumpDist > MISSION_DUMP.interactRange) return;
   if (MISSION_DUMP.state === 'opening') return;
 
-  const ds = w2s(MISSION_DUMP.wx, MISSION_DUMP.wz);
-  const prompt = MISSION_DUMP.state === 'closed'     ? '[ E ]  Open' :
-                 MISSION_DUMP.state === 'open_key'   ? '[ E ]  Take Key 🗝️' : null;
-  if (!prompt) return;
+  const ds2 = w2s(MISSION_DUMP.wx, MISSION_DUMP.wz);
+  const prompt2 = MISSION_DUMP.state === 'closed'    ? '[ E ]  Open' :
+                  MISSION_DUMP.state === 'open_key'  ? '[ E ]  Take Key 🗝️' : null;
+  if (!prompt2) return;
 
   cx.save();
   cx.globalAlpha = 0.75 + Math.sin(pulse * 4) * 0.2;
-  cx.font = 'bold 13px monospace';
-  cx.textAlign = 'center';
-  const tw = cx.measureText(prompt).width + 20;
+  cx.font = 'bold 13px monospace'; cx.textAlign = 'center';
+  const tw2 = cx.measureText(prompt2).width + 20;
   cx.fillStyle = '#0a0816'; cx.strokeStyle = '#00ffcc'; cx.lineWidth = 1.5;
-  cx.beginPath(); cx.roundRect(ds.x - tw/2, ds.y - 120, tw, 28, 6); cx.fill(); cx.stroke();
+  cx.beginPath(); cx.roundRect(ds2.x - tw2/2, ds2.y - 120, tw2, 28, 6); cx.fill(); cx.stroke();
   cx.fillStyle = '#00ffcc';
-  cx.fillText(prompt, ds.x, ds.y - 101);
+  cx.fillText(prompt2, ds2.x, ds2.y - 101);
   cx.restore();
 }
 
