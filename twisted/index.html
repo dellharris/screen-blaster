@@ -1579,63 +1579,115 @@ function openSoundCloud() {
   PHONE_OPEN = false;
 }
 
+// Phone button: left side, under hearts (hearts end ~y=65)
+// px/py = top-left corner of the phone icon
+var PHONE_BTN = { x: 10, y: 80, w: 44, h: 44 };
+
 function drawPhoneMenu() {
-  var px = VW - 16, py = 100;
+  var btn = PHONE_BTN;
   var phoneImg = IMG['phone_icon'];
-  var pw = 42, ph = 42;
   cx.save();
+
+  // ── Phone icon button ──
   if (phoneImg && phoneImg.naturalWidth) {
     var par = phoneImg.naturalWidth / phoneImg.naturalHeight;
-    ph = pw / par;
-    cx.globalAlpha = PHONE_OPEN ? 1 : 0.85;
-    cx.drawImage(phoneImg, px - pw, py, pw, ph);
+    var ph2 = btn.w / par;
+    // Glow ring when open
+    if (PHONE_OPEN) {
+      cx.shadowBlur = 14; cx.shadowColor = '#ff2d78';
+    }
+    cx.globalAlpha = PHONE_OPEN ? 1 : 0.88;
+    cx.drawImage(phoneImg, btn.x, btn.y, btn.w, ph2);
   } else {
-    cx.globalAlpha = 0.85;
-    cx.fillStyle = PHONE_OPEN ? '#ff2d78' : '#333';
-    cx.beginPath(); cx.roundRect(px - pw, py, pw, ph, 8); cx.fill();
-    cx.font = '20px sans-serif'; cx.textAlign = 'center';
-    cx.fillText('📱', px - pw/2, py + ph*0.65);
+    cx.globalAlpha = 0.88;
+    cx.fillStyle = PHONE_OPEN ? '#ff2d78' : '#222';
+    cx.beginPath(); cx.roundRect(btn.x, btn.y, btn.w, btn.h, 10); cx.fill();
+    cx.font = '22px sans-serif'; cx.textAlign = 'center';
+    cx.fillText('📱', btn.x + btn.w/2, btn.y + btn.h*0.72);
   }
-  // Panel
+  cx.shadowBlur = 0;
+
+  // ── iPhone-style panel ──
   if (PHONE_OPEN) {
-    var panX = px - 165, panY = py + ph + 6, panW = 153, panH = 148;
-    cx.globalAlpha = 0.94;
-    cx.fillStyle = '#0a0816'; cx.strokeStyle = '#ff2d78'; cx.lineWidth = 1.5;
-    cx.beginPath(); cx.roundRect(panX, panY, panW, panH, 8); cx.fill(); cx.stroke();
+    var panX = btn.x, panY = btn.y + btn.h + 8;
+    var panW = 200, appSize = 52, gap = 10, cols = 3;
+    var apps = [
+      { icon: '🔊', label: 'Music',       color: '#00ffcc', active: !musicMuted },
+      { icon: '🔇', label: 'Mute',        color: '#555',    active: musicMuted  },
+      { icon: '☁️', label: 'SoundCloud',  color: '#ff5500', active: false       },
+      { icon: '🗺️', label: 'Map',         color: '#4488ff', active: false       },
+      { icon: '⚙️', label: 'Settings',    color: '#888',    active: false       },
+    ];
+    var rows = Math.ceil(apps.length / cols);
+    var panH = rows * (appSize + gap + 16) + gap + 24;
+
+    // Panel background — iOS frosted look
+    cx.globalAlpha = 0.93;
+    cx.fillStyle = '#0d0618';
+    cx.strokeStyle = 'rgba(255,45,120,0.5)'; cx.lineWidth = 1.5;
+    cx.beginPath(); cx.roundRect(panX, panY, panW, panH, 16); cx.fill(); cx.stroke();
+
+    // Header bar
+    cx.globalAlpha = 0.6;
+    cx.fillStyle = 'rgba(255,45,120,0.15)';
+    cx.beginPath(); cx.roundRect(panX, panY, panW, 28, [16,16,0,0]); cx.fill();
     cx.globalAlpha = 1;
-    // Music toggle
-    cx.font = 'bold 11px monospace'; cx.textAlign = 'left';
-    cx.fillStyle = musicMuted ? '#555' : '#00ffcc';
-    cx.fillText(musicMuted ? '🔇  MUSIC OFF' : '🔊  MUSIC ON', panX + 12, panY + 26);
-    // SoundCloud
-    cx.fillStyle = '#ff5500';
-    cx.fillText('☁️  SOUNDCLOUD', panX + 12, panY + 58);
-    // Settings
-    cx.fillStyle = '#aaa';
-    cx.fillText('⚙️   SETTINGS', panX + 12, panY + 90);
-    // Map
-    cx.fillStyle = '#aaa';
-    cx.fillText('🗺️   MAP', panX + 12, panY + 90);
-    // Coming soon tag
-    cx.font = 'italic 9px monospace'; cx.fillStyle = '#444';
-    cx.fillText('settings + map coming soon', panX + 12, panY + 116);
+    cx.font = 'bold 10px monospace'; cx.fillStyle = '#ff2d78'; cx.textAlign = 'center';
+    cx.fillText('● ● ●  TWISTED OS', panX + panW/2, panY + 18);
+
+    // App icons grid
+    apps.forEach(function(app, i) {
+      var col = i % cols, row = Math.floor(i / cols);
+      var ax = panX + gap + col * (appSize + gap);
+      var ay = panY + 36 + row * (appSize + gap + 16);
+
+      // App icon background
+      cx.globalAlpha = app.active ? 0.95 : 0.55;
+      var grad = cx.createLinearGradient(ax, ay, ax+appSize, ay+appSize);
+      grad.addColorStop(0, app.active ? app.color + 'aa' : '#1a1a2a');
+      grad.addColorStop(1, app.active ? '#0d0618' : '#0a0a18');
+      cx.fillStyle = grad;
+      cx.strokeStyle = app.active ? app.color : 'rgba(255,255,255,0.1)';
+      cx.lineWidth = 1.5;
+      cx.beginPath(); cx.roundRect(ax, ay, appSize, appSize, 12); cx.fill(); cx.stroke();
+
+      // Icon
+      cx.globalAlpha = 1;
+      cx.font = '22px sans-serif'; cx.textAlign = 'center';
+      cx.fillText(app.icon, ax + appSize/2, ay + appSize*0.62);
+
+      // Label
+      cx.font = 'bold 8px monospace';
+      cx.fillStyle = app.active ? app.color : '#888';
+      cx.fillText(app.label, ax + appSize/2, ay + appSize + 11);
+    });
   }
   cx.restore();
 }
 
 function isPhoneBtn(x, y) {
-  return x > VW - 58 && x < VW - 16 && y > 100 && y < 148;
+  var b = PHONE_BTN;
+  return x > b.x && x < b.x + b.w + 4 && y > b.y && y < b.y + b.h + 14;
 }
 
 function handlePhoneMenuTap(x, y) {
   if (!PHONE_OPEN) return false;
-  var px = VW - 16, py = 100;
-  var ph = 42;
-  var panX = px - 165, panY = py + ph + 6, panW = 153;
-  if (x < panX || x > panX + panW) return false;
-  if (y > panY + 10  && y < panY + 42) { toggleMute(); return true; }
-  if (y > panY + 42  && y < panY + 74) { openSoundCloud(); return true; }
-  return true; // absorb other panel taps
+  var panX = PHONE_BTN.x, panY = PHONE_BTN.y + PHONE_BTN.h + 8;
+  var appSize = 52, gap = 10, cols = 3;
+  var apps = ['music', 'mute', 'soundcloud', 'map', 'settings'];
+  for (var i = 0; i < apps.length; i++) {
+    var col = i % cols, row = Math.floor(i / cols);
+    var ax = panX + gap + col * (appSize + gap);
+    var ay = panY + 36 + row * (appSize + gap + 16);
+    if (x > ax && x < ax+appSize && y > ay && y < ay+appSize) {
+      if (apps[i] === 'music' || apps[i] === 'mute') { toggleMute(); return true; }
+      if (apps[i] === 'soundcloud') { openSoundCloud(); return true; }
+      return true;
+    }
+  }
+  // Absorb any tap inside the panel area
+  if (x > panX && x < panX + 200 && y > panY) return true;
+  return false;
 }
 
 function drawJoystick() {
