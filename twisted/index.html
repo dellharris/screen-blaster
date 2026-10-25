@@ -63,19 +63,78 @@
   src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&auto_play=false&hide_related=true&show_comments=false&show_user=false&buying=false&liking=false&download=false&sharing=false&show_artwork=false&show_playcount=false&show_teaser=false&start_track=0"></iframe>
 <script src="https://w.soundcloud.com/player/api.js"></script>
 
-<!-- SoundCloud phone overlay -->
-<div id="sc-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:10;background:rgba(0,0,0,0.82);align-items:center;justify-content:center;flex-direction:column;">
+<iframe id="sc-game" allow="autoplay" style="display:none;width:1px;height:1px;"
+  src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&auto_play=false&hide_related=true&show_comments=false&show_user=false&buying=false&liking=false&download=false&sharing=false&show_artwork=false&show_playcount=false&show_teaser=false&start_track=0"></iframe>
+<script src="https://w.soundcloud.com/player/api.js"></script>
+
+<!-- ── PHONE OVERLAY ── Full-screen with hand image background ── -->
+<div id="phone-overlay" style="display:none;position:fixed;inset:0;z-index:20;background:#000;">
+  <!-- Background: hand holding phone in alley -->
+  <img src="assets/phone_bg.png" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.9;">
+
+  <!-- Phone screen area — positioned over the blank phone screen in the image -->
+  <!-- Screen is roughly right 38% of image, top 75% height -->
+  <div id="phone-screen" style="position:absolute;right:2%;top:2%;width:36%;height:72%;background:linear-gradient(160deg,#0d1a1a,#0a0f18);border-radius:12px;overflow:hidden;box-shadow:0 0 30px rgba(180,0,255,0.4);">
+    <!-- Status bar -->
+    <div style="background:rgba(0,0,0,0.6);padding:6px 12px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="color:#fff;font-size:10px;font-family:monospace;">9:41</span>
+      <span style="color:#fff;font-size:10px;">●●●●</span>
+    </div>
+    <!-- App grid -->
+    <div style="padding:14px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+      <!-- Music app -->
+      <div onclick="phoneOpenMusic()" style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <img src="assets/app_music.png" style="width:100%;border-radius:14px;box-shadow:0 0 12px #cc44ff88;">
+        <span style="color:#fff;font-size:9px;font-family:monospace;text-shadow:0 0 6px #cc44ff;">Music</span>
+      </div>
+      <!-- Map app -->
+      <div onclick="phoneOpenMap()" style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div style="width:100%;aspect-ratio:1;border-radius:14px;overflow:hidden;box-shadow:0 0 12px #4488ff88;">
+          <img src="assets/map_city.jpg" style="width:100%;height:100%;object-fit:cover;">
+        </div>
+        <span style="color:#fff;font-size:9px;font-family:monospace;text-shadow:0 0 6px #4488ff;">Map</span>
+      </div>
+      <!-- Uber app placeholder -->
+      <div style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;opacity:0.4;">
+        <div style="width:100%;aspect-ratio:1;border-radius:14px;background:#111;display:flex;align-items:center;justify-content:center;font-size:22px;">🚗</div>
+        <span style="color:#888;font-size:9px;font-family:monospace;">Uber</span>
+      </div>
+    </div>
+    <!-- Lock bar hint -->
+    <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:32%;height:4px;background:rgba(255,255,255,0.3);border-radius:2px;"></div>
+  </div>
+
+  <!-- Close button -->
+  <button onclick="closePhoneOverlay()" style="position:absolute;top:14px;left:14px;background:rgba(0,0,0,0.7);border:1.5px solid #ff2d78;color:#ff2d78;font-size:16px;border-radius:20px;padding:6px 14px;cursor:pointer;font-family:monospace;z-index:21;">✕ close</button>
+</div>
+
+<!-- Music (SoundCloud) sub-screen -->
+<div id="sc-overlay" style="display:none;position:fixed;inset:0;z-index:25;background:rgba(0,0,0,0.88);align-items:center;justify-content:center;flex-direction:column;">
   <div style="background:#1a0a2a;border:2px solid #ff2d78;border-radius:18px;width:min(420px,92vw);overflow:hidden;box-shadow:0 0 40px #ff2d7844;">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0d0618;border-bottom:1px solid #ff2d7844;">
       <div style="display:flex;align-items:center;gap:10px;">
-        <img src="https://w.soundcloud.com/icon/assets/images/orange_white_256-94fc4c.png" style="width:28px;height:28px;border-radius:6px;">
-        <span style="color:#ff5500;font-family:monospace;font-weight:bold;font-size:13px;">SoundCloud</span>
+        <img src="assets/app_music.png" style="width:28px;height:28px;border-radius:8px;">
+        <span style="color:#cc44ff;font-family:monospace;font-weight:bold;font-size:13px;">Now Playing</span>
       </div>
       <button id="sc-close" style="background:none;border:none;color:#ff2d78;font-size:22px;cursor:pointer;line-height:1;">✕</button>
     </div>
     <iframe id="sc-player" width="100%" height="350" scrolling="no" frameborder="no" allow="autoplay"
-      src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&color=%23ff2d78&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=true">
+      src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&color=%23cc44ff&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=true">
     </iframe>
+  </div>
+</div>
+
+<!-- Map sub-screen -->
+<div id="map-overlay" style="display:none;position:fixed;inset:0;z-index:25;background:rgba(0,0,0,0.92);align-items:center;justify-content:center;flex-direction:column;">
+  <div style="position:relative;width:min(680px,95vw);border:2px solid #4488ff;border-radius:14px;overflow:hidden;box-shadow:0 0 40px #4488ff44;">
+    <div style="background:#0a0f1a;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="color:#4488ff;font-family:monospace;font-weight:bold;font-size:13px;">📍 MIAMI — CURRENT LOCATION</span>
+      <button onclick="closeMapOverlay()" style="background:none;border:none;color:#ff2d78;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <img src="assets/map_city.jpg" style="width:100%;display:block;">
+    <div style="background:#0a0f1a;padding:8px 14px;font-family:monospace;font-size:11px;color:#666;">
+      💰 Earn $500 to unlock Uber to next map
+    </div>
   </div>
 </div>
 
@@ -838,7 +897,7 @@ cv.addEventListener('touchstart', e => {
       if (isCrouchBtn(p.x, p.y) && crouchId === null) { crouchId = t.identifier; triggerCrouch(); }
       else if (isRunBtn(p.x, p.y) && runId === null)  { runId = t.identifier; P.running = true; }
       else if (isMuteBtn(p.x, p.y)) { toggleMute(); }
-      else if (isPhoneBtn(p.x, p.y)) { PHONE_OPEN = !PHONE_OPEN; if (PHONE_OPEN) INVENTORY.open = false; }
+      else if (isPhoneBtn(p.x, p.y)) { openSoundCloud(); }
       else if (handlePhoneMenuTap(p.x, p.y)) { /* handled */ }
       else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; }
       else if (isDumpsterTap(p.x, p.y)) { tryInteract(); }
@@ -879,7 +938,7 @@ cv.addEventListener('mousedown', e => {
     if (isCrouchBtn(x,y)) { triggerCrouch(); return; }
     if (isRunBtn(x,y))    { P.running = true; return; }
     if (isMuteBtn(x,y))   { toggleMute(); return; }
-    if (isPhoneBtn(x,y))  { PHONE_OPEN = !PHONE_OPEN; if (PHONE_OPEN) INVENTORY.open = false; return; }
+    if (isPhoneBtn(x,y))  { openSoundCloud(); return; }
     if (handlePhoneMenuTap(x,y)) return;
     if (x > VW-116 && x < VW-16 && y > 56 && y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; return; }
     if (isDumpsterTap(x,y)) { tryInteract(); return; }
@@ -1709,20 +1768,35 @@ function drawInventoryBag() {
 
 // Phone menu state
 var PHONE_OPEN = false;
-var SC_OPEN = false;
+
+// Phone overlay — opens full-screen hand image UI
+const PHONE_OVL = document.getElementById('phone-overlay');
 const SC_OVERLAY = document.getElementById('sc-overlay');
+const MAP_OVL    = document.getElementById('map-overlay');
+
 document.getElementById('sc-close').addEventListener('click', function() {
-  SC_OPEN = false;
   SC_OVERLAY.style.display = 'none';
 });
 SC_OVERLAY.addEventListener('click', function(e) {
-  if (e.target === SC_OVERLAY) { SC_OPEN = false; SC_OVERLAY.style.display = 'none'; }
+  if (e.target === SC_OVERLAY) SC_OVERLAY.style.display = 'none';
 });
 
-function openSoundCloud() {
-  SC_OPEN = true;
-  SC_OVERLAY.style.display = 'flex';
+function closePhoneOverlay() {
+  PHONE_OVL.style.display = 'none';
   PHONE_OPEN = false;
+}
+function phoneOpenMusic() {
+  SC_OVERLAY.style.display = 'flex';
+}
+function phoneOpenMap() {
+  MAP_OVL.style.display = 'flex';
+}
+function closeMapOverlay() {
+  MAP_OVL.style.display = 'none';
+}
+function openSoundCloud() {
+  PHONE_OVL.style.display = 'block';
+  PHONE_OPEN = true;
 }
 
 // Phone button: left side, under hearts (hearts end ~y=65)
