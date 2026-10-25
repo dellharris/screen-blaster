@@ -50,6 +50,23 @@
 <video id="cutscene-video" src="assets/cutscene_run.mp4" playsinline webkit-playsinline preload="auto"></video>
 <video id="latch-video" src="assets/cutscene_latch.mp4" playsinline webkit-playsinline preload="auto" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:3;background:#000"></video>
 <audio id="bg-music" src="assets/bg_music.wav" loop preload="auto"></audio>
+
+<!-- SoundCloud phone overlay -->
+<div id="sc-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:10;background:rgba(0,0,0,0.82);align-items:center;justify-content:center;flex-direction:column;">
+  <div style="background:#1a0a2a;border:2px solid #ff2d78;border-radius:18px;width:min(420px,92vw);overflow:hidden;box-shadow:0 0 40px #ff2d7844;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0d0618;border-bottom:1px solid #ff2d7844;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <img src="https://w.soundcloud.com/icon/assets/images/orange_white_256-94fc4c.png" style="width:28px;height:28px;border-radius:6px;">
+        <span style="color:#ff5500;font-family:monospace;font-weight:bold;font-size:13px;">SoundCloud</span>
+      </div>
+      <button id="sc-close" style="background:none;border:none;color:#ff2d78;font-size:22px;cursor:pointer;line-height:1;">✕</button>
+    </div>
+    <iframe id="sc-player" width="100%" height="350" scrolling="no" frameborder="no" allow="autoplay"
+      src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&color=%23ff2d78&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=true">
+    </iframe>
+  </div>
+</div>
+
 <div id="rotate-msg"><span>&#8635;</span>ROTATE YOUR PHONE<br><small style="color:#666">Landscape mode required</small></div>
 <script>
 'use strict';
@@ -661,6 +678,7 @@ cv.addEventListener('touchstart', e => {
       else if (isRunBtn(p.x, p.y) && runId === null)  { runId = t.identifier; P.running = true; }
       else if (isMuteBtn(p.x, p.y)) { toggleMute(); }
       else if (isPhoneBtn(p.x, p.y)) { PHONE_OPEN = !PHONE_OPEN; if (PHONE_OPEN) INVENTORY.open = false; }
+      else if (handlePhoneMenuTap(p.x, p.y)) { /* handled */ }
       else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; }
       else if (isJoyZone(p.x, p.y) && !JOY.on) {
         JOY.on = true; JOY.id = t.identifier;
@@ -700,6 +718,7 @@ cv.addEventListener('mousedown', e => {
     if (isRunBtn(x,y))    { P.running = true; return; }
     if (isMuteBtn(x,y))   { toggleMute(); return; }
     if (isPhoneBtn(x,y))  { PHONE_OPEN = !PHONE_OPEN; if (PHONE_OPEN) INVENTORY.open = false; return; }
+    if (handlePhoneMenuTap(x,y)) return;
     if (x > VW-116 && x < VW-16 && y > 56 && y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; return; }
     tryInteract();
     if (isJoyZone(x,y)) { mouseDrag=true; JOY.on=true; JOY.sx=x; JOY.sy=y; JOY.dx=JOY.dy=0; }
@@ -1512,6 +1531,21 @@ function drawInventoryBag() {
 
 // Phone menu state
 var PHONE_OPEN = false;
+var SC_OPEN = false;
+const SC_OVERLAY = document.getElementById('sc-overlay');
+document.getElementById('sc-close').addEventListener('click', function() {
+  SC_OPEN = false;
+  SC_OVERLAY.style.display = 'none';
+});
+SC_OVERLAY.addEventListener('click', function(e) {
+  if (e.target === SC_OVERLAY) { SC_OPEN = false; SC_OVERLAY.style.display = 'none'; }
+});
+
+function openSoundCloud() {
+  SC_OPEN = true;
+  SC_OVERLAY.style.display = 'flex';
+  PHONE_OPEN = false;
+}
 
 function drawPhoneMenu() {
   var px = VW - 16, py = 100;
@@ -1532,7 +1566,7 @@ function drawPhoneMenu() {
   }
   // Panel
   if (PHONE_OPEN) {
-    var panX = px - 160, panY = py + ph + 6, panW = 148, panH = 126;
+    var panX = px - 165, panY = py + ph + 6, panW = 153, panH = 148;
     cx.globalAlpha = 0.94;
     cx.fillStyle = '#0a0816'; cx.strokeStyle = '#ff2d78'; cx.lineWidth = 1.5;
     cx.beginPath(); cx.roundRect(panX, panY, panW, panH, 8); cx.fill(); cx.stroke();
@@ -1541,9 +1575,12 @@ function drawPhoneMenu() {
     cx.font = 'bold 11px monospace'; cx.textAlign = 'left';
     cx.fillStyle = musicMuted ? '#555' : '#00ffcc';
     cx.fillText(musicMuted ? '🔇  MUSIC OFF' : '🔊  MUSIC ON', panX + 12, panY + 26);
+    // SoundCloud
+    cx.fillStyle = '#ff5500';
+    cx.fillText('☁️  SOUNDCLOUD', panX + 12, panY + 58);
     // Settings
     cx.fillStyle = '#aaa';
-    cx.fillText('⚙️   SETTINGS', panX + 12, panY + 58);
+    cx.fillText('⚙️   SETTINGS', panX + 12, panY + 90);
     // Map
     cx.fillStyle = '#aaa';
     cx.fillText('🗺️   MAP', panX + 12, panY + 90);
@@ -1556,6 +1593,17 @@ function drawPhoneMenu() {
 
 function isPhoneBtn(x, y) {
   return x > VW - 58 && x < VW - 16 && y > 100 && y < 148;
+}
+
+function handlePhoneMenuTap(x, y) {
+  if (!PHONE_OPEN) return false;
+  var px = VW - 16, py = 100;
+  var ph = 42;
+  var panX = px - 165, panY = py + ph + 6, panW = 153;
+  if (x < panX || x > panX + panW) return false;
+  if (y > panY + 10  && y < panY + 42) { toggleMute(); return true; }
+  if (y > panY + 42  && y < panY + 74) { openSoundCloud(); return true; }
+  return true; // absorb other panel taps
 }
 
 function drawJoystick() {
