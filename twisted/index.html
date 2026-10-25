@@ -499,7 +499,14 @@ const SFX = {
   spotlight:  function() { sfx('sine', 880, 0.3, 0.2); sfx('sine', 660, 0.3, 0.12); },
   caught:     function() { sfx('sawtooth', 220, 0.6, 0.3, 800); },
   keyPickup:  function() { sfx('sine', 1046, 0.12, 0.25); setTimeout(function(){ sfx('sine', 1318, 0.15, 0.25); }, 120); setTimeout(function(){ sfx('sine', 1568, 0.2, 0.3); }, 240); },
-  dumpsterOpen: function() { sfxNoise(0.4, 0.2, 180); sfx('triangle', 80, 0.4, 0.15); },
+  dumpsterOpen: function() {
+    // Metal creak + bass thud + sparkle
+    sfxNoise(0.5, 0.22, 160);
+    sfx('triangle', 90, 0.5, 0.18);
+    setTimeout(function(){ sfxNoise(0.2, 0.14, 300); }, 180);
+    setTimeout(function(){ sfx('sine', 1200, 0.15, 0.12); }, 350);
+  },
+  btnTap: function() { sfx('sine', 880, 0.06, 0.18); sfx('sine', 1100, 0.08, 0.15); },
   doorUnlock: function() { sfx('sine', 440, 0.08, 0.2); setTimeout(function(){ sfx('sine', 660, 0.08, 0.25); }, 90); setTimeout(function(){ sfx('sine', 880, 0.15, 0.3); }, 180); },
   win:        function() { [523,659,784,1046].forEach(function(f,i){ setTimeout(function(){ sfx('sine',f,0.3,0.3); }, i*120); }); },
   ambient:    function() { sfxNoise(0.8, 0.03, 800); },
@@ -806,21 +813,22 @@ function addItem(id, label, emoji) {
 function hasItem(id) { return !!INVENTORY.items.find(i => i.id === id); }
 
 // ─── Interact: try to open/loot the mission dumpster ─────────────────────────
-function tryInteract() {
+// Screen position of interact button — updated each frame for tap detection
+var INTERACT_BTN_POS = { x:0, y:0, w:0, h:0, visible:false };
+
+function tryInteract(forcedByTap) {
   if (phase !== PH.PLAY) return;
-  const dx = P.wx - MISSION_DUMP.wx;
-  const dz = P.wz - MISSION_DUMP.wz;
-  const dist = Math.hypot(dx, dz);
-  if (dist > MISSION_DUMP.interactRange) return;
+  const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
+  // Mobile tap on dumpster/button uses wider range — if you can see it you can reach it
+  const range = forcedByTap ? 0.55 : MISSION_DUMP.interactRange;
+  if (dist > range) return;
 
   if (MISSION_DUMP.state === 'closed') {
-    // TODO: check for crowbar when it's seeded — for now open directly
     MISSION_DUMP.state = 'opening';
     MISSION_DUMP.frame = 0;
     MISSION_DUMP.timer = 0;
     SFX.dumpsterOpen();
   } else if (MISSION_DUMP.state === 'open_key') {
-    // Collect the key
     addItem('key', 'Door Key', '🗝️');
     MISSION_DUMP.state = 'open_empty';
     SFX.keyPickup();
@@ -1001,7 +1009,8 @@ cv.addEventListener('touchstart', e => {
       else if (isPhoneBtn(p.x, p.y)) { openSoundCloud(); }
       else if (handlePhoneMenuTap(p.x, p.y)) { /* handled */ }
       else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; }
-      else if (isDumpsterTap(p.x, p.y)) { tryInteract(); }
+      else if (isDumpsterTap(p.x, p.y)) { SFX.btnTap(); tryInteract(true); }
+      else if (INTERACT_BTN_POS.visible && p.x > INTERACT_BTN_POS.x && p.x < INTERACT_BTN_POS.x + INTERACT_BTN_POS.w && p.y > INTERACT_BTN_POS.y && p.y < INTERACT_BTN_POS.y + INTERACT_BTN_POS.h) { SFX.btnTap(); tryInteract(true); }
       else if (isJoyZone(p.x, p.y) && !JOY.on) {
         JOY.on = true; JOY.id = t.identifier;
         JOY.sx = p.x; JOY.sy = p.y; JOY.dx = JOY.dy = 0;
@@ -1042,7 +1051,8 @@ cv.addEventListener('mousedown', e => {
     if (isPhoneBtn(x,y))  { openSoundCloud(); return; }
     if (handlePhoneMenuTap(x,y)) return;
     if (x > VW-116 && x < VW-16 && y > 56 && y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; return; }
-    if (isDumpsterTap(x,y)) { tryInteract(); return; }
+    if (isDumpsterTap(x,y)) { tryInteract(true); return; }
+    if (INTERACT_BTN_POS.visible && x > INTERACT_BTN_POS.x && x < INTERACT_BTN_POS.x + INTERACT_BTN_POS.w && y > INTERACT_BTN_POS.y && y < INTERACT_BTN_POS.y + INTERACT_BTN_POS.h) { tryInteract(true); return; }
     tryInteract();
     if (isJoyZone(x,y)) { mouseDrag=true; JOY.on=true; JOY.sx=x; JOY.sy=y; JOY.dx=JOY.dy=0; }
   } else handleTap();
@@ -1841,24 +1851,70 @@ function drawHUD() {
 
 function drawInteractPrompt() {
   const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
-  if (dist > MISSION_DUMP.interactRange) return;
+  INTERACT_BTN_POS.visible = false;
+
+  // Show button at wider range so iOS players see it in time
+  if (dist > MISSION_DUMP.interactRange * 2.5) return;
   if (MISSION_DUMP.state === 'opening') return;
 
+  const isKey   = MISSION_DUMP.state === 'open_key';
+  const isOpen  = MISSION_DUMP.state === 'open_empty';
+  if (isOpen) return;
+
+  const label = isKey ? '🗝️  TAKE KEY' : '👆  OPEN';
+  const col1  = isKey ? '#ffdd00' : '#00ffcc';
+  const col2  = isKey ? '#cc8800' : '#008866';
+  const glow  = isKey ? '#ffcc0066' : '#00ffcc44';
+
   const ds = w2s(MISSION_DUMP.wx, MISSION_DUMP.wz);
-  const prompt = MISSION_DUMP.state === 'closed'     ? '[ E ]  Open' :
-                 MISSION_DUMP.state === 'open_key'   ? '[ E ]  Take Key 🗝️' : null;
-  if (!prompt) return;
+  const bw = 130, bh = 44, bx = ds.x - bw/2, by = ds.y - 145;
+  const br = 22;  // border radius (pill shape)
+
+  // Pulse alpha — more visible = more inviting
+  const alpha = 0.82 + Math.sin(pulse * 3.5) * 0.18;
 
   cx.save();
-  cx.globalAlpha = 0.75 + Math.sin(pulse * 4) * 0.2;
-  cx.font = 'bold 13px monospace';
+  cx.globalAlpha = alpha;
+
+  // Outer glow
+  cx.shadowBlur = 18 + Math.sin(pulse*3)*6;
+  cx.shadowColor = col1;
+
+  // Button body — glossy gradient
+  const grad = cx.createLinearGradient(bx, by, bx, by+bh);
+  grad.addColorStop(0,   col1 + 'ee');
+  grad.addColorStop(0.45, col2 + 'dd');
+  grad.addColorStop(1,   col2 + '99');
+  cx.fillStyle = grad;
+  cx.beginPath(); cx.roundRect(bx, by, bw, bh, br); cx.fill();
+
+  // Inner top glint — glossy highlight
+  cx.shadowBlur = 0;
+  cx.globalAlpha = alpha * 0.45;
+  cx.fillStyle = 'rgba(255,255,255,0.65)';
+  cx.beginPath(); cx.roundRect(bx+6, by+4, bw-12, bh*0.38, [br, br, 0, 0]); cx.fill();
+
+  // Border
+  cx.globalAlpha = alpha * 0.9;
+  cx.strokeStyle = col1;
+  cx.lineWidth = 1.5;
+  cx.beginPath(); cx.roundRect(bx, by, bw, bh, br); cx.stroke();
+
+  // Label
+  cx.globalAlpha = 1;
+  cx.shadowBlur = 8; cx.shadowColor = '#000';
+  cx.font = 'bold 15px monospace';
+  cx.fillStyle = '#fff';
   cx.textAlign = 'center';
-  const tw = cx.measureText(prompt).width + 20;
-  cx.fillStyle = '#0a0816'; cx.strokeStyle = '#00ffcc'; cx.lineWidth = 1.5;
-  cx.beginPath(); cx.roundRect(ds.x - tw/2, ds.y - 120, tw, 28, 6); cx.fill(); cx.stroke();
-  cx.fillStyle = '#00ffcc';
-  cx.fillText(prompt, ds.x, ds.y - 101);
+  cx.fillText(label, ds.x, by + bh*0.64);
+  cx.shadowBlur = 0;
+
   cx.restore();
+
+  // Store button bounds for tap detection
+  INTERACT_BTN_POS.x = bx; INTERACT_BTN_POS.y = by;
+  INTERACT_BTN_POS.w = bw; INTERACT_BTN_POS.h = bh;
+  INTERACT_BTN_POS.visible = true;
 }
 
 function drawInventoryBag() {
