@@ -1123,11 +1123,12 @@ function drawCar() {
 function drawDumpster(wx, wz, scale2, spriteKey) {
   const key = spriteKey || 'dumpster';
   const img = IMG[key] || IMG['dumpster'];
-  if (!img) return;
+  if (!img || !img.naturalWidth || !img.naturalHeight) return;
   const ar  = img.naturalWidth / img.naturalHeight;
   const ds  = w2s(wx, wz);
   const sc  = dScale(wz) * (scale2 || 2.0);
   const dh  = 220 * sc * SQUISH;
+  if (!isFinite(dh) || !isFinite(ar)) return;
   cx.drawImage(img, ds.x - dh*ar*0.46, ds.y - dh*0.92, dh*ar, dh);
 }
 
@@ -2032,11 +2033,12 @@ function drawOverlay(col, title, sub, hint) {
 
 // ─── Main render loop ─────────────────────────────────────────────────────────
 function render(ts) {
-  update(ts);
-  cx.clearRect(0, 0, cv.width, cv.height);
-  cx.save();
-  cx.translate(offX, offY);
-  cx.scale(scale, scale);
+  try {
+    update(ts);
+    cx.clearRect(0, 0, cv.width, cv.height);
+    cx.save();
+    cx.translate(offX, offY);
+    cx.scale(scale, scale);
 
   switch (phase) {
     case PH.INSTALL:
@@ -2136,6 +2138,10 @@ function render(ts) {
   }
 
   cx.restore();
+  } catch(e) {
+    console.error('RENDER ERROR:', e);
+    cx.restore();
+  }
   requestAnimationFrame(render);
 }
 
