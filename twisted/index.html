@@ -1600,11 +1600,15 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   }
 
   const baseH = 360;
-  // When a sequence sprite (transition/gum/idle) drives the render, the artwork
-  // already depicts the correct height — applying heightMul on top makes her shrink.
-  // Only compress height when showing the base squat/walk sprites.
-  const heightMul = gumSprKey ? 1.0 : lerp(1.0, 0.70, crouchLerp);
-  // sqBoost only applies when showing the plain squat sprite — gum/transition frames stay untouched
+  // Only STANDING-HEIGHT artwork bypasses the crouch compression.
+  // Crouch-height artwork (squat_walk crouch_t*, gum frames, squat_idle) still
+  // uses the normal lerp so they don't pop to full size while crouching.
+  // Standing-height artwork: standup transition frames + standing idle frames.
+  const isStandingArt = gumSprKey && (
+    gumSprKey.indexOf('standup') >= 0 ||
+    (gumSprKey.indexOf('_idle_') >= 0 && gumSprKey.indexOf('squat') < 0)
+  );
+  const heightMul = isStandingArt ? 1.0 : lerp(1.0, 0.70, crouchLerp);
   const boost = (!gumSprKey && crouchBinary && sqBoost) ? sqBoost : 1.0;
   const sh = baseH * s * SQUISH * heightMul * boost;
   const ar = spr ? (spr.width / spr.height) : 0.5;
