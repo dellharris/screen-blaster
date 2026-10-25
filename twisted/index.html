@@ -134,6 +134,7 @@ loadImg('fg',           'assets/foreground.png');
 loadImg('police',       'assets/police.png');
 // Dialogue comic portraits (used as-is, no black removal needed)
 loadImg('dumpster',     'assets/dumpster.png');
+loadImg('bag_icon',     'assets/bag_icon.png');
 // Dumpster mission frames
 ['dumpster_closed','dumpster_cracking','dumpster_ajar',
  'dumpster_open_key_far','dumpster_open_key_a','dumpster_open_key_b',
@@ -1472,34 +1473,41 @@ function drawInteractPrompt() {
   cx.restore();
 }
 
-function drawInventoryBag() {
-  if (INVENTORY.items.length === 0) return;
-  const bx = VW - 16, by = 56;   // top-right, below mute button
-  const itemCount = INVENTORY.items.length;
-  const bagH = 44 + INVENTORY.anim * (itemCount * 36 + 8);
-
+function drawJoystick() {
+  if (INVENTORY.items.length === 0 && !INVENTORY.open) return;
+  var bx = VW - 16, by = 56;
+  var itemCount = INVENTORY.items.length;
   cx.save();
-  // Bag button
-  cx.globalAlpha = 0.9;
-  cx.fillStyle = INVENTORY.open ? '#ff2d7830' : '#07050c';
-  cx.strokeStyle = '#ff2d78'; cx.lineWidth = 1.5;
-  cx.beginPath(); cx.roundRect(bx - 104, by, 96, 36, 5); cx.fill(); cx.stroke();
-  cx.globalAlpha = 1; cx.font = 'bold 11px monospace'; cx.textAlign = 'center';
-  cx.fillStyle = '#ff2d78';
-  cx.fillText(`🎒 BAG (${itemCount})`, bx - 56, by + 23);
-
-  // Drawer
-  if (INVENTORY.anim > 0.02) {
-    cx.globalAlpha = INVENTORY.anim * 0.95;
-    cx.fillStyle = '#0a0816'; cx.strokeStyle = '#ff2d78'; cx.lineWidth = 1;
-    cx.beginPath(); cx.roundRect(bx - 112, by + 38, 104, itemCount * 36 + 8, 5); cx.fill(); cx.stroke();
-    cx.globalAlpha = INVENTORY.anim;
-    INVENTORY.items.forEach((item, i) => {
-      const iy = by + 50 + i * 36;
-      cx.font = '20px sans-serif'; cx.textAlign = 'left';
-      cx.fillText(item.emoji, bx - 104, iy);
-      cx.font = '10px monospace'; cx.fillStyle = '#ccc';
-      cx.fillText(item.label, bx - 78, iy - 2);
+  // Bag icon button
+  var bagImg = IMG['bag_icon'];
+  var bw = 52, bh = 52;
+  if (bagImg) {
+    var ar = bagImg.naturalWidth / bagImg.naturalHeight;
+    bh = bw / ar;
+    cx.globalAlpha = 0.92;
+    cx.drawImage(bagImg, bx - bw, by, bw, bh);
+  }
+  // Item count badge
+  if (itemCount > 0) {
+    cx.globalAlpha = 1;
+    cx.fillStyle = '#ff2d78';
+    cx.beginPath(); cx.arc(bx - 6, by + 6, 9, 0, Math.PI * 2); cx.fill();
+    cx.font = 'bold 10px monospace'; cx.fillStyle = '#fff'; cx.textAlign = 'center';
+    cx.fillText(String(itemCount), bx - 6, by + 10);
+  }
+  // Drawer — show items when open
+  if (INVENTORY.open && itemCount > 0) {
+    var dy = by + bh + 8;
+    INVENTORY.items.forEach(function(item, i) {
+      cx.globalAlpha = 0.92;
+      cx.fillStyle = '#0a0816'; cx.strokeStyle = '#ff2d78'; cx.lineWidth = 1;
+      cx.beginPath(); cx.roundRect(bx - 130, dy, 118, 30, 5); cx.fill(); cx.stroke();
+      cx.globalAlpha = 1;
+      cx.font = '16px sans-serif'; cx.textAlign = 'left';
+      cx.fillText(item.emoji, bx - 126, dy + 22);
+      cx.font = 'bold 10px monospace'; cx.fillStyle = '#ccc';
+      cx.fillText(item.label, bx - 104, dy + 20);
+      dy += 36;
     });
   }
   cx.restore();
