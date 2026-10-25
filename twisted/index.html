@@ -1183,7 +1183,7 @@ function drawDumpster(wx, wz, scale2, spriteKey) {
 // Depth-sorted render: bins AND characters in one list so depth is always correct
 function drawEntities() {
   const ents = [
-    { type:'bin', wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 1.4) },
+    { type:'bin', wz: DUMP_B.wz, draw: () => drawDumpster(DUMP_B.wx, DUMP_B.wz, 2.4) },
     { type:'bin', wz: DUMP_A.wz, draw: () => {
       // Mission dumpster — show correct state sprite
       let sprKey = 'dumpster_closed';
@@ -1191,7 +1191,7 @@ function drawEntities() {
       if (MISSION_DUMP.state === 'opening')    sprKey = OPENING_SEQ[MISSION_DUMP.frame]?.key || 'dumpster_closed';
       if (MISSION_DUMP.state === 'open_key')   sprKey = 'dumpster_open_key_d';  // static hold
       if (MISSION_DUMP.state === 'open_empty') sprKey = 'dumpster_open_empty';
-      drawDumpster(DUMP_A.wx, DUMP_A.wz, 1.4, sprKey);
+      drawDumpster(DUMP_A.wx, DUMP_A.wz, 2.4, sprKey);
     }},
     { type:'npc',    wz: NPC.renderWz, draw: () => {
       const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
