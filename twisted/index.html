@@ -338,6 +338,8 @@ loadImg('naomi_stand_step1', 'assets/naomi_stand_step1.png');
 loadImg('naomi_stand_step2', 'assets/naomi_stand_step2.png');
 loadImg('naomi_stand_step3', 'assets/naomi_stand_step3.png');
 loadImg('naomi_stand_step4', 'assets/naomi_stand_step4.png');
+// Naomi standing idle animation frames (anxious fidget)
+for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png');
 // Naomi backward step frames
 loadImg('naomi_step_back1', 'assets/naomi_step_back1.png');
 loadImg('naomi_step_back2', 'assets/naomi_step_back2.png');
@@ -688,7 +690,12 @@ const P = {
   sqIdleFrameTimer: 0,
   // Squat WALK cycle — t4→t2→t1→t3 while crouching and moving
   sqWalkTimer: 0,
-  sqWalkStep: 0,   // 0-3 indexes into NAOMI_SQUAT_WALK
+  sqWalkStep: 0,
+  // Standing idle fidget
+  standIdleTimer: 0,
+  standIdleActive: false,
+  standIdleFrame: 0,
+  standIdleFrameTimer: 0,
 };
 
 // ─── NPC: Sierra ─────────────────────────────────────────────────────────────
@@ -867,6 +874,19 @@ const NAOMI_CROUCH_IN_LEFT = NAOMI_CROUCH_IN.map(function(f){
 const NAOMI_CROUCH_OUT_LEFT = NAOMI_CROUCH_OUT.map(function(f){
   return { key: f.key + '_left', dur: f.dur };
 });
+// Naomi standing idle — anxious fidget, fires every 4s
+// neutral → fidget → stress → hair grab → return
+const NAOMI_STAND_IDLE = [
+  { key:'naomi_idle_1', dur:0.30 },  // neutral hold
+  { key:'naomi_idle_2', dur:0.18 },  // hand lifts
+  { key:'naomi_idle_3', dur:0.22 },  // hand to face
+  { key:'naomi_idle_4', dur:0.20 },  // both hands on head
+  { key:'naomi_idle_5', dur:0.22 },  // gripping head
+  { key:'naomi_idle_6', dur:0.20 },  // easing, touch hair
+  { key:'naomi_idle_7', dur:0.22 },  // hand through hair
+  { key:'naomi_idle_8', dur:0.35 },  // near neutral, exhale
+];
+
 // Naomi micro-step forward/side: single tap while standing
 const NAOMI_STEP_SEQ = [
   { key:'naomi_stand_step1', dur:0.09 },
@@ -1060,6 +1080,7 @@ function startGame() {
   P.transSeq=null; P.transFrame=0; P.transTimer=0;
   P.sqIdleTimer=0; P.sqIdleActive=false; P.sqIdleFrame=0; P.sqIdleFrameTimer=0;
   P.sqWalkTimer=0; P.sqWalkStep=0;
+  P.standIdleTimer=0; P.standIdleActive=false; P.standIdleFrame=0; P.standIdleFrameTimer=0;
   P.lastMvx=0; P.lastMvz=1;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
   NPC.targetWx=0.80; NPC.targetWz=0.62; NPC.crouchLerp=1;
@@ -1242,6 +1263,28 @@ function update(ts) {
       P.sqIdleFrame++;
       if (P.sqIdleFrame >= NAOMI_SQUAT_IDLE.length) {
         P.sqIdleActive = false; P.sqIdleFrame = 0; P.sqIdleTimer = 0;
+      }
+    }
+  }
+
+  // ─── Naomi standing idle fidget (every 4s while standing still) ───────────
+  const standStill = !P.moving && !P.crouch && !P.transSeq;
+  if (standStill && !P.standIdleActive) {
+    P.standIdleTimer += dt;
+    if (P.standIdleTimer >= 4.0) {
+      P.standIdleActive = true; P.standIdleFrame = 0; P.standIdleFrameTimer = 0;
+      P.standIdleTimer = 0;
+    }
+  } else if (!standStill) {
+    P.standIdleTimer = 0; P.standIdleActive = false; P.standIdleFrame = 0;
+  }
+  if (P.standIdleActive) {
+    P.standIdleFrameTimer += dt;
+    if (P.standIdleFrameTimer >= NAOMI_STAND_IDLE[P.standIdleFrame].dur) {
+      P.standIdleFrameTimer = 0;
+      P.standIdleFrame++;
+      if (P.standIdleFrame >= NAOMI_STAND_IDLE.length) {
+        P.standIdleActive = false; P.standIdleFrame = 0; P.standIdleTimer = 0;
       }
     }
   }
@@ -1486,7 +1529,7 @@ function drawEntities() {
       drawPlayerDetectGlow();
       let naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
       if (!naomiSprKey && P.sqIdleActive) naomiSprKey = NAOMI_SQUAT_IDLE[P.sqIdleFrame].key;
-      // Squat walk: pick left or right facing based on movement direction
+      if (!naomiSprKey && P.standIdleActive) naomiSprKey = NAOMI_STAND_IDLE[P.standIdleFrame].key;
       if (!naomiSprKey && P.crouch && P.moving) {
         const sqSeq = P.lastMvx < -0.1 ? NAOMI_SQUAT_WALK_LEFT : NAOMI_SQUAT_WALK;
         naomiSprKey = sqSeq[P.sqWalkStep];
@@ -1557,7 +1600,10 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   }
 
   const baseH = 360;
-  const heightMul = lerp(1.0, 0.70, crouchLerp);
+  // When a sequence sprite (transition/gum/idle) drives the render, the artwork
+  // already depicts the correct height — applying heightMul on top makes her shrink.
+  // Only compress height when showing the base squat/walk sprites.
+  const heightMul = gumSprKey ? 1.0 : lerp(1.0, 0.70, crouchLerp);
   // sqBoost only applies when showing the plain squat sprite — gum/transition frames stay untouched
   const boost = (!gumSprKey && crouchBinary && sqBoost) ? sqBoost : 1.0;
   const sh = baseH * s * SQUISH * heightMul * boost;
