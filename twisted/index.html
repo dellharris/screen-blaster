@@ -567,10 +567,13 @@ const P = {
   transTimer: 0,
   stepPending: false,
   // Squat idle fidget state
-  sqIdleTimer: 0,    // counts up while crouched still
+  sqIdleTimer: 0,
   sqIdleActive: false,
   sqIdleFrame: 0,
   sqIdleFrameTimer: 0,
+  // Squat WALK cycle — t4→t2→t1→t3 while crouching and moving
+  sqWalkTimer: 0,
+  sqWalkStep: 0,   // 0-3 indexes into NAOMI_SQUAT_WALK
 };
 
 // ─── NPC: Sierra ─────────────────────────────────────────────────────────────
@@ -772,6 +775,15 @@ const NAOMI_SQUAT_IDLE = [
   { key:'naomi_squat',     dur:0.30 },
 ];
 
+// Squat WALK cycle — 4 frames cycling while crouching+moving
+// neutral → leg-forward → neutral → other-leg = natural squat waddle
+const NAOMI_SQUAT_WALK = [
+  'naomi_crouch_t4',  // neutral squat
+  'naomi_crouch_t2',  // weight shift / foot forward
+  'naomi_crouch_t1',  // mid-step
+  'naomi_crouch_t3',  // opposite step
+];
+
 // Win zone: far-left door
 const WIN = { wxMin: 0.00, wxMax: 0.14, wzMin: 0.00, wzMax: 0.32 };
 
@@ -795,6 +807,14 @@ const CROUCH_BTN = { cx: VW-64, cy: VH-64, r: 46 };
 const RUN_BTN    = { cx: VW-64, cy: VH-172, r: 38 };  // above Stay Low
 function isCrouchBtn(x, y) { return Math.hypot(x-CROUCH_BTN.cx, y-CROUCH_BTN.cy) < CROUCH_BTN.r; }
 function isRunBtn(x, y)    { return Math.hypot(x-RUN_BTN.cx,    y-RUN_BTN.cy)    < RUN_BTN.r;    }
+
+// Check if tap hits the mission dumpster on screen — generous hit area for mobile
+function isDumpsterTap(x, y) {
+  const ds = w2s(MISSION_DUMP.wx, MISSION_DUMP.wz);
+  const sc = dScale(MISSION_DUMP.wz);
+  const hitR = 80 * sc;  // scales with depth
+  return Math.hypot(x - ds.x, y - ds.y) < hitR;
+}
 function isMuteBtn(x, y)   { return x > VW-110 && x < VW-16 && y > 8 && y < 44; }
 function isJoyZone(x, y)   { return x < VW*0.45 && y > VH*0.42; }
 
@@ -821,6 +841,7 @@ cv.addEventListener('touchstart', e => {
       else if (isPhoneBtn(p.x, p.y)) { PHONE_OPEN = !PHONE_OPEN; if (PHONE_OPEN) INVENTORY.open = false; }
       else if (handlePhoneMenuTap(p.x, p.y)) { /* handled */ }
       else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; }
+      else if (isDumpsterTap(p.x, p.y)) { tryInteract(); }
       else if (isJoyZone(p.x, p.y) && !JOY.on) {
         JOY.on = true; JOY.id = t.identifier;
         JOY.sx = p.x; JOY.sy = p.y; JOY.dx = JOY.dy = 0;
@@ -861,6 +882,7 @@ cv.addEventListener('mousedown', e => {
     if (isPhoneBtn(x,y))  { PHONE_OPEN = !PHONE_OPEN; if (PHONE_OPEN) INVENTORY.open = false; return; }
     if (handlePhoneMenuTap(x,y)) return;
     if (x > VW-116 && x < VW-16 && y > 56 && y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; return; }
+    if (isDumpsterTap(x,y)) { tryInteract(); return; }
     tryInteract();
     if (isJoyZone(x,y)) { mouseDrag=true; JOY.on=true; JOY.sx=x; JOY.sy=y; JOY.dx=JOY.dy=0; }
   } else handleTap();
@@ -897,6 +919,7 @@ function startGame() {
   P.walkTimer=0; P.walkFrame=0; P.walkStep=0; P.moving=false; P.running=false;
   P.transSeq=null; P.transFrame=0; P.transTimer=0;
   P.sqIdleTimer=0; P.sqIdleActive=false; P.sqIdleFrame=0; P.sqIdleFrameTimer=0;
+  P.sqWalkTimer=0; P.sqWalkStep=0;
   P.lastMvx=0; P.lastMvz=1;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
   NPC.targetWx=0.80; NPC.targetWz=0.62; NPC.crouchLerp=1;
@@ -1105,22 +1128,29 @@ function update(ts) {
   // Walk animation tick — 3-frame cycle: neutral(0) → a(1) → neutral(0) → b(2)
   P.moving = !!(mx || mz);
   if (P.moving) {
-    const fps = P.crouch ? 5.0 : P.running ? 13.0 : 7.0;  // crouch-walk at 5fps
+    const fps = P.crouch ? 5.0 : P.running ? 13.0 : 7.0;
     P.walkTimer += dt * fps;
     if (P.walkTimer >= 1) {
       P.walkTimer -= 1;
       if (P.running) {
-        // Run: skip neutral frame — cycles a→b→a→b directly for bigger stride look
         P.walkStep = (P.walkStep + 1) % 2;
         P.walkFrame = P.walkStep === 0 ? 1 : 2;
       } else {
-        // Walk: neutral between each stride — 0=neutral, 1=_a, 2=neutral, 3=_b
         P.walkStep = (P.walkStep + 1) % 4;
         P.walkFrame = [0, 1, 0, 2][P.walkStep];
       }
     }
+    // Squat walk cycle — advances independently at ~4fps
+    if (P.crouch) {
+      P.sqWalkTimer += dt * 4.5;
+      if (P.sqWalkTimer >= 1) {
+        P.sqWalkTimer -= 1;
+        P.sqWalkStep = (P.sqWalkStep + 1) % NAOMI_SQUAT_WALK.length;
+      }
+    }
   } else {
     P.walkTimer = 0; P.walkStep = 0; P.walkFrame = 0;
+    if (!P.crouch) { P.sqWalkTimer = 0; P.sqWalkStep = 0; }
   }
 
   // NPC walk animation tick — use actual position change, not target distance
@@ -1316,6 +1346,8 @@ function drawEntities() {
       drawPlayerDetectGlow();
       let naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
       if (!naomiSprKey && P.sqIdleActive) naomiSprKey = NAOMI_SQUAT_IDLE[P.sqIdleFrame].key;
+      // Squat WALK — crouching + moving uses dedicated squat walk cycle
+      if (!naomiSprKey && P.crouch && P.moving) naomiSprKey = NAOMI_SQUAT_WALK[P.sqWalkStep];
       drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, naomiSprKey, 0, undefined, P.moving);
     }},
   ];
