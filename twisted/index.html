@@ -135,6 +135,7 @@ loadImg('police',       'assets/police.png');
 // Dialogue comic portraits (used as-is, no black removal needed)
 loadImg('dumpster',     'assets/dumpster.png');
 loadImg('bag_icon',     'assets/bag_icon.png');
+loadImg('phone_icon',   'assets/phone_icon.png');
 // Dumpster mission frames
 ['dumpster_closed','dumpster_cracking','dumpster_ajar',
  'dumpster_open_key_far','dumpster_open_key_a','dumpster_open_key_b',
@@ -659,7 +660,8 @@ cv.addEventListener('touchstart', e => {
       if (isCrouchBtn(p.x, p.y) && crouchId === null) { crouchId = t.identifier; triggerCrouch(); }
       else if (isRunBtn(p.x, p.y) && runId === null)  { runId = t.identifier; P.running = true; }
       else if (isMuteBtn(p.x, p.y)) { toggleMute(); }
-      else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; }
+      else if (isPhoneBtn(p.x, p.y)) { PHONE_OPEN = !PHONE_OPEN; if (PHONE_OPEN) INVENTORY.open = false; }
+      else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; }
       else if (isJoyZone(p.x, p.y) && !JOY.on) {
         JOY.on = true; JOY.id = t.identifier;
         JOY.sx = p.x; JOY.sy = p.y; JOY.dx = JOY.dy = 0;
@@ -697,7 +699,8 @@ cv.addEventListener('mousedown', e => {
     if (isCrouchBtn(x,y)) { triggerCrouch(); return; }
     if (isRunBtn(x,y))    { P.running = true; return; }
     if (isMuteBtn(x,y))   { toggleMute(); return; }
-    if (x > VW-116 && x < VW-16 && y > 56 && y < 96) { INVENTORY.open = !INVENTORY.open; return; }
+    if (isPhoneBtn(x,y))  { PHONE_OPEN = !PHONE_OPEN; if (PHONE_OPEN) INVENTORY.open = false; return; }
+    if (x > VW-116 && x < VW-16 && y > 56 && y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; return; }
     tryInteract();
     if (isJoyZone(x,y)) { mouseDrag=true; JOY.on=true; JOY.sx=x; JOY.sy=y; JOY.dx=JOY.dy=0; }
   } else handleTap();
@@ -929,14 +932,8 @@ function update(ts) {
         MISSION_DUMP.frame = 0;
       }
     }
-  } else if (MISSION_DUMP.state === 'open_key') {
-    MISSION_DUMP.timer += dt;
-    const cur = KEY_IDLE_SEQ[MISSION_DUMP.frame % KEY_IDLE_SEQ.length];
-    if (MISSION_DUMP.timer >= cur.dur) {
-      MISSION_DUMP.timer = 0;
-      MISSION_DUMP.frame = (MISSION_DUMP.frame + 1) % KEY_IDLE_SEQ.length;
-    }
   }
+  // open_key: hold static on last opening frame — no looping animation
 
   // Inventory bag animation
   const bagOpen = INVENTORY.open;
@@ -1139,9 +1136,9 @@ function drawEntities() {
     { type:'bin', wz: DUMP_A.wz, draw: () => {
       // Mission dumpster — show correct state sprite
       let sprKey = 'dumpster_closed';
-      if (MISSION_DUMP.state === 'closed')    sprKey = 'dumpster_closed';
-      if (MISSION_DUMP.state === 'opening')   sprKey = OPENING_SEQ[MISSION_DUMP.frame]?.key || 'dumpster_closed';
-      if (MISSION_DUMP.state === 'open_key')  sprKey = KEY_IDLE_SEQ[MISSION_DUMP.frame % KEY_IDLE_SEQ.length]?.key;
+      if (MISSION_DUMP.state === 'closed')     sprKey = 'dumpster_closed';
+      if (MISSION_DUMP.state === 'opening')    sprKey = OPENING_SEQ[MISSION_DUMP.frame]?.key || 'dumpster_closed';
+      if (MISSION_DUMP.state === 'open_key')   sprKey = 'dumpster_open_key_d';  // static hold
       if (MISSION_DUMP.state === 'open_empty') sprKey = 'dumpster_open_empty';
       drawDumpster(DUMP_A.wx, DUMP_A.wz, 1.4, sprKey);
     }},
@@ -1511,6 +1508,54 @@ function drawInventoryBag() {
     });
   }
   cx.restore();
+}
+
+// Phone menu state
+var PHONE_OPEN = false;
+
+function drawPhoneMenu() {
+  var px = VW - 16, py = 100;
+  var phoneImg = IMG['phone_icon'];
+  var pw = 42, ph = 42;
+  cx.save();
+  if (phoneImg && phoneImg.naturalWidth) {
+    var par = phoneImg.naturalWidth / phoneImg.naturalHeight;
+    ph = pw / par;
+    cx.globalAlpha = PHONE_OPEN ? 1 : 0.85;
+    cx.drawImage(phoneImg, px - pw, py, pw, ph);
+  } else {
+    cx.globalAlpha = 0.85;
+    cx.fillStyle = PHONE_OPEN ? '#ff2d78' : '#333';
+    cx.beginPath(); cx.roundRect(px - pw, py, pw, ph, 8); cx.fill();
+    cx.font = '20px sans-serif'; cx.textAlign = 'center';
+    cx.fillText('📱', px - pw/2, py + ph*0.65);
+  }
+  // Panel
+  if (PHONE_OPEN) {
+    var panX = px - 160, panY = py + ph + 6, panW = 148, panH = 126;
+    cx.globalAlpha = 0.94;
+    cx.fillStyle = '#0a0816'; cx.strokeStyle = '#ff2d78'; cx.lineWidth = 1.5;
+    cx.beginPath(); cx.roundRect(panX, panY, panW, panH, 8); cx.fill(); cx.stroke();
+    cx.globalAlpha = 1;
+    // Music toggle
+    cx.font = 'bold 11px monospace'; cx.textAlign = 'left';
+    cx.fillStyle = musicMuted ? '#555' : '#00ffcc';
+    cx.fillText(musicMuted ? '🔇  MUSIC OFF' : '🔊  MUSIC ON', panX + 12, panY + 26);
+    // Settings
+    cx.fillStyle = '#aaa';
+    cx.fillText('⚙️   SETTINGS', panX + 12, panY + 58);
+    // Map
+    cx.fillStyle = '#aaa';
+    cx.fillText('🗺️   MAP', panX + 12, panY + 90);
+    // Coming soon tag
+    cx.font = 'italic 9px monospace'; cx.fillStyle = '#444';
+    cx.fillText('settings + map coming soon', panX + 12, panY + 116);
+  }
+  cx.restore();
+}
+
+function isPhoneBtn(x, y) {
+  return x > VW - 58 && x < VW - 16 && y > 100 && y < 148;
 }
 
 function drawJoystick() {
@@ -2105,6 +2150,7 @@ function render(ts) {
       drawHUD();
       drawInteractPrompt();
       drawInventoryBag();
+      drawPhoneMenu();
       drawJoystick();
       break;
 
