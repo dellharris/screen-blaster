@@ -67,56 +67,99 @@
   src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&auto_play=false&hide_related=true&show_comments=false&show_user=false&buying=false&liking=false&download=false&sharing=false&show_artwork=false&show_playcount=false&show_teaser=false&start_track=0"></iframe>
 <script src="https://w.soundcloud.com/player/api.js"></script>
 
-<!-- ── PHONE OVERLAY ── Full-screen with hand image background ── -->
-<div id="phone-overlay" style="display:none;position:fixed;inset:0;z-index:20;background:#000;">
-  <!-- Background: hand holding phone in alley -->
-  <img src="assets/phone_bg.png" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.9;">
+<!-- ── PHONE OVERLAY ── Immersive alley scene with floating iPhone UI ── -->
+<style>
+  @keyframes policeFlash {
+    0%,49%{ filter: drop-shadow(0 0 18px #ff2200) brightness(1.1); }
+    50%,100%{ filter: drop-shadow(0 0 18px #0044ff) brightness(1.0); }
+  }
+  @keyframes iconFloat {
+    0%,100%{ transform:translateY(0); }
+    50%{ transform:translateY(-6px); }
+  }
+  @keyframes glowPulse {
+    0%,100%{ box-shadow:0 0 18px #cc44ff,0 0 40px #cc44ff44; }
+    50%{ box-shadow:0 0 32px #cc44ff,0 0 60px #cc44ff88; }
+  }
+  .phone-app-icon {
+    cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:5px;
+    animation: iconFloat 3s ease-in-out infinite;
+    transition: transform 0.15s;
+  }
+  .phone-app-icon:active { transform:scale(0.93) !important; }
+  .phone-app-icon:nth-child(2){ animation-delay:0.6s; }
+  .phone-app-icon:nth-child(3){ animation-delay:1.2s; }
+  .close-x-btn {
+    position:absolute;top:14px;right:14px;
+    width:46px;height:46px;border-radius:50%;
+    background:radial-gradient(circle at 38% 32%, #ff6655, #cc0000 60%, #880000);
+    border:2px solid #ff4433;
+    box-shadow:0 0 18px #ff3300cc, 0 0 40px #ff220066, inset 0 1px 0 rgba(255,180,160,0.5);
+    color:#fff;font-size:20px;font-weight:900;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    z-index:30;text-shadow:0 1px 3px rgba(0,0,0,0.8);
+    transition:box-shadow 0.2s;
+  }
+  .close-x-btn:hover { box-shadow:0 0 28px #ff5500ee,0 0 60px #ff3300aa; }
+  .close-x-btn:active { transform:scale(0.92); }
+</style>
 
-  <!-- Phone screen area — positioned over the blank phone screen in the image -->
-  <!-- Screen is roughly right 38% of image, top 75% height -->
-  <div id="phone-screen" style="position:absolute;right:2%;top:2%;width:36%;height:72%;background:linear-gradient(160deg,#0d1a1a,#0a0f18);border-radius:12px;overflow:hidden;box-shadow:0 0 30px rgba(180,0,255,0.4);">
+<div id="phone-overlay" style="display:none;position:fixed;inset:0;z-index:20;overflow:hidden;">
+  <!-- Alley background -->
+  <img src="assets/phone_bg.png" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">
+  <!-- Police car looming in alley — left side, mid-depth -->
+  <img src="assets/police_scene.png" style="position:absolute;left:-4%;bottom:0;width:52%;object-fit:contain;animation:policeFlash 1s infinite;z-index:1;">
+  <!-- Dark vignette overlay -->
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 65% 50%,transparent 30%,rgba(0,0,0,0.55) 100%);z-index:2;"></div>
+
+  <!-- iPhone screen — floating on the phone in the background image -->
+  <!-- phone screen sits approx right:3%, top:3%, sized to fit the blank phone screen -->
+  <div style="position:absolute;right:3%;top:3%;width:34%;max-width:280px;background:linear-gradient(170deg,#0d1520,#080d18);border-radius:16px;overflow:hidden;box-shadow:0 0 30px rgba(180,0,255,0.5),0 0 60px rgba(180,0,255,0.2);z-index:5;animation:glowPulse 2.5s ease-in-out infinite;">
     <!-- Status bar -->
-    <div style="background:rgba(0,0,0,0.6);padding:6px 12px;display:flex;justify-content:space-between;align-items:center;">
-      <span style="color:#fff;font-size:10px;font-family:monospace;">9:41</span>
-      <span style="color:#fff;font-size:10px;">●●●●</span>
+    <div style="background:rgba(0,0,0,0.7);padding:6px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(180,0,255,0.2);">
+      <span style="color:#ddd;font-size:10px;font-family:monospace;letter-spacing:1px;">9:41</span>
+      <div style="width:40px;height:12px;background:#111;border-radius:6px;"></div>
+      <span style="color:#ddd;font-size:10px;">▓▓▓▓</span>
     </div>
-    <!-- App grid -->
-    <div style="padding:14px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
-      <!-- Music app -->
-      <div onclick="phoneOpenMusic()" style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;">
-        <img src="assets/app_music.png" style="width:100%;border-radius:14px;box-shadow:0 0 12px #cc44ff88;">
-        <span style="color:#fff;font-size:9px;font-family:monospace;text-shadow:0 0 6px #cc44ff;">Music</span>
+    <!-- App label -->
+    <div style="padding:10px 12px 2px;font-family:monospace;font-size:9px;color:#cc44ff;letter-spacing:2px;text-transform:uppercase;text-shadow:0 0 8px #cc44ff;">Apps</div>
+    <!-- Floating app icons -->
+    <div style="padding:8px 10px 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+      <div class="phone-app-icon" onclick="phoneOpenMusic()">
+        <img src="assets/app_music.png" style="width:100%;border-radius:16px;box-shadow:0 4px 18px #cc44ffaa,0 0 8px #cc44ff55;">
+        <span style="color:#fff;font-size:9px;font-family:monospace;text-shadow:0 0 8px #cc44ff;">Music</span>
       </div>
-      <!-- Map app -->
-      <div onclick="phoneOpenMap()" style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;">
-        <div style="width:100%;aspect-ratio:1;border-radius:14px;overflow:hidden;box-shadow:0 0 12px #4488ff88;">
+      <div class="phone-app-icon" onclick="phoneOpenMap()" style="animation-delay:0.5s">
+        <div style="width:100%;aspect-ratio:1;border-radius:16px;overflow:hidden;box-shadow:0 4px 18px #4488ffaa;">
           <img src="assets/map_city.jpg" style="width:100%;height:100%;object-fit:cover;">
         </div>
-        <span style="color:#fff;font-size:9px;font-family:monospace;text-shadow:0 0 6px #4488ff;">Map</span>
+        <span style="color:#fff;font-size:9px;font-family:monospace;text-shadow:0 0 8px #4488ff;">Map</span>
       </div>
-      <!-- Uber app placeholder -->
-      <div style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;opacity:0.4;">
-        <div style="width:100%;aspect-ratio:1;border-radius:14px;background:#111;display:flex;align-items:center;justify-content:center;font-size:22px;">🚗</div>
-        <span style="color:#888;font-size:9px;font-family:monospace;">Uber</span>
+      <div class="phone-app-icon" style="opacity:0.35;animation-delay:1s">
+        <div style="width:100%;aspect-ratio:1;border-radius:16px;background:linear-gradient(135deg,#1a1a2a,#0d0d18);display:flex;align-items:center;justify-content:center;font-size:26px;border:1px solid rgba(255,255,255,0.06);">🚗</div>
+        <span style="color:#666;font-size:9px;font-family:monospace;">Uber</span>
       </div>
     </div>
-    <!-- Lock bar hint -->
-    <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:32%;height:4px;background:rgba(255,255,255,0.3);border-radius:2px;"></div>
+    <!-- Home indicator -->
+    <div style="display:flex;justify-content:center;padding-bottom:8px;">
+      <div style="width:28%;height:4px;background:rgba(255,255,255,0.25);border-radius:2px;"></div>
+    </div>
   </div>
 
-  <!-- Close button -->
-  <button onclick="closePhoneOverlay()" style="position:absolute;top:14px;left:14px;background:rgba(0,0,0,0.7);border:1.5px solid #ff2d78;color:#ff2d78;font-size:16px;border-radius:20px;padding:6px 14px;cursor:pointer;font-family:monospace;z-index:21;">✕ close</button>
+  <!-- Glossy red close X -->
+  <button class="close-x-btn" onclick="closePhoneOverlay()">✕</button>
 </div>
 
-<!-- Music (SoundCloud) sub-screen -->
+<!-- Music sub-screen -->
 <div id="sc-overlay" style="display:none;position:fixed;inset:0;z-index:25;background:rgba(0,0,0,0.88);align-items:center;justify-content:center;flex-direction:column;">
-  <div style="background:#1a0a2a;border:2px solid #ff2d78;border-radius:18px;width:min(420px,92vw);overflow:hidden;box-shadow:0 0 40px #ff2d7844;">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0d0618;border-bottom:1px solid #ff2d7844;">
+  <div style="background:#1a0a2a;border:2px solid #cc44ff;border-radius:18px;width:min(420px,92vw);overflow:hidden;box-shadow:0 0 40px #cc44ff44;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0d0618;border-bottom:1px solid #cc44ff44;">
       <div style="display:flex;align-items:center;gap:10px;">
         <img src="assets/app_music.png" style="width:28px;height:28px;border-radius:8px;">
         <span style="color:#cc44ff;font-family:monospace;font-weight:bold;font-size:13px;">Now Playing</span>
       </div>
-      <button id="sc-close" style="background:none;border:none;color:#ff2d78;font-size:22px;cursor:pointer;line-height:1;">✕</button>
+      <button id="sc-close" class="close-x-btn" style="position:static;width:34px;height:34px;font-size:15px;">✕</button>
     </div>
     <iframe id="sc-player" width="100%" height="350" scrolling="no" frameborder="no" allow="autoplay"
       src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&color=%23cc44ff&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=true">
