@@ -356,6 +356,11 @@ loadImg('naomi_crouch_t1_left', 'assets/naomi_crouch_t1_left.png');
 loadImg('naomi_crouch_t2_left', 'assets/naomi_crouch_t2_left.png');
 loadImg('naomi_crouch_t3_left', 'assets/naomi_crouch_t3_left.png');
 loadImg('naomi_crouch_t4_left', 'assets/naomi_crouch_t4_left.png');
+// Stand-up animation frames (squat → standing, 8 steps)
+for (let _su = 1; _su <= 8; _su++) {
+  loadImg('naomi_standup_' + _su,        'assets/naomi_standup_' + _su + '.png');
+  loadImg('naomi_standup_' + _su + '_left', 'assets/naomi_standup_' + _su + '_left.png');
+}
 
 // ─── Perspective floor definition ─────────────────────────────────────────────
 // Calibrated against the Miami alley backdrop:
@@ -576,12 +581,16 @@ LVID.addEventListener('ended', endLatch);
 function triggerCrouch() {
   const wasStanding = !P.crouch;
   P.crouch = !P.crouch;
-  // Play transition sequence
-  P.transSeq   = wasStanding ? NAOMI_CROUCH_IN : NAOMI_CROUCH_OUT;
-  P.transFrame = 0;
-  P.transTimer = 0;
+  // Pick left or right facing sequence based on current direction
+  const facingLeft = P.lastMvx < -0.1;
   if (wasStanding) {
-    playLatch('squat', () => { P.crouch = true; P.crouchLerp = 1; });
+    P.transSeq = facingLeft ? NAOMI_CROUCH_IN_LEFT : NAOMI_CROUCH_IN;
+  } else {
+    P.transSeq = facingLeft ? NAOMI_CROUCH_OUT_LEFT : NAOMI_CROUCH_OUT;
+  }
+  P.transFrame = 0; P.transTimer = 0;
+  if (wasStanding) {
+    playLatch('squat', function() { P.crouch = true; P.crouchLerp = 1; });
   }
 }
 
@@ -829,19 +838,35 @@ const GUM_SEQ = [
 ];
 
 // Naomi crouch-in: standing → squat
-const NAOMI_CROUCH_IN  = [
-  { key:'naomi_crouch_t1', dur:0.10 },
-  { key:'naomi_crouch_t2', dur:0.10 },
-  { key:'naomi_crouch_t3', dur:0.10 },
-  { key:'naomi_crouch_t4', dur:0.10 },
+// Crouch-in: standing → squat (frames 8→1, reversed standup)
+const NAOMI_CROUCH_IN = [
+  { key:'naomi_standup_8', dur:0.07 },
+  { key:'naomi_standup_7', dur:0.07 },
+  { key:'naomi_standup_6', dur:0.07 },
+  { key:'naomi_standup_5', dur:0.07 },
+  { key:'naomi_standup_4', dur:0.07 },
+  { key:'naomi_standup_3', dur:0.07 },
+  { key:'naomi_standup_2', dur:0.07 },
+  { key:'naomi_standup_1', dur:0.07 },
 ];
-// Naomi crouch-out: squat → standing (same frames reversed)
+// Crouch-out: squat → standing (frames 1→8, fluid 8-step rise)
 const NAOMI_CROUCH_OUT = [
-  { key:'naomi_crouch_t4', dur:0.08 },
-  { key:'naomi_crouch_t3', dur:0.08 },
-  { key:'naomi_crouch_t2', dur:0.08 },
-  { key:'naomi_crouch_t1', dur:0.08 },
+  { key:'naomi_standup_1', dur:0.07 },
+  { key:'naomi_standup_2', dur:0.07 },
+  { key:'naomi_standup_3', dur:0.07 },
+  { key:'naomi_standup_4', dur:0.08 },
+  { key:'naomi_standup_5', dur:0.08 },
+  { key:'naomi_standup_6', dur:0.08 },
+  { key:'naomi_standup_7', dur:0.08 },
+  { key:'naomi_standup_8', dur:0.10 },
 ];
+// Left-facing versions for when moving/facing left
+const NAOMI_CROUCH_IN_LEFT = NAOMI_CROUCH_IN.map(function(f){
+  return { key: f.key + '_left', dur: f.dur };
+});
+const NAOMI_CROUCH_OUT_LEFT = NAOMI_CROUCH_OUT.map(function(f){
+  return { key: f.key + '_left', dur: f.dur };
+});
 // Naomi micro-step forward/side: single tap while standing
 const NAOMI_STEP_SEQ = [
   { key:'naomi_stand_step1', dur:0.09 },
