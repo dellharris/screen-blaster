@@ -305,10 +305,14 @@ for (let _si = 1; _si <= 4; _si++) {
   loadImg(`naomi_step_right${_si}`, `assets/naomi_step_right${_si}.png`);
   loadImg(`naomi_step_left${_si}`,  `assets/naomi_step_left${_si}.png`);
 }
-loadImg('naomi_crouch_t1',   'assets/naomi_crouch_t1.png');
-loadImg('naomi_crouch_t2',   'assets/naomi_crouch_t2.png');
-loadImg('naomi_crouch_t3',   'assets/naomi_crouch_t3.png');
-loadImg('naomi_crouch_t4',   'assets/naomi_crouch_t4.png');
+loadImg('naomi_crouch_t1',      'assets/naomi_crouch_t1.png');
+loadImg('naomi_crouch_t2',      'assets/naomi_crouch_t2.png');
+loadImg('naomi_crouch_t3',      'assets/naomi_crouch_t3.png');
+loadImg('naomi_crouch_t4',      'assets/naomi_crouch_t4.png');
+loadImg('naomi_crouch_t1_left', 'assets/naomi_crouch_t1_left.png');
+loadImg('naomi_crouch_t2_left', 'assets/naomi_crouch_t2_left.png');
+loadImg('naomi_crouch_t3_left', 'assets/naomi_crouch_t3_left.png');
+loadImg('naomi_crouch_t4_left', 'assets/naomi_crouch_t4_left.png');
 
 // ─── Perspective floor definition ─────────────────────────────────────────────
 // Calibrated against the Miami alley backdrop:
@@ -836,11 +840,20 @@ const NAOMI_SQUAT_IDLE = [
 
 // Squat WALK cycle — 4 frames cycling while crouching+moving
 // neutral → leg-forward → neutral → other-leg = natural squat waddle
+// Squat walk facing RIGHT (default / forward)
 const NAOMI_SQUAT_WALK = [
-  'naomi_crouch_t4',  // neutral squat
-  'naomi_crouch_t2',  // weight shift / foot forward
-  'naomi_crouch_t1',  // mid-step
-  'naomi_crouch_t3',  // opposite step
+  'naomi_crouch_t4',
+  'naomi_crouch_t2',
+  'naomi_crouch_t1',
+  'naomi_crouch_t3',
+];
+
+// Squat walk facing LEFT — mirrored frames
+const NAOMI_SQUAT_WALK_LEFT = [
+  'naomi_crouch_t4_left',
+  'naomi_crouch_t2_left',
+  'naomi_crouch_t1_left',
+  'naomi_crouch_t3_left',
 ];
 
 // Win zone: far-left door
@@ -1405,8 +1418,11 @@ function drawEntities() {
       drawPlayerDetectGlow();
       let naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
       if (!naomiSprKey && P.sqIdleActive) naomiSprKey = NAOMI_SQUAT_IDLE[P.sqIdleFrame].key;
-      // Squat WALK — crouching + moving uses dedicated squat walk cycle
-      if (!naomiSprKey && P.crouch && P.moving) naomiSprKey = NAOMI_SQUAT_WALK[P.sqWalkStep];
+      // Squat walk: pick left or right facing based on movement direction
+      if (!naomiSprKey && P.crouch && P.moving) {
+        const sqSeq = P.lastMvx < -0.1 ? NAOMI_SQUAT_WALK_LEFT : NAOMI_SQUAT_WALK;
+        naomiSprKey = sqSeq[P.sqWalkStep];
+      }
       drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, naomiSprKey, 0, undefined, P.moving);
     }},
   ];
