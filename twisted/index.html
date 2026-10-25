@@ -1474,8 +1474,7 @@ function drawInteractPrompt() {
   cx.restore();
 }
 
-function drawJoystick() {
-  if (INVENTORY.items.length === 0 && !INVENTORY.open) return;
+function drawInventoryBag() {
   var bx = VW - 16, by = 56;
   var itemCount = INVENTORY.items.length;
   cx.save();
