@@ -57,7 +57,11 @@
 <video id="intro-video" src="assets/intro_video.mp4" playsinline webkit-playsinline preload="auto" muted style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:4;background:#000"></video>
 <video id="cutscene-video" src="assets/cutscene_run.mp4" playsinline webkit-playsinline preload="auto"></video>
 <video id="latch-video" src="assets/cutscene_latch.mp4" playsinline webkit-playsinline preload="auto" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:3;background:#000"></video>
-<audio id="bg-music" src="assets/bg_music.wav" loop preload="auto"></audio>
+
+<!-- Hidden SoundCloud game music player — auto-plays playlist from track 1 -->
+<iframe id="sc-game" allow="autoplay" style="display:none;width:1px;height:1px;"
+  src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&auto_play=false&hide_related=true&show_comments=false&show_user=false&buying=false&liking=false&download=false&sharing=false&show_artwork=false&show_playcount=false&show_teaser=false&start_track=0"></iframe>
+<script src="https://w.soundcloud.com/player/api.js"></script>
 
 <!-- SoundCloud phone overlay -->
 <div id="sc-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:10;background:rgba(0,0,0,0.82);align-items:center;justify-content:center;flex-direction:column;">
@@ -285,10 +289,122 @@ const CROSSFADE_DUR = 1.2;
 
 // ─── Cutscene video ───────────────────────────────────────────────────────────
 const VID  = document.getElementById('cutscene-video');
-const MUS  = document.getElementById('bg-music');
 const LVID = document.getElementById('latch-video');
 const IVID = document.getElementById('intro-video');
+
+// ─── SoundCloud game music ────────────────────────────────────────────────────
+let SC_WIDGET = null;
 let musicMuted = false;
+let scReady = false;
+
+function initSCMusic() {
+  const iframe = document.getElementById('sc-game');
+  if (!iframe || !window.SC) return;
+  SC_WIDGET = SC.Widget(iframe);
+  SC_WIDGET.bind(SC.Widget.Events.READY, function() {
+    scReady = true;
+    SC_WIDGET.setVolume(65);
+  });
+}
+
+function startMusic() {
+  if (!scReady || !SC_WIDGET) return;
+  SC_WIDGET.play();
+}
+
+function toggleMute() {
+  musicMuted = !musicMuted;
+  if (SC_WIDGET && scReady) {
+    SC_WIDGET.setVolume(musicMuted ? 0 : 65);
+  }
+}
+
+// Init after SC API script loads
+window.addEventListener('load', function() {
+  setTimeout(initSCMusic, 800);
+});
+
+// ─── Web Audio sound effects ──────────────────────────────────────────────────
+let AC = null;
+
+function getAC() {
+  if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  if (AC.state === 'suspended') AC.resume();
+  return AC;
+}
+
+// Generic synth shot: type, freq, duration, volume
+function sfx(type, freq, dur, vol, filterFreq) {
+  try {
+    const ac = getAC();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    const now = ac.currentTime;
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.4, now + dur);
+    gain.gain.setValueAtTime(vol || 0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    if (filterFreq) {
+      const flt = ac.createBiquadFilter();
+      flt.type = 'lowpass'; flt.frequency.value = filterFreq;
+      osc.connect(flt); flt.connect(gain);
+    } else {
+      osc.connect(gain);
+    }
+    gain.connect(ac.destination);
+    osc.start(now); osc.stop(now + dur);
+  } catch(e) {}
+}
+
+// Noise burst (footstep / rustle)
+function sfxNoise(dur, vol, filterFreq) {
+  try {
+    const ac = getAC();
+    const bufSize = Math.floor(ac.sampleRate * dur);
+    const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1);
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const gain = ac.createGain();
+    const now = ac.currentTime;
+    gain.gain.setValueAtTime(vol || 0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    const flt = ac.createBiquadFilter();
+    flt.type = 'bandpass'; flt.frequency.value = filterFreq || 300; flt.Q.value = 0.8;
+    src.connect(flt); flt.connect(gain); gain.connect(ac.destination);
+    src.start(now); src.stop(now + dur);
+  } catch(e) {}
+}
+
+// Named sound effects
+const SFX = {
+  stepWalk:   function() { sfxNoise(0.06, 0.10, 250); },
+  stepRun:    function() { sfxNoise(0.04, 0.18, 380); },
+  stepCrouch: function() { sfxNoise(0.08, 0.05, 150); },
+  spotlight:  function() { sfx('sine', 880, 0.3, 0.2); sfx('sine', 660, 0.3, 0.12); },
+  caught:     function() { sfx('sawtooth', 220, 0.6, 0.3, 800); },
+  keyPickup:  function() { sfx('sine', 1046, 0.12, 0.25); setTimeout(function(){ sfx('sine', 1318, 0.15, 0.25); }, 120); setTimeout(function(){ sfx('sine', 1568, 0.2, 0.3); }, 240); },
+  dumpsterOpen: function() { sfxNoise(0.4, 0.2, 180); sfx('triangle', 80, 0.4, 0.15); },
+  doorUnlock: function() { sfx('sine', 440, 0.08, 0.2); setTimeout(function(){ sfx('sine', 660, 0.08, 0.25); }, 90); setTimeout(function(){ sfx('sine', 880, 0.15, 0.3); }, 180); },
+  win:        function() { [523,659,784,1046].forEach(function(f,i){ setTimeout(function(){ sfx('sine',f,0.3,0.3); }, i*120); }); },
+  ambient:    function() { sfxNoise(0.8, 0.03, 800); },
+};
+
+// Footstep ticker
+let stepTimer = 0;
+function tickFootsteps(dt, moving, running, crouching) {
+  if (!moving) { stepTimer = 0; return; }
+  const rate = crouching ? 0.55 : running ? 0.18 : 0.30;
+  stepTimer += dt;
+  if (stepTimer >= rate) {
+    stepTimer = 0;
+    if (crouching) SFX.stepCrouch();
+    else if (running) SFX.stepRun();
+    else SFX.stepWalk();
+  }
+}
 
 // ─── Intro video ──────────────────────────────────────────────────────────────
 // Plays as the very first thing — muted so autoplay works on mobile.
@@ -361,15 +477,6 @@ function triggerCrouch() {
   if (wasStanding) {
     playLatch('squat', () => { P.crouch = true; P.crouchLerp = 1; });
   }
-}
-
-function startMusic() {
-  MUS.volume = 0.7;
-  MUS.play().catch(() => {});
-}
-function toggleMute() {
-  musicMuted = !musicMuted;
-  MUS.muted = musicMuted;
 }
 
 function playCutscene() {
@@ -586,10 +693,12 @@ function tryInteract() {
     MISSION_DUMP.state = 'opening';
     MISSION_DUMP.frame = 0;
     MISSION_DUMP.timer = 0;
+    SFX.dumpsterOpen();
   } else if (MISSION_DUMP.state === 'open_key') {
     // Collect the key
     addItem('key', 'Door Key', '🗝️');
     MISSION_DUMP.state = 'open_empty';
+    SFX.keyPickup();
   }
 }
 
@@ -948,6 +1057,9 @@ function update(ts) {
   P.idlePhase   = (P.idlePhase   + dt) % (Math.PI * 200);
   NPC.idlePhase = (NPC.idlePhase + dt) % (Math.PI * 200);
 
+  // Footstep sound effects
+  tickFootsteps(dt, P.moving, P.running, P.crouch);
+
   // ─── Naomi squat idle fidget ───────────────────────────────────────────────
   const sqMoving = !!(mx || mz);
   if (P.crouch && !sqMoving && !P.transSeq && !P.sqIdleActive) {
@@ -1065,6 +1177,7 @@ function update(ts) {
 
   if (P.det >= 1 && !isCaught) {
     isCaught = true; catchFlash = 1; P.det = 0; P.catches++;
+    SFX.caught(); SFX.spotlight();
     if (P.catches >= P.maxCatches) {
       setTimeout(() => { phase = PH.CAUGHT; }, 1400);
     } else {
@@ -1077,6 +1190,7 @@ function update(ts) {
   if (P.wx >= WIN.wxMin && P.wx <= WIN.wxMax &&
       P.wz >= WIN.wzMin && P.wz <= WIN.wzMax) {
     phase = PH.WIN;
+    SFX.win();
   }
 }
 
