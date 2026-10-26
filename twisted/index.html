@@ -181,6 +181,63 @@
   </div>
 </div>
 
+<!-- ── TRASH SEARCH MINI-GAME ── -->
+<style>
+@keyframes revealPop { 0%{transform:scale(0.5);opacity:0} 60%{transform:scale(1.15)} 100%{transform:scale(1);opacity:1} }
+@keyframes shakePile { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-4px)} 40%,80%{transform:translateX(4px)} }
+@keyframes timerPulse { 0%,100%{box-shadow:0 0 8px #ff4400} 50%{box-shadow:0 0 20px #ff4400} }
+.trash-pile {
+  cursor:pointer; border-radius:14px; aspect-ratio:1;
+  background:linear-gradient(135deg,#2a1f0a,#1a1208);
+  border:2px solid #554422; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; font-size:28px;
+  transition:transform 0.1s; user-select:none;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.5);
+}
+.trash-pile:active { transform:scale(0.93); }
+.trash-pile.revealed { pointer-events:none; animation:revealPop 0.3s ease-out; }
+.trash-pile.key-found { border-color:#ffcc00; box-shadow:0 0 18px #ffcc0088; background:linear-gradient(135deg,#2a2000,#1a1500); }
+.trash-pile.gun-found { border-color:#00ccff; box-shadow:0 0 18px #00ccff88; background:linear-gradient(135deg,#001a2a,#001020); }
+.trash-pile.junk-found { border-color:#443322; opacity:0.6; }
+.trash-pile.shake { animation:shakePile 0.3s ease-in-out; }
+.trash-pile .pile-icon { font-size:26px; }
+.trash-pile .pile-label { font-size:9px; font-family:monospace; color:#888; margin-top:2px; }
+</style>
+
+<div id="trash-game" style="display:none;position:fixed;inset:0;z-index:30;background:rgba(0,0,0,0.93);align-items:center;justify-content:center;flex-direction:column;">
+  <div style="width:min(480px,96vw);background:#120e06;border-radius:18px;overflow:hidden;border:2px solid #88440088;box-shadow:0 0 40px #884400aa;">
+    <!-- Header -->
+    <div style="background:linear-gradient(90deg,#1a1000,#2a1800);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #44220044;">
+      <div>
+        <div style="color:#ffcc00;font-family:monospace;font-weight:bold;font-size:14px;letter-spacing:1px;">🗑️  SEARCH THE TRASH</div>
+        <div style="color:#887755;font-size:10px;font-family:monospace;" id="trash-subtitle">Find the key — find the gun for a bonus</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="color:#ff4400;font-family:monospace;font-size:22px;font-weight:bold;" id="trash-timer-display">10</div>
+        <div style="color:#554433;font-size:9px;font-family:monospace;">seconds</div>
+      </div>
+    </div>
+    <!-- Timer bar -->
+    <div style="height:5px;background:#221100;">
+      <div id="trash-timer-bar" style="height:100%;background:linear-gradient(90deg,#ff4400,#ffaa00);width:100%;transition:width 0.1s linear;"></div>
+    </div>
+    <!-- Dumpster view -->
+    <div style="padding:14px 14px 6px;background:url('assets/dumpster_open_key_d.png') center/cover no-repeat;position:relative;">
+      <div style="background:rgba(0,0,0,0.72);border-radius:10px;padding:10px;">
+        <div id="trash-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;"></div>
+      </div>
+    </div>
+    <!-- Status bar -->
+    <div id="trash-status" style="padding:10px 16px;text-align:center;font-family:monospace;font-size:12px;color:#aaa;background:#0d0a04;min-height:38px;display:flex;align-items:center;justify-content:center;"></div>
+    <!-- Result screen -->
+    <div id="trash-result" style="display:none;padding:20px;text-align:center;background:#0d0a04;border-top:1px solid #33220022;">
+      <div id="trash-result-title" style="font-size:22px;font-family:monospace;font-weight:bold;margin-bottom:8px;"></div>
+      <div id="trash-result-sub" style="font-size:12px;color:#aaa;font-family:monospace;margin-bottom:14px;"></div>
+      <button id="trash-result-btn" style="background:linear-gradient(135deg,#ffcc00,#ff8800);color:#000;border:none;border-radius:20px;padding:10px 28px;font-size:14px;font-family:monospace;font-weight:bold;cursor:pointer;box-shadow:0 0 16px #ffaa0066;"></button>
+    </div>
+  </div>
+</div>
+
 <div id="rotate-msg"><span>&#8635;</span>ROTATE YOUR PHONE<br><small style="color:#666">Landscape mode required</small></div>
 <script>
 'use strict';
@@ -822,6 +879,146 @@ function hasItem(id) { return !!INVENTORY.items.find(i => i.id === id); }
 // Screen position of interact button — updated each frame for tap detection
 var INTERACT_BTN_POS = { x:0, y:0, w:0, h:0, visible:false };
 
+// ─── Trash Search Mini-Game ───────────────────────────────────────────────────
+var TRASH_GAME_EL  = null;  // initialized after DOM ready
+var trashTimer     = 0;
+var trashActive    = false;
+var trashItems     = [];    // [{type, revealed, el}]
+var trashFoundKey  = false;
+var trashFoundGun  = false;
+var trashInterval  = null;
+const TRASH_TIME   = 10;
+
+// Junk items (emoji + label)
+const JUNK_ITEMS = [
+  {icon:'🥫',label:'can'}, {icon:'📰',label:'paper'}, {icon:'👟',label:'boot'},
+  {icon:'🦴',label:'bone'}, {icon:'🧻',label:'roll'}, {icon:'📦',label:'box'},
+];
+
+function openTrashGame() {
+  TRASH_GAME_EL = document.getElementById('trash-game');
+  trashFoundKey = false; trashFoundGun = false; trashActive = true;
+  trashTimer = TRASH_TIME;
+
+  // Build 8 items: 6 junk + 1 key + 1 gun, shuffled
+  const shuffleJunk = [...JUNK_ITEMS].sort(function(){ return Math.random()-0.5; }).slice(0,6);
+  const pool = [...shuffleJunk,
+    {icon:'🗝️', label:'KEY',  type:'key'},
+    {icon:'🔫', label:'GUN',  type:'gun'},
+  ].sort(function(){ return Math.random()-0.5; });
+
+  trashItems = pool;
+
+  // Build grid
+  const grid = document.getElementById('trash-grid');
+  grid.innerHTML = '';
+  pool.forEach(function(item, i) {
+    const div = document.createElement('div');
+    div.className = 'trash-pile';
+    div.innerHTML = '<div class="pile-icon">🗑️</div><div class="pile-label">pile ' + (i+1) + '</div>';
+    div.addEventListener('click', function(){ revealTrashItem(i); });
+    div.addEventListener('touchstart', function(e){ e.preventDefault(); revealTrashItem(i); }, {passive:false});
+    item.el = div;
+    item.revealed = false;
+    grid.appendChild(div);
+  });
+
+  // Reset UI
+  document.getElementById('trash-result').style.display = 'none';
+  document.getElementById('trash-status').textContent = 'Tap piles to search — find the key!';
+  document.getElementById('trash-subtitle').textContent = 'Find the key — find the gun for a bonus';
+  document.getElementById('trash-timer-display').textContent = TRASH_TIME;
+  document.getElementById('trash-timer-bar').style.width = '100%';
+  TRASH_GAME_EL.style.display = 'flex';
+
+  // Start countdown
+  if (trashInterval) clearInterval(trashInterval);
+  trashInterval = setInterval(trashTick, 100);
+}
+
+function trashTick() {
+  if (!trashActive) return;
+  trashTimer = Math.max(0, trashTimer - 0.1);
+  const pct = (trashTimer / TRASH_TIME) * 100;
+  document.getElementById('trash-timer-display').textContent = Math.ceil(trashTimer);
+  document.getElementById('trash-timer-bar').style.width = pct + '%';
+  if (pct < 30) document.getElementById('trash-timer-bar').style.background = 'linear-gradient(90deg,#ff0000,#ff4400)';
+  else if (pct < 60) document.getElementById('trash-timer-bar').style.background = 'linear-gradient(90deg,#ff4400,#ffaa00)';
+  if (trashTimer <= 0) trashFail();
+}
+
+function revealTrashItem(i) {
+  const item = trashItems[i];
+  if (!trashActive || item.revealed) return;
+  item.revealed = true;
+  const el = item.el;
+  el.innerHTML = '<div class="pile-icon">' + item.icon + '</div><div class="pile-label">' + item.label + '</div>';
+  SFX.btnTap();
+
+  if (item.type === 'key') {
+    el.classList.add('revealed','key-found');
+    trashFoundKey = true;
+    sfx('sine', 880, 0.1, 0.2); setTimeout(function(){ sfx('sine',1100,0.12,0.25); },100);
+    document.getElementById('trash-status').textContent = '🗝️ Found the key! ' + (trashFoundGun?'PERFECT!':'Keep searching for the gun...');
+    if (trashFoundGun) { setTimeout(trashPerfect, 600); return; }
+    // Pass after short delay if they already found key but not gun
+    setTimeout(function(){ if (trashActive && trashFoundKey && !trashFoundGun) trashPass(); }, 2000);
+  } else if (item.type === 'gun') {
+    el.classList.add('revealed','gun-found');
+    trashFoundGun = true;
+    sfx('sine', 660, 0.1, 0.2); setTimeout(function(){ sfx('sine',880,0.12,0.25); },80);
+    document.getElementById('trash-status').textContent = '🔫 Found the gun! ' + (trashFoundKey?'PERFECT!':'Now find the key!');
+    if (trashFoundKey) { setTimeout(trashPerfect, 600); }
+  } else {
+    el.classList.add('revealed','junk-found');
+    el.classList.add('shake');
+    setTimeout(function(){ el.classList.remove('shake'); }, 300);
+  }
+}
+
+function trashPerfect() {
+  if (!trashActive) return;
+  trashActive = false; clearInterval(trashInterval);
+  addItem('key', 'Door Key', '🗝️');
+  addItem('gun', 'Gun', '🔫');
+  SFX.keyPickup();
+  MISSION_DUMP.state = 'open_empty';
+  showTrashResult('🏆 PERFECT!', 'You got the KEY + GUN bonus!', 'Let\'s go →', closeTrashGame);
+}
+
+function trashPass() {
+  if (!trashActive) return;
+  trashActive = false; clearInterval(trashInterval);
+  addItem('key', 'Door Key', '🗝️');
+  SFX.keyPickup();
+  MISSION_DUMP.state = 'open_empty';
+  showTrashResult('✅ GOT IT', 'Key found — no gun this time.', 'Move out →', closeTrashGame);
+}
+
+function trashFail() {
+  trashActive = false; clearInterval(trashInterval);
+  sfx('sawtooth', 200, 0.4, 0.2);
+  showTrashResult('⏰ TOO SLOW', 'You missed it. Try again...', '🔄 Try Again', function(){
+    document.getElementById('trash-result').style.display = 'none';
+    openTrashGame();
+  });
+}
+
+function showTrashResult(title, sub, btnText, btnAction) {
+  document.getElementById('trash-result-title').textContent = title;
+  document.getElementById('trash-result-sub').textContent  = sub;
+  const btn = document.getElementById('trash-result-btn');
+  btn.textContent = btnText;
+  btn.onclick = btnAction;
+  document.getElementById('trash-result').style.display = 'block';
+}
+
+function closeTrashGame() {
+  if (trashInterval) clearInterval(trashInterval);
+  trashActive = false;
+  document.getElementById('trash-game').style.display = 'none';
+}
+
 function tryInteract(forcedByTap) {
   if (phase !== PH.PLAY) return;
   const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
@@ -835,9 +1032,8 @@ function tryInteract(forcedByTap) {
     MISSION_DUMP.timer = 0;
     SFX.dumpsterOpen();
   } else if (MISSION_DUMP.state === 'open_key') {
-    addItem('key', 'Door Key', '🗝️');
-    MISSION_DUMP.state = 'open_empty';
-    SFX.keyPickup();
+    // Launch trash search mini-game instead of direct pickup
+    openTrashGame();
   }
 }
 
