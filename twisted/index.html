@@ -1469,11 +1469,20 @@ function update(ts) {
   }
   if (catchFlash > 0) catchFlash = Math.max(0, catchFlash - dt * 2.5);
 
-  // Win
-  if (P.wx >= WIN.wxMin && P.wx <= WIN.wxMax &&
+  // Win — only if Naomi has the key
+  if (hasItem('key') &&
+      P.wx >= WIN.wxMin && P.wx <= WIN.wxMax &&
       P.wz >= WIN.wzMin && P.wz <= WIN.wzMax) {
     phase = PH.WIN;
     SFX.win();
+  }
+
+  // Block the left wall exit zone if no key — push Naomi back out
+  if (!hasItem('key') &&
+      P.wx <= WIN.wxMax + 0.04 &&
+      P.wz >= WIN.wzMin && P.wz <= WIN.wzMax + 0.10) {
+    P.wx = WIN.wxMax + 0.05;
+    P.renderWx = Math.max(P.renderWx, WIN.wxMax + 0.04);
   }
 }
 
@@ -1618,15 +1627,28 @@ function drawWinGlow() {
   if (IMG['fg']) cx.drawImage(IMG['fg'], 0, 0, VW, VH);
   const ws = w2s(WIN.wxMin + 0.07, WIN.wzMin + 0.12);
   cx.save();
-  cx.globalAlpha = 0.45 + Math.sin(pulse * 3) * 0.35;
-  cx.fillStyle = '#00ff88';
-  cx.font = `bold ${16 + Math.sin(pulse*3)*2}px sans-serif`;
-  cx.textAlign = 'center';
-  cx.fillText('→ SAFE', ws.x, ws.y);
-  cx.globalAlpha = 0.18 + Math.sin(pulse*3)*0.1;
-  const gg = cx.createRadialGradient(ws.x, ws.y, 0, ws.x, ws.y, 40);
-  gg.addColorStop(0,'#00ff88'); gg.addColorStop(1,'transparent');
-  cx.fillStyle = gg; cx.fillRect(ws.x-40, ws.y-40, 80, 80);
+
+  if (hasItem('key')) {
+    // Has key — show green SAFE glow
+    cx.globalAlpha = 0.45 + Math.sin(pulse * 3) * 0.35;
+    cx.fillStyle = '#00ff88';
+    cx.font = `bold ${16 + Math.sin(pulse*3)*2}px sans-serif`;
+    cx.textAlign = 'center';
+    cx.fillText('→ SAFE', ws.x, ws.y);
+    cx.globalAlpha = 0.18 + Math.sin(pulse*3)*0.1;
+    const gg = cx.createRadialGradient(ws.x, ws.y, 0, ws.x, ws.y, 40);
+    gg.addColorStop(0,'#00ff88'); gg.addColorStop(1,'transparent');
+    cx.fillStyle = gg; cx.fillRect(ws.x-40, ws.y-40, 80, 80);
+  } else {
+    // No key — show locked indicator
+    cx.globalAlpha = 0.35 + Math.sin(pulse * 2) * 0.15;
+    cx.font = 'bold 14px monospace'; cx.fillStyle = '#ff4422'; cx.textAlign = 'center';
+    cx.fillText('🔒 LOCKED', ws.x, ws.y);
+    cx.globalAlpha = 0.12 + Math.sin(pulse*2)*0.05;
+    const rg = cx.createRadialGradient(ws.x, ws.y, 0, ws.x, ws.y, 35);
+    rg.addColorStop(0,'#ff4422'); rg.addColorStop(1,'transparent');
+    cx.fillStyle = rg; cx.fillRect(ws.x-35, ws.y-35, 70, 70);
+  }
   cx.restore();
 }
 
