@@ -67,6 +67,10 @@
 <video id="win-video" playsinline webkit-playsinline preload="auto"
   style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:15;background:#000;"></video>
 
+<!-- Caught video — plays when all lives lost then returns to title -->
+<video id="caught-video" src="assets/caught.mp4" playsinline webkit-playsinline preload="auto"
+  style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:15;background:#000;"></video>
+
 <iframe id="sc-game" allow="autoplay" style="display:none;width:1px;height:1px;"
   src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&auto_play=false&hide_related=true&show_comments=false&show_user=false&buying=false&liking=false&download=false&sharing=false&show_artwork=false&show_playcount=false&show_teaser=false&start_track=0"></iframe>
 <script src="https://w.soundcloud.com/player/api.js"></script>
@@ -505,7 +509,24 @@ WVID.addEventListener('ended', function() {
   }
 });
 
-// ─── SoundCloud game music ────────────────────────────────────────────────────
+// ─── Caught video sequence ───────────────────────────────────────────────────
+const CVID = document.getElementById('caught-video');
+
+function playCaughtVideo() {
+  if (SC_WIDGET && scReady) SC_WIDGET.setVolume(0);
+  CVID.style.display = 'block';
+  CVID.currentTime = 0;
+  CVID.play().catch(function(){ endCaughtVideo(); });
+}
+
+function endCaughtVideo() {
+  CVID.pause();
+  CVID.style.display = 'none';
+  if (SC_WIDGET && scReady) SC_WIDGET.setVolume(65);
+  resetGame();
+}
+
+CVID.addEventListener('ended', endCaughtVideo);
 let SC_WIDGET = null;
 let musicMuted = false;
 let scReady = false;
@@ -1290,7 +1311,7 @@ function handleTap() {
   if (phase === PH.WIN)       { endWinSequence(); return; }  // tap skips win video
   if (phase === PH.WIN_DLG)   { winDlgIdx++; if (winDlgIdx >= WIN_DLG.length) { phase = PH.END; endTimer = 0; } return; }
   if (phase === PH.END)       { resetGame(); return; }
-  if (phase === PH.CAUGHT)    { resetGame(); return; }
+  if (phase === PH.CAUGHT)    { endCaughtVideo(); return; }  // tap skips caught video
 }
 
 cv.addEventListener('touchstart', e => {
@@ -1709,7 +1730,7 @@ function update(ts) {
     isCaught = true; catchFlash = 1; P.det = 0; P.catches++;
     SFX.caught(); SFX.spotlight();
     if (P.catches >= P.maxCatches) {
-      setTimeout(() => { phase = PH.CAUGHT; }, 1400);
+      setTimeout(function() { phase = PH.CAUGHT; playCaughtVideo(); }, 1400);
     } else {
       setTimeout(() => { isCaught = false; }, 1600);
     }
@@ -3030,8 +3051,8 @@ function render(ts) {
       break;
 
     case PH.CAUGHT:
-      drawBg(0.82);
-      drawOverlay('rgba(160,0,0,0.88)', 'CAUGHT', 'You were spotted too many times.', 'TAP TO TRY AGAIN');
+      // Caught video plays above canvas — keep canvas black
+      cx.fillStyle = '#000'; cx.fillRect(0, 0, VW, VH);
       break;
 
     case PH.WIN:
