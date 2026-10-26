@@ -340,6 +340,10 @@ loadImg('naomi_stand_step3', 'assets/naomi_stand_step3.png');
 loadImg('naomi_stand_step4', 'assets/naomi_stand_step4.png');
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png');
+// Jacket off frames
+for (let _ji = 1; _ji <= 3; _ji++) loadImg('naomi_jacket_off_' + _ji, 'assets/naomi_jacket_off_' + _ji + '.png');
+// Jacket on frames
+for (let _joi = 1; _joi <= 4; _joi++) loadImg('naomi_jacket_on_' + _joi, 'assets/naomi_jacket_on_' + _joi + '.png');
 // Naomi backward step frames
 loadImg('naomi_step_back1', 'assets/naomi_step_back1.png');
 loadImg('naomi_step_back2', 'assets/naomi_step_back2.png');
@@ -703,6 +707,8 @@ const P = {
   standIdleActive: false,
   standIdleFrame: 0,
   standIdleFrameTimer: 0,
+  standIdleSeq: null,       // current randomly chosen sequence
+  standIdleNext: 2.5,       // seconds until next idle fires
 };
 
 // ─── NPC: Sierra ─────────────────────────────────────────────────────────────
@@ -885,14 +891,37 @@ const NAOMI_CROUCH_OUT_LEFT = NAOMI_CROUCH_OUT.map(function(f){
 // Naomi standing idle — anxious fidget, fires every 4s
 // neutral → fidget → stress → hair grab → return
 const NAOMI_STAND_IDLE = [
-  { key:'naomi_idle_1', dur:0.30 },  // neutral hold
-  { key:'naomi_idle_2', dur:0.18 },  // hand lifts
-  { key:'naomi_idle_3', dur:0.22 },  // hand to face
-  { key:'naomi_idle_4', dur:0.20 },  // both hands on head
-  { key:'naomi_idle_5', dur:0.22 },  // gripping head
-  { key:'naomi_idle_6', dur:0.20 },  // easing, touch hair
-  { key:'naomi_idle_7', dur:0.22 },  // hand through hair
-  { key:'naomi_idle_8', dur:0.35 },  // near neutral, exhale
+  { key:'naomi_idle_1', dur:0.30 },
+  { key:'naomi_idle_2', dur:0.18 },
+  { key:'naomi_idle_3', dur:0.22 },
+  { key:'naomi_idle_4', dur:0.20 },
+  { key:'naomi_idle_5', dur:0.22 },
+  { key:'naomi_idle_6', dur:0.20 },
+  { key:'naomi_idle_7', dur:0.22 },
+  { key:'naomi_idle_8', dur:0.35 },
+];
+
+// Jacket OFF: pulls hoodie off
+const NAOMI_JACKET_OFF = [
+  { key:'naomi_jacket_off_1', dur:0.22 },
+  { key:'naomi_jacket_off_2', dur:0.22 },
+  { key:'naomi_jacket_off_3', dur:0.35 },
+];
+
+// Jacket ON: puts hoodie back on + zips
+const NAOMI_JACKET_ON = [
+  { key:'naomi_jacket_on_1', dur:0.18 },
+  { key:'naomi_jacket_on_2', dur:0.20 },
+  { key:'naomi_jacket_on_3', dur:0.22 },
+  { key:'naomi_jacket_on_4', dur:0.35 },
+];
+
+// All idle action pools — AI picks one randomly with weighted timing
+const NAOMI_IDLE_POOL = [
+  NAOMI_STAND_IDLE,   // hair fidget (weight: appears 2x more often)
+  NAOMI_STAND_IDLE,
+  NAOMI_JACKET_OFF,   // jacket off
+  NAOMI_JACKET_ON,    // jacket on/zip
 ];
 
 // Naomi micro-step forward/side: single tap while standing
@@ -1091,6 +1120,7 @@ function startGame() {
   P.sqIdleTimer=0; P.sqIdleActive=false; P.sqIdleFrame=0; P.sqIdleFrameTimer=0;
   P.sqWalkTimer=0; P.sqWalkStep=0;
   P.standIdleTimer=0; P.standIdleActive=false; P.standIdleFrame=0; P.standIdleFrameTimer=0;
+  P.standIdleSeq=null; P.standIdleNext=2.5;
   P.lastMvx=0; P.lastMvz=1;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
   NPC.targetWx=0.80; NPC.targetWz=0.62; NPC.crouchLerp=1;
@@ -1277,26 +1307,37 @@ function update(ts) {
     }
   }
 
-  // ─── Naomi standing idle fidget (every 4s while standing still) ───────────
-  const standStill = !P.moving && !P.crouch && !P.transSeq;
-  if (standStill && !P.standIdleActive) {
+  // ─── Naomi standing idle — smart randomizer (2-4s, picks from action pool) ──
+  const standStill = !P.moving && !P.crouch && !P.transSeq && !P.standIdleActive;
+  if (standStill) {
     P.standIdleTimer += dt;
-    if (P.standIdleTimer >= 4.0) {
-      P.standIdleActive = true; P.standIdleFrame = 0; P.standIdleFrameTimer = 0;
-      P.standIdleTimer = 0;
+    if (P.standIdleTimer >= P.standIdleNext) {
+      // Pick action from pool — varied timing feels natural
+      const pool = NAOMI_IDLE_POOL;
+      P.standIdleSeq   = pool[Math.floor(Math.random() * pool.length)];
+      P.standIdleActive = true;
+      P.standIdleFrame  = 0;
+      P.standIdleFrameTimer = 0;
+      P.standIdleTimer  = 0;
+      // Next action fires in 2-4s — randomize so actions don't feel robotic
+      P.standIdleNext = 2.0 + Math.random() * 2.0;
     }
-  } else if (!standStill) {
-    P.standIdleTimer = 0; P.standIdleActive = false; P.standIdleFrame = 0;
-  }
-  if (P.standIdleActive) {
+  } else if (!P.moving && !P.crouch && !P.transSeq && P.standIdleActive) {
+    // Run the active sequence
+    const seq = P.standIdleSeq || NAOMI_STAND_IDLE;
     P.standIdleFrameTimer += dt;
-    if (P.standIdleFrameTimer >= NAOMI_STAND_IDLE[P.standIdleFrame].dur) {
+    if (P.standIdleFrameTimer >= seq[P.standIdleFrame].dur) {
       P.standIdleFrameTimer = 0;
       P.standIdleFrame++;
-      if (P.standIdleFrame >= NAOMI_STAND_IDLE.length) {
-        P.standIdleActive = false; P.standIdleFrame = 0; P.standIdleTimer = 0;
+      if (P.standIdleFrame >= seq.length) {
+        P.standIdleActive = false; P.standIdleFrame = 0;
+        // Short cooldown before next action can fire
+        P.standIdleTimer = 0;
+        P.standIdleNext = 2.0 + Math.random() * 2.0;
       }
     }
+  } else if (P.moving || P.crouch || P.transSeq) {
+    P.standIdleTimer = 0; P.standIdleActive = false; P.standIdleFrame = 0;
   }
 
   // ─── Mission dumpster tick ────────────────────────────────────────────────
@@ -1539,7 +1580,9 @@ function drawEntities() {
       drawPlayerDetectGlow();
       let naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
       if (!naomiSprKey && P.sqIdleActive) naomiSprKey = NAOMI_SQUAT_IDLE[P.sqIdleFrame].key;
-      if (!naomiSprKey && P.standIdleActive) naomiSprKey = NAOMI_STAND_IDLE[P.standIdleFrame].key;
+      if (!naomiSprKey && P.standIdleActive && P.standIdleSeq) {
+        naomiSprKey = P.standIdleSeq[P.standIdleFrame] ? P.standIdleSeq[P.standIdleFrame].key : null;
+      }
       if (!naomiSprKey && P.crouch && P.moving) {
         const sqSeq = P.lastMvx < -0.1 ? NAOMI_SQUAT_WALK_LEFT : NAOMI_SQUAT_WALK;
         naomiSprKey = sqSeq[P.sqWalkStep];
