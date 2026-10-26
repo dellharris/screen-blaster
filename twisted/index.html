@@ -890,38 +890,57 @@ const NAOMI_CROUCH_OUT_LEFT = NAOMI_CROUCH_OUT.map(function(f){
 });
 // Naomi standing idle — anxious fidget, fires every 4s
 // neutral → fidget → stress → hair grab → return
-const NAOMI_STAND_IDLE = [
-  { key:'naomi_idle_1', dur:0.30 },
-  { key:'naomi_idle_2', dur:0.18 },
-  { key:'naomi_idle_3', dur:0.22 },
-  { key:'naomi_idle_4', dur:0.20 },
-  { key:'naomi_idle_5', dur:0.22 },
-  { key:'naomi_idle_6', dur:0.20 },
-  { key:'naomi_idle_7', dur:0.22 },
+// ─── Naomi standing idle action library ──────────────────────────────────────
+
+// Hair fidget variants — 4 moods, randomized so she never feels robotic
+const NAOMI_HAIR_A = [  // anxiety build and release
+  { key:'naomi_idle_2', dur:0.16 }, { key:'naomi_idle_3', dur:0.20 },
+  { key:'naomi_idle_4', dur:0.22 }, { key:'naomi_idle_5', dur:0.22 },
+  { key:'naomi_idle_4', dur:0.18 }, { key:'naomi_idle_3', dur:0.16 },
+  { key:'naomi_idle_1', dur:0.28 },
+];
+const NAOMI_HAIR_B = [  // quick stress grab
+  { key:'naomi_idle_4', dur:0.18 }, { key:'naomi_idle_5', dur:0.20 },
+  { key:'naomi_idle_6', dur:0.22 }, { key:'naomi_idle_5', dur:0.18 },
+  { key:'naomi_idle_8', dur:0.32 },
+];
+const NAOMI_HAIR_C = [  // hair through exhale — calmest
+  { key:'naomi_idle_6', dur:0.18 }, { key:'naomi_idle_7', dur:0.22 },
+  { key:'naomi_idle_8', dur:0.40 },
+];
+const NAOMI_HAIR_D = [  // full anxious cycle
+  { key:'naomi_idle_2', dur:0.14 }, { key:'naomi_idle_3', dur:0.16 },
+  { key:'naomi_idle_4', dur:0.18 }, { key:'naomi_idle_5', dur:0.20 },
+  { key:'naomi_idle_6', dur:0.18 }, { key:'naomi_idle_7', dur:0.18 },
   { key:'naomi_idle_8', dur:0.35 },
 ];
 
-// Jacket OFF: pulls hoodie off
+const NAOMI_STAND_IDLE = NAOMI_HAIR_D;  // alias for compatibility
+
+// Jacket off → hold → put back on (self-reversing)
 const NAOMI_JACKET_OFF = [
-  { key:'naomi_jacket_off_1', dur:0.22 },
+  { key:'naomi_jacket_off_1', dur:0.20 },
   { key:'naomi_jacket_off_2', dur:0.22 },
-  { key:'naomi_jacket_off_3', dur:0.35 },
+  { key:'naomi_jacket_off_3', dur:0.50 },  // hold off moment
+  { key:'naomi_jacket_off_2', dur:0.20 },  // reverse — putting back
+  { key:'naomi_jacket_off_1', dur:0.22 },
 ];
 
-// Jacket ON: puts hoodie back on + zips
-const NAOMI_JACKET_ON = [
-  { key:'naomi_jacket_on_1', dur:0.18 },
-  { key:'naomi_jacket_on_2', dur:0.20 },
-  { key:'naomi_jacket_on_3', dur:0.22 },
-  { key:'naomi_jacket_on_4', dur:0.35 },
+// Zip up → hold → unzip (self-reversing)
+const NAOMI_JACKET_ZIP = [
+  { key:'naomi_jacket_on_3', dur:0.22 },   // hands on zipper
+  { key:'naomi_jacket_on_4', dur:0.50 },   // fully zipped, holds
+  { key:'naomi_jacket_on_3', dur:0.22 },   // unzip back down
 ];
 
-// All idle action pools — AI picks one randomly with weighted timing
+// Pool: jacket rare (2/11 chance), hair variants dominate and rotate
 const NAOMI_IDLE_POOL = [
-  NAOMI_STAND_IDLE,   // hair fidget (weight: appears 2x more often)
-  NAOMI_STAND_IDLE,
-  NAOMI_JACKET_OFF,   // jacket off
-  NAOMI_JACKET_ON,    // jacket on/zip
+  NAOMI_HAIR_A, NAOMI_HAIR_A, NAOMI_HAIR_A,
+  NAOMI_HAIR_B, NAOMI_HAIR_B,
+  NAOMI_HAIR_C, NAOMI_HAIR_C,
+  NAOMI_HAIR_D, NAOMI_HAIR_D,
+  NAOMI_JACKET_OFF,   // ~1/11
+  NAOMI_JACKET_ZIP,   // ~1/11
 ];
 
 // Naomi micro-step forward/side: single tap while standing
