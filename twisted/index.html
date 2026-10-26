@@ -63,6 +63,10 @@
   src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&auto_play=false&hide_related=true&show_comments=false&show_user=false&buying=false&liking=false&download=false&sharing=false&show_artwork=false&show_playcount=false&show_teaser=false&start_track=0"></iframe>
 <script src="https://w.soundcloud.com/player/api.js"></script>
 
+<!-- Win sequence videos — play back to back then return to title -->
+<video id="win-video" playsinline webkit-playsinline preload="auto"
+  style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:15;background:#000;"></video>
+
 <iframe id="sc-game" allow="autoplay" style="display:none;width:1px;height:1px;"
   src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&auto_play=false&hide_related=true&show_comments=false&show_user=false&buying=false&liking=false&download=false&sharing=false&show_artwork=false&show_playcount=false&show_teaser=false&start_track=0"></iframe>
 <script src="https://w.soundcloud.com/player/api.js"></script>
@@ -465,6 +469,41 @@ const CROSSFADE_DUR = 1.2;
 const VID  = document.getElementById('cutscene-video');
 const LVID = document.getElementById('latch-video');
 const IVID = document.getElementById('intro-video');
+const WVID = document.getElementById('win-video');
+
+// ─── Win sequence: two videos back to back → title screen ────────────────────
+function playWinSequence() {
+  // Mute game music during win sequence
+  if (SC_WIDGET && scReady) SC_WIDGET.setVolume(0);
+
+  WVID.style.display = 'block';
+  WVID.src = 'assets/win_part1.mp4';
+  WVID.currentTime = 0;
+  WVID.play().catch(function(){ chainWinPart2(); });
+}
+
+function chainWinPart2() {
+  WVID.src = 'assets/win_part2.mp4';
+  WVID.currentTime = 0;
+  WVID.play().catch(function(){ endWinSequence(); });
+}
+
+function endWinSequence() {
+  WVID.pause();
+  WVID.style.display = 'none';
+  WVID.src = '';
+  // Restore music volume then go back to title
+  if (SC_WIDGET && scReady) SC_WIDGET.setVolume(65);
+  resetGame();
+}
+
+WVID.addEventListener('ended', function() {
+  if (WVID.src.indexOf('win_part1') >= 0) {
+    chainWinPart2();
+  } else {
+    endWinSequence();
+  }
+});
 
 // ─── SoundCloud game music ────────────────────────────────────────────────────
 let SC_WIDGET = null;
@@ -1243,11 +1282,12 @@ function isJoyZone(x, y)   { return x < VW*0.45 && y > VH*0.42; }
 
 function handleTap() {
   if (phase === PH.INSTALL)   { return; }
-  if (phase === PH.INTRO)     { endIntroVideo(); return; }  // tap skips intro video
+  if (phase === PH.INTRO)     { endIntroVideo(); return; }
   if (phase === PH.TITLE)     { phase = PH.DLG; return; }
   if (phase === PH.DLG)       { dlgIdx++; if (dlgIdx >= DLG.length) playCutscene(); return; }
   if (phase === PH.CUTSCENE)  { chainLatch(); return; }
   if (phase === PH.CROSSFADE) { crossfadeTimer = CROSSFADE_DUR; return; }
+  if (phase === PH.WIN)       { endWinSequence(); return; }  // tap skips win video
   if (phase === PH.WIN_DLG)   { winDlgIdx++; if (winDlgIdx >= WIN_DLG.length) { phase = PH.END; endTimer = 0; } return; }
   if (phase === PH.END)       { resetGame(); return; }
   if (phase === PH.CAUGHT)    { resetGame(); return; }
@@ -1682,6 +1722,8 @@ function update(ts) {
       P.wz >= WIN.wzMin && P.wz <= WIN.wzMax) {
     phase = PH.WIN;
     SFX.win();
+    // Start win video sequence immediately — plays part1 → part2 → title
+    setTimeout(playWinSequence, 600);
   }
 
   // Block the left wall exit zone if no key — push Naomi back out
