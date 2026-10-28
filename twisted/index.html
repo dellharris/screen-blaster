@@ -408,6 +408,8 @@ for (let _ss = 1; _ss <= 4; _ss++) {
   loadImg('sierra_step_side' + _ss,        'assets/sierra_step_side' + _ss + '.png');
   loadImg('sierra_step_side' + _ss + '_left', 'assets/sierra_step_side' + _ss + '_left.png');
 }
+// Sierra phone idle frames (casual scroll + weight shift)
+for (let _pi = 1; _pi <= 4; _pi++) loadImg('sierra_phone_idle' + _pi, 'assets/sierra_phone_idle' + _pi + '.png');
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png?v=2');
 // Jacket off frames
@@ -1244,11 +1246,19 @@ const SIERRA_STEP_LEFT = [
   { key:'sierra_step_side4_left', dur:0.12 },
 ];
 
-// Pool: forward twice as likely, left/right rotate evenly
+// Pool: forward twice as likely, left/right rotate evenly, phone idle for long waits
+const SIERRA_PHONE_IDLE = [
+  { key:'sierra_phone_idle1', dur:0.18 },
+  { key:'sierra_phone_idle2', dur:0.22 },
+  { key:'sierra_phone_idle3', dur:0.18 },
+  { key:'sierra_phone_idle4', dur:0.22 },
+];
+
 const SIERRA_STEP_POOL = [
   SIERRA_STEP_FWD, SIERRA_STEP_FWD,
   SIERRA_STEP_RIGHT,
   SIERRA_STEP_LEFT,
+  SIERRA_PHONE_IDLE, SIERRA_PHONE_IDLE,  // phone scroll fires often — she's always on it
 ];
 
 // Naomi micro-step forward/side: single tap while standing
