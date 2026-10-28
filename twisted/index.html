@@ -403,6 +403,11 @@ loadImg('sierra_step_fwd1', 'assets/sierra_step_fwd1.png');
 loadImg('sierra_step_fwd2', 'assets/sierra_step_fwd2.png');
 loadImg('sierra_step_fwd3', 'assets/sierra_step_fwd3.png');
 loadImg('sierra_step_fwd4', 'assets/sierra_step_fwd4.png');
+// Sierra side step frames (right-facing + mirrored left)
+for (let _ss = 1; _ss <= 4; _ss++) {
+  loadImg('sierra_step_side' + _ss,        'assets/sierra_step_side' + _ss + '.png');
+  loadImg('sierra_step_side' + _ss + '_left', 'assets/sierra_step_side' + _ss + '_left.png');
+}
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png?v=2');
 // Jacket off frames
@@ -1225,6 +1230,27 @@ const SIERRA_STEP_FWD = [
   { key:'sierra_step_fwd4', dur:0.12 },
 ];
 
+// Sierra side step — phone-check shuffle while repositioning
+const SIERRA_STEP_RIGHT = [
+  { key:'sierra_step_side1', dur:0.10 },
+  { key:'sierra_step_side2', dur:0.10 },
+  { key:'sierra_step_side3', dur:0.10 },
+  { key:'sierra_step_side4', dur:0.12 },
+];
+const SIERRA_STEP_LEFT = [
+  { key:'sierra_step_side1_left', dur:0.10 },
+  { key:'sierra_step_side2_left', dur:0.10 },
+  { key:'sierra_step_side3_left', dur:0.10 },
+  { key:'sierra_step_side4_left', dur:0.12 },
+];
+
+// Pool: forward twice as likely, left/right rotate evenly
+const SIERRA_STEP_POOL = [
+  SIERRA_STEP_FWD, SIERRA_STEP_FWD,
+  SIERRA_STEP_RIGHT,
+  SIERRA_STEP_LEFT,
+];
+
 // Naomi micro-step forward/side: single tap while standing
 const NAOMI_STEP_SEQ = [
   { key:'naomi_stand_step1', dur:0.09 },
@@ -1765,7 +1791,8 @@ function update(ts) {
   if (sierraSettled) {
     NPC.stepIdleTimer += dt;
     if (NPC.stepIdleTimer >= NPC.stepNext) {
-      NPC.stepSeq   = SIERRA_STEP_FWD;
+      // Pick from pool — forward most common, side steps add variety
+      NPC.stepSeq   = SIERRA_STEP_POOL[Math.floor(Math.random() * SIERRA_STEP_POOL.length)];
       NPC.stepFrame = 0;
       NPC.stepTimer = 0;
       NPC.stepIdleTimer = 0;
