@@ -1481,31 +1481,86 @@ function update(ts) {
   if (Math.abs(CAR.la) > 1) CAR.ldir *= -1;
   CAR.ft += dt;
 
-  // Sierra mirrors Naomi's crouch
-  // No lateral weave when crouching — Sierra stays perfectly still beside Naomi
-  const sideWeave = P.crouch ? 0 : Math.sin(pulse * 1.3) * 0.022;
+  // ─── Sierra Follow System — THE HIGHLIGHT ──────────────────────────────────
+  // Sierra reads the situation and responds with personality, not just lerp.
+
+  // 1. Compute how far Naomi has moved this frame (her velocity)
+  const naomiVelX = P.wx - (P.renderWx || P.wx);
+  const naomiVelZ = P.wz - (P.renderWz || P.wz);
+  const naomiSpeed = Math.hypot(naomiVelX, naomiVelZ) / (dt || 0.016);
+
+  // 2. Sierra's desired offset from Naomi changes based on context
+  let targetOffX, targetOffZ;
 
   if (P.crouch) {
-    // In front of bins, camera-facing side — Sierra to Naomi's right
-    NPC.targetWx = clamp(P.wx + 0.18, 0.72, 0.92);
-    NPC.targetWz = clamp(P.wz - 0.02, 0.58, 0.72);
+    // Crouching: Sierra stays RIGHT of Naomi, same depth — cover formation
+    targetOffX =  0.18;
+    targetOffZ = -0.02;
+  } else if (P.running) {
+    // Running: Sierra pulls AHEAD-LEFT — she leads when they sprint
+    targetOffX = -0.18 + Math.sin(pulse * 0.8) * 0.015;
+    targetOffZ = -0.16;
+  } else if (naomiSpeed > 0.3) {
+    // Walking fast: Sierra slightly behind-left, watching Naomi's back
+    targetOffX = -0.12 + Math.sin(pulse * 1.1) * 0.012;
+    targetOffZ = -0.10;
   } else {
-    // Running — Sierra leads slightly ahead-left
-    NPC.targetWx = clamp(P.wx - 0.15 + sideWeave, 0.03, 0.90);
-    NPC.targetWz = clamp(P.wz - 0.13, 0.02, 0.90);
+    // Idle or slow: Sierra hangs back casually, natural spacing
+    targetOffX = -0.10 + Math.sin(pulse * 0.7) * 0.018;
+    targetOffZ = -0.08;
   }
 
+  // 3. Target position with obstacle-aware clamping
+  const rawTargetX = clamp(P.wx + targetOffX, 0.03, 0.95);
+  const rawTargetZ = clamp(P.wz + targetOffZ, 0.02, 0.90);
+
+  // 4. Rubber-band speed — slower when close, MUCH faster when far behind
+  const dist = Math.hypot(NPC.wx - rawTargetX, NPC.wz - rawTargetZ);
+  let followSpeed;
+  if (P.crouch) {
+    followSpeed = 0.7;                          // calm, deliberate in crouch
+  } else if (P.running) {
+    followSpeed = 4.5 + dist * 8.0;            // scrambles hard when running
+  } else {
+    // Walk: rubber band — lazy when close, urgent when gap opens
+    followSpeed = dist < 0.08 ? 1.2 : dist < 0.18 ? 2.5 : 4.0 + dist * 6.0;
+  }
+
+  // 5. Anticipation jitter — Sierra reacts slightly after Naomi changes direction
+  // She has a tiny "decision delay" that makes her feel human
+  if (!NPC._anticipationTimer) NPC._anticipationTimer = 0;
+  if (!NPC._smoothTargetX) { NPC._smoothTargetX = rawTargetX; NPC._smoothTargetZ = rawTargetZ; }
+  NPC._anticipationTimer += dt;
+  // Smooth target updates with a tiny lag — she "reads" where Naomi is going
+  const targetSmooth = P.running ? 0.25 : 0.15;
+  NPC._smoothTargetX = lerp(NPC._smoothTargetX, rawTargetX, Math.min(1, dt * (1/targetSmooth)));
+  NPC._smoothTargetZ = lerp(NPC._smoothTargetZ, rawTargetZ, Math.min(1, dt * (1/targetSmooth)));
+
+  // 6. Move Sierra toward smoothed target
   const prevNx = NPC.wx, prevNz = NPC.wz;
-  const npcSpeed = P.crouch ? 0.6 : P.running ? 3.5 : 2.0;
-  NPC.wx = lerp(NPC.wx, NPC.targetWx, Math.min(1, dt * npcSpeed));
-  NPC.wz = lerp(NPC.wz, NPC.targetWz, Math.min(1, dt * npcSpeed));
-  // Resolve NPC obstacles too
+  NPC.wx = lerp(NPC.wx, NPC._smoothTargetX, Math.min(1, dt * followSpeed));
+  NPC.wz = lerp(NPC.wz, NPC._smoothTargetZ, Math.min(1, dt * followSpeed));
+
+  // 7. Obstacle resolution
   const npcRes = resolveObstacles(NPC.wx, NPC.wz, prevNx, prevNz);
   NPC.wx = npcRes.wx; NPC.wz = npcRes.wz;
+
+  // 8. Direction — Sierra faces where she's ACTUALLY moving, feels responsive
   const ndx = NPC.wx - prevNx, ndz = NPC.wz - prevNz;
   const nmag = Math.hypot(ndx, ndz);
-  if (nmag > 0.00003) { NPC.lastMvx = ndx / nmag; NPC.lastMvz = ndz / nmag; }
-  else if (!P.crouch) { NPC.lastMvx = 0; NPC.lastMvz = 1; }
+  if (nmag > 0.00005) {
+    // Smooth direction turn — not snappy, feels like a real body rotating
+    const turnRate = P.running ? 12.0 : 6.0;
+    NPC.lastMvx = lerp(NPC.lastMvx, ndx / nmag, Math.min(1, dt * turnRate));
+    NPC.lastMvz = lerp(NPC.lastMvz, ndz / nmag, Math.min(1, dt * turnRate));
+  } else if (!P.crouch && !P.moving) {
+    // Idle: Sierra subtly orients toward Naomi — she's always watching her back
+    const toNaomiX = P.wx - NPC.wx;
+    const toNaomiZ = P.wz - NPC.wz;
+    const toMag = Math.hypot(toNaomiX, toNaomiZ) || 1;
+    NPC.lastMvx = lerp(NPC.lastMvx, toNaomiX / toMag, dt * 1.5);
+    NPC.lastMvz = lerp(NPC.lastMvz, toNaomiZ / toMag, dt * 1.5);
+  }
 
   // Player world-space movement from joystick
   let mx = 0, mz = 0;
