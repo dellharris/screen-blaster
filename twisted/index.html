@@ -398,6 +398,11 @@ loadImg('naomi_stand_step1', 'assets/naomi_stand_step1.png');
 loadImg('naomi_stand_step2', 'assets/naomi_stand_step2.png');
 loadImg('naomi_stand_step3', 'assets/naomi_stand_step3.png');
 loadImg('naomi_stand_step4', 'assets/naomi_stand_step4.png');
+// Sierra micro-step frames
+loadImg('sierra_step_fwd1', 'assets/sierra_step_fwd1.png');
+loadImg('sierra_step_fwd2', 'assets/sierra_step_fwd2.png');
+loadImg('sierra_step_fwd3', 'assets/sierra_step_fwd3.png');
+loadImg('sierra_step_fwd4', 'assets/sierra_step_fwd4.png');
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png?v=2');
 // Jacket off frames
@@ -825,17 +830,21 @@ const P = {
 
 // ─── NPC: Sierra ─────────────────────────────────────────────────────────────
 const NPC = {
-  wx: 0.57, wz: 0.62,            // Sierra — LEFT side, in front of bin A
+  wx: 0.57, wz: 0.62,
   renderWx: 0.57, renderWz: 0.62,
   targetWx: 0.57, targetWz: 0.62,
-  lastMvx: 0, lastMvz: 1,        // facing camera
+  lastMvx: 0, lastMvz: 1,
   walkTimer: 0, walkFrame: 0, walkStep: 0,
   moving: false, idlePhase: 1.8,
-  crouchLerp: 1,         // Sierra's own independent crouch interpolation
+  crouchLerp: 1,
   // Gum idle animation
   idleTimer: 0, gumActive: false, gumFrame: 0, gumFrameTimer: 0,
   // Crossfade transition: blends squat sprite → gum frame 1
   gumFade: 0, gumFading: false,
+  // Micro-step animation state
+  stepSeq: null, stepFrame: 0, stepTimer: 0,
+  stepIdleTimer: 0,   // counts up while Sierra is near-settled
+  stepNext: 1.5,      // seconds until next micro-step fires
 };
 
 // ─── Patrol car ───────────────────────────────────────────────────────────────
@@ -1204,8 +1213,16 @@ const NAOMI_IDLE_POOL = [
   NAOMI_HAIR_B, NAOMI_HAIR_B,
   NAOMI_HAIR_C, NAOMI_HAIR_C,
   NAOMI_HAIR_D, NAOMI_HAIR_D,
-  NAOMI_JACKET_OFF,   // ~1/11
-  NAOMI_JACKET_ZIP,   // ~1/11
+  NAOMI_JACKET_OFF,
+  NAOMI_JACKET_ZIP,
+];
+
+// Sierra micro-step forward — plays when she settles near Naomi
+const SIERRA_STEP_FWD = [
+  { key:'sierra_step_fwd1', dur:0.10 },
+  { key:'sierra_step_fwd2', dur:0.10 },
+  { key:'sierra_step_fwd3', dur:0.10 },
+  { key:'sierra_step_fwd4', dur:0.12 },
 ];
 
 // Naomi micro-step forward/side: single tap while standing
@@ -1742,6 +1759,33 @@ function update(ts) {
     NPC.walkTimer = 0; NPC.walkStep = 0; NPC.walkFrame = 0;
   }
 
+  // ─── Sierra micro-step: fires when she's settled and needs to adjust ────────
+  // She does a tiny forward step every 1.5-3s when standing still near Naomi
+  const sierraSettled = !NPC.moving && !P.crouch && !NPC.gumActive && !NPC.stepSeq;
+  if (sierraSettled) {
+    NPC.stepIdleTimer += dt;
+    if (NPC.stepIdleTimer >= NPC.stepNext) {
+      NPC.stepSeq   = SIERRA_STEP_FWD;
+      NPC.stepFrame = 0;
+      NPC.stepTimer = 0;
+      NPC.stepIdleTimer = 0;
+      NPC.stepNext  = 1.5 + Math.random() * 1.5; // 1.5-3s randomized
+    }
+  } else if (NPC.moving || P.crouch) {
+    NPC.stepIdleTimer = 0; NPC.stepSeq = null; NPC.stepFrame = 0;
+  }
+
+  if (NPC.stepSeq) {
+    NPC.stepTimer += dt;
+    if (NPC.stepTimer >= NPC.stepSeq[NPC.stepFrame].dur) {
+      NPC.stepTimer = 0;
+      NPC.stepFrame++;
+      if (NPC.stepFrame >= NPC.stepSeq.length) {
+        NPC.stepSeq = null; NPC.stepFrame = 0;
+      }
+    }
+  }
+
   // ─── Sierra gum idle animation ────────────────────────────────────────────
   const GUM_TRIGGER = 5.0;
 
@@ -1924,8 +1968,9 @@ function drawEntities() {
     }},
     { type:'npc',    wz: NPC.renderWz, draw: () => {
       const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
-      // sqBoost=1.22 makes Sierra's squat match Naomi's visual size — gum/transition frames unaffected
-      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, gumSprKey, 0, 1.22, NPC.moving);
+      // Micro-step overrides gum when active — she can't chew gum AND step
+      const sierraSprKey = NPC.stepSeq ? NPC.stepSeq[NPC.stepFrame].key : gumSprKey;
+      drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, sierraSprKey, 0, 1.22, NPC.moving);
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
