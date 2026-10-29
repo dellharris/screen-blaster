@@ -1461,6 +1461,7 @@ function startGame() {
   P.standIdleTimer=0; P.standIdleActive=false; P.standIdleFrame=0; P.standIdleFrameTimer=0;
   P.standIdleSeq=null; P.standIdleNext=2.5;
   NPC._stepState='idle'; NPC._stepCooldown=0;
+  NPC._plantedWx = NPC.wx; NPC._plantedWz = NPC.wz;
   P.lastMvx=0; P.lastMvz=1;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
   NPC.targetWx=0.80; NPC.targetWz=0.62; NPC.crouchLerp=1;
@@ -1536,69 +1537,51 @@ function update(ts) {
   if (Math.abs(CAR.la) > 1) CAR.ldir *= -1;
   CAR.ft += dt;
 
-  // ─── Sierra Follow System — THE HIGHLIGHT ──────────────────────────────────
-  // Sierra reads the situation and responds with personality, not just lerp.
+  // ─── Sierra Follow System — PLANT AND COMMIT ──────────────────────────────
+  // Sierra stays completely still until the gap is too big, then snaps to a
+  // new planted position. No per-frame drift.
 
-  // 1. Compute how far Naomi has moved this frame (her velocity)
-  const naomiVelX = P.wx - (P.renderWx || P.wx);
-  const naomiVelZ = P.wz - (P.renderWz || P.wz);
-  const naomiSpeed = Math.hypot(naomiVelX, naomiVelZ) / (dt || 0.016);
-
-  // 2. Sierra's desired offset from Naomi changes based on context
+  // Where Sierra SHOULD stand relative to Naomi
   let targetOffX, targetOffZ;
-
   if (P.crouch) {
-    // Crouching: Sierra stays RIGHT of Naomi, same depth — cover formation
-    targetOffX =  0.18;
-    targetOffZ = -0.02;
+    targetOffX =  0.18; targetOffZ = -0.02;
   } else if (P.running) {
-    // Running: Sierra pulls AHEAD-LEFT — she leads when they sprint
-    targetOffX = -0.18 + Math.sin(pulse * 0.8) * 0.015;
-    targetOffZ = -0.16;
-  } else if (naomiSpeed > 0.3) {
-    // Walking fast: Sierra slightly behind-left, watching Naomi's back
-    targetOffX = -0.12 + Math.sin(pulse * 1.1) * 0.012;
-    targetOffZ = -0.10;
+    targetOffX = -0.18; targetOffZ = -0.16;
   } else {
-    // Idle or slow: Sierra hangs back casually, natural spacing
-    targetOffX = -0.10 + Math.sin(pulse * 0.7) * 0.018;
-    targetOffZ = -0.08;
+    targetOffX = -0.12; targetOffZ = -0.10;
   }
 
-  // 3. Target position with obstacle-aware clamping
   const rawTargetX = clamp(P.wx + targetOffX, 0.03, 0.95);
   const rawTargetZ = clamp(P.wz + targetOffZ, 0.02, 0.90);
 
-  // 4. Rubber-band speed — slower when close, MUCH faster when far behind
-  const dist = Math.hypot(NPC.wx - rawTargetX, NPC.wz - rawTargetZ);
-  let followSpeed;
-  if (P.crouch) {
-    followSpeed = 0.7;                          // calm, deliberate in crouch
-  } else if (P.running) {
-    followSpeed = 4.5 + dist * 8.0;            // scrambles hard when running
-  } else {
-    // Walk: rubber band — lazy when close, urgent when gap opens
-    followSpeed = dist < 0.08 ? 1.2 : dist < 0.18 ? 2.5 : 4.0 + dist * 6.0;
+  // Initialize planted position on first frame
+  if (NPC._plantedWx === undefined) {
+    NPC._plantedWx = NPC.wx;
+    NPC._plantedWz = NPC.wz;
   }
 
-  // 5. Anticipation jitter — Sierra reacts slightly after Naomi changes direction
-  // She has a tiny "decision delay" that makes her feel human
-  if (!NPC._anticipationTimer) NPC._anticipationTimer = 0;
-  if (!NPC._smoothTargetX) { NPC._smoothTargetX = rawTargetX; NPC._smoothTargetZ = rawTargetZ; }
-  NPC._anticipationTimer += dt;
-  // Smooth target updates with a tiny lag — she "reads" where Naomi is going
-  const targetSmooth = P.running ? 0.25 : 0.15;
-  NPC._smoothTargetX = lerp(NPC._smoothTargetX, rawTargetX, Math.min(1, dt * (1/targetSmooth)));
-  NPC._smoothTargetZ = lerp(NPC._smoothTargetZ, rawTargetZ, Math.min(1, dt * (1/targetSmooth)));
+  const gapToPerfect = Math.hypot(NPC._plantedWx - rawTargetX, NPC._plantedWz - rawTargetZ);
 
-  // 6. Move Sierra toward smoothed target
+  // Only move when gap is large enough to warrant a real step
+  const moveThreshold = P.running ? 0.12 : P.crouch ? 0.08 : 0.18;
+
+  if (gapToPerfect > moveThreshold) {
+    // Commit to new planted position — move fast
+    const catchSpeed = P.running ? 12.0 : 7.0;
+    NPC._plantedWx = lerp(NPC._plantedWx, rawTargetX, Math.min(1, dt * catchSpeed));
+    NPC._plantedWz = lerp(NPC._plantedWz, rawTargetZ, Math.min(1, dt * catchSpeed));
+  }
+  // else: stay exactly where she is — planted
+
+  // Lock NPC position to planted position
   const prevNx = NPC.wx, prevNz = NPC.wz;
-  NPC.wx = lerp(NPC.wx, NPC._smoothTargetX, Math.min(1, dt * followSpeed));
-  NPC.wz = lerp(NPC.wz, NPC._smoothTargetZ, Math.min(1, dt * followSpeed));
+  NPC.wx = NPC._plantedWx;
+  NPC.wz = NPC._plantedWz;
 
-  // 7. Obstacle resolution
+  // Obstacle resolution still applies
   const npcRes = resolveObstacles(NPC.wx, NPC.wz, prevNx, prevNz);
   NPC.wx = npcRes.wx; NPC.wz = npcRes.wz;
+  NPC._plantedWx = NPC.wx; NPC._plantedWz = NPC.wz;
 
   // 8. Direction — Sierra faces where she's ACTUALLY moving
   const ndx = NPC.wx - prevNx, ndz = NPC.wz - prevNz;
