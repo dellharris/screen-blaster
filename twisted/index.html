@@ -2364,67 +2364,58 @@ function drawInteractPrompt() {
   const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
   INTERACT_BTN_POS.visible = false;
 
-  // Show button at wider range so iOS players see it in time
-  if (dist > MISSION_DUMP.interactRange * 2.5) return;
-  if (MISSION_DUMP.state === 'opening') return;
+  if (dist > MISSION_DUMP.interactRange * 2.8) return;
+  if (MISSION_DUMP.state === 'opening' || MISSION_DUMP.state === 'open_empty') return;
 
-  const isKey   = MISSION_DUMP.state === 'open_key';
-  const isOpen  = MISSION_DUMP.state === 'open_empty';
-  if (isOpen) return;
+  const isKey = MISSION_DUMP.state === 'open_key';
+  const ds    = w2s(MISSION_DUMP.wx, MISSION_DUMP.wz);
+  const s     = dScale(MISSION_DUMP.wz);
 
-  const label = isKey ? '🗝️  TAKE KEY' : '👆  OPEN';
-  const col1  = isKey ? '#ffdd00' : '#00ffcc';
-  const col2  = isKey ? '#cc8800' : '#008866';
-  const glow  = isKey ? '#ffcc0066' : '#00ffcc44';
-
-  const ds = w2s(MISSION_DUMP.wx, MISSION_DUMP.wz);
-  const bw = 130, bh = 44, bx = ds.x - bw/2, by = ds.y - 145;
-  const br = 22;  // border radius (pill shape)
-
-  // Pulse alpha — more visible = more inviting
-  const alpha = 0.82 + Math.sin(pulse * 3.5) * 0.18;
+  // Proximity fade — brighter the closer Naomi gets
+  const proximity = 1 - clamp(dist / (MISSION_DUMP.interactRange * 2.8), 0, 1);
+  const breathe   = 0.55 + Math.sin(pulse * 3.2) * 0.45;
+  const alpha     = proximity * breathe;
 
   cx.save();
-  cx.globalAlpha = alpha;
 
-  // Outer glow
-  cx.shadowBlur = 18 + Math.sin(pulse*3)*6;
-  cx.shadowColor = col1;
+  // Ground pulse ring at the dumpster base — feels like the world is alive
+  const col = isKey ? '#ffcc00' : '#00ffcc';
+  const ringR = (40 + Math.sin(pulse * 3.2) * 8) * s;
 
-  // Button body — glossy gradient
-  const grad = cx.createLinearGradient(bx, by, bx, by+bh);
-  grad.addColorStop(0,   col1 + 'ee');
-  grad.addColorStop(0.45, col2 + 'dd');
-  grad.addColorStop(1,   col2 + '99');
-  cx.fillStyle = grad;
-  cx.beginPath(); cx.roundRect(bx, by, bw, bh, br); cx.fill();
+  cx.globalAlpha = alpha * 0.6;
+  cx.strokeStyle = col;
+  cx.lineWidth   = 2.5 * s;
+  cx.shadowBlur  = 18; cx.shadowColor = col;
+  cx.beginPath();
+  cx.ellipse(ds.x, ds.y, ringR, ringR * 0.28, 0, 0, Math.PI * 2);
+  cx.stroke();
 
-  // Inner top glint — glossy highlight
+  // Second outer ring (expanding pulse effect)
+  const ringR2 = ringR * (1.3 + Math.sin(pulse * 1.8 + 1) * 0.12);
+  cx.globalAlpha = alpha * 0.25;
+  cx.lineWidth = 1.2 * s;
+  cx.beginPath();
+  cx.ellipse(ds.x, ds.y, ringR2, ringR2 * 0.28, 0, 0, Math.PI * 2);
+  cx.stroke();
   cx.shadowBlur = 0;
-  cx.globalAlpha = alpha * 0.45;
-  cx.fillStyle = 'rgba(255,255,255,0.65)';
-  cx.beginPath(); cx.roundRect(bx+6, by+4, bw-12, bh*0.38, [br, br, 0, 0]); cx.fill();
 
-  // Border
+  // Tiny icon above dumpster — minimal, doesn't cover characters
+  // Positioned BEHIND/ABOVE the dumpster not floating over Naomi
   cx.globalAlpha = alpha * 0.9;
-  cx.strokeStyle = col1;
-  cx.lineWidth = 1.5;
-  cx.beginPath(); cx.roundRect(bx, by, bw, bh, br); cx.stroke();
-
-  // Label
-  cx.globalAlpha = 1;
-  cx.shadowBlur = 8; cx.shadowColor = '#000';
-  cx.font = 'bold 15px monospace';
-  cx.fillStyle = '#fff';
+  cx.font = `${Math.round(14 * s)}px sans-serif`;
   cx.textAlign = 'center';
-  cx.fillText(label, ds.x, by + bh*0.64);
-  cx.shadowBlur = 0;
+  // Place it at the dumpster lid level, not mid-screen
+  const iconY = ds.y - (80 * s * SQUISH);
+  cx.fillText(isKey ? '🗝️' : '👆', ds.x, iconY);
 
   cx.restore();
 
-  // Store button bounds for tap detection
-  INTERACT_BTN_POS.x = bx; INTERACT_BTN_POS.y = by;
-  INTERACT_BTN_POS.w = bw; INTERACT_BTN_POS.h = bh;
+  // Wide tap zone — whole dumpster area is tappable, no separate button
+  const hitW = 160 * s, hitH = 120 * s;
+  INTERACT_BTN_POS.x = ds.x - hitW/2;
+  INTERACT_BTN_POS.y = ds.y - hitH;
+  INTERACT_BTN_POS.w = hitW;
+  INTERACT_BTN_POS.h = hitH;
   INTERACT_BTN_POS.visible = true;
 }
 
