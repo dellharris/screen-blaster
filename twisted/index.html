@@ -678,18 +678,20 @@ let videosLoaded    = 0;
 let videosReady     = false;
 let loadingDotTimer = 0;
 let loadingDots     = 0;
+let loadingElapsed  = 0;  // how long we've been on loading screen
 
 (function startPreloading() {
   PRELOAD_VIDEOS.forEach(function(src) {
     var v = document.createElement('video');
     v.preload = 'auto'; v.muted = true; v.src = src;
-    v.addEventListener('canplaythrough', function() {
-      videosLoaded++;
-      if (videosLoaded >= PRELOAD_VIDEOS.length) videosReady = true;
-    }, { once: true });
-    setTimeout(function() { if (!videosReady) { videosLoaded = PRELOAD_VIDEOS.length; videosReady = true; } }, 10000);
+    // Count on either canplaythrough or loadeddata (more reliable on iOS)
+    function onLoad() { videosLoaded = Math.min(videosLoaded + 1, PRELOAD_VIDEOS.length); if (videosLoaded >= PRELOAD_VIDEOS.length) videosReady = true; }
+    v.addEventListener('canplaythrough', onLoad, { once: true });
+    v.addEventListener('loadeddata', onLoad, { once: true });
     v.load();
   });
+  // Hard failsafe: 3 seconds max wait — game always starts
+  setTimeout(function() { videosLoaded = PRELOAD_VIDEOS.length; videosReady = true; }, 3000);
 })();
 
 // No-op stubs so legacy references don't crash
@@ -1414,7 +1416,7 @@ function isJoyZone(x, y)   { return x < VW*0.45 && y > VH*0.42; }
 
 function handleTap() {
   if (phase === PH.INSTALL)   { return; }
-  if (phase === PH.INTRO)     { if (videosReady) { phase = PH.TITLE; startMusic(); } return; }
+  if (phase === PH.INTRO)     { if (videosReady || loadingElapsed > 1.5) { phase = PH.TITLE; startMusic(); } return; }
   if (phase === PH.TITLE)     { phase = PH.DLG; return; }
   if (phase === PH.DLG)       { dlgIdx++; if (dlgIdx >= DLG.length) playCutscene(); return; }
   if (phase === PH.CUTSCENE)  { chainLatch(); return; }
@@ -1563,11 +1565,12 @@ function update(ts) {
   lastTs = ts;
   pulse += dt;
 
-  // INTRO = loading screen — advances to TITLE once videos are cached
+  // INTRO = loading screen — max 3s wait, tap-able after 1.5s
   if (phase === PH.INTRO) {
+    loadingElapsed += dt;
     loadingDotTimer += dt;
     if (loadingDotTimer > 0.5) { loadingDotTimer = 0; loadingDots = (loadingDots + 1) % 4; }
-    if (videosReady) phase = PH.TITLE;
+    if (videosReady || loadingElapsed >= 3.0) { phase = PH.TITLE; startMusic(); }
     return;
   }
 
@@ -3239,11 +3242,20 @@ function render(ts) {
       cx.font = "bold 16px monospace"; cx.fillStyle = '#00ffcc';
       cx.fillText('MIAMI UNDERWORLD', VW/2, VH * 0.89);
 
-      // Loading dots
-      const dots = '.'.repeat(loadingDots + 1);
-      const pct  = Math.min(100, Math.round((videosLoaded / PRELOAD_VIDEOS.length) * 100));
-      cx.font = "12px monospace"; cx.fillStyle = 'rgba(255,255,255,0.55)';
-      cx.fillText('Loading' + dots + '  ' + pct + '%', VW/2, VH * 0.95);
+      // Show loading progress or tap prompt once ready
+      cx.font = "12px monospace"; cx.textAlign = 'center';
+      if (videosReady || loadingElapsed > 1.5) {
+        // Ready — pulse tap prompt
+        cx.globalAlpha = 0.5 + Math.sin(pulse * 3) * 0.4;
+        cx.fillStyle = '#fff';
+        cx.fillText('TAP TO PLAY', VW/2, VH * 0.95);
+      } else {
+        const pct = Math.min(100, Math.round((videosLoaded / PRELOAD_VIDEOS.length) * 100));
+        const dots = '.'.repeat(loadingDots + 1);
+        cx.globalAlpha = 0.55;
+        cx.fillStyle = '#fff';
+        cx.fillText('Loading' + dots + '  ' + pct + '%', VW/2, VH * 0.95);
+      }
       cx.restore();
       break;
     }
