@@ -2399,15 +2399,6 @@ function drawInteractPrompt() {
   cx.stroke();
   cx.shadowBlur = 0;
 
-  // Tiny icon above dumpster — minimal, doesn't cover characters
-  // Positioned BEHIND/ABOVE the dumpster not floating over Naomi
-  cx.globalAlpha = alpha * 0.9;
-  cx.font = `${Math.round(14 * s)}px sans-serif`;
-  cx.textAlign = 'center';
-  // Place it at the dumpster lid level, not mid-screen
-  const iconY = ds.y - (80 * s * SQUISH);
-  cx.fillText(isKey ? '🗝️' : '👆', ds.x, iconY);
-
   cx.restore();
 
   // Wide tap zone — whole dumpster area is tappable, no separate button
