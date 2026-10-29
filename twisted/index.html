@@ -417,6 +417,8 @@ for (let _pi = 1; _pi <= 4; _pi++) loadImg('sierra_phone_idle' + _pi, 'assets/si
 for (let _si = 1; _si <= 8; _si++) loadImg('sierra_stand_idle' + _si, 'assets/sierra_stand_idle' + _si + '.png');
 // Sierra gun emote — triggered when player taps gun in inventory
 for (let _gi2 = 1; _gi2 <= 6; _gi2++) loadImg('sierra_gun_' + _gi2, 'assets/sierra_gun_' + _gi2 + '.png');
+// Sierra squat gun emote — used when crouching
+for (let _gsi = 1; _gsi <= 6; _gsi++) loadImg('sierra_gun_squat_' + _gsi, 'assets/sierra_gun_squat_' + _gsi + '.png');
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png?v=2');
 // Jacket off frames
@@ -969,13 +971,15 @@ var INTERACT_BTN_POS = { x:0, y:0, w:0, h:0, visible:false };
 var GUN_ITEM_BTN = { x:0, y:0, w:0, h:0, visible:false };
 
 function triggerGunEmote() {
-  if (NPC.gunEmoteActive) return; // already playing
+  if (NPC.gunEmoteActive) return;
   NPC.gunEmoteActive = true;
   NPC.gunEmoteFrame = 0;
   NPC.gunEmoteTimer = 0;
-  NPC.stepSeq = null; // cancel any step animation
+  // Pick correct sequence based on whether Naomi is crouching
+  NPC._gunEmoteSeq = P.crouch ? SIERRA_GUN_SQUAT_EMOTE : SIERRA_GUN_EMOTE;
+  NPC.stepSeq = null;
   SFX.btnTap();
-  INVENTORY.open = false; // close bag after triggering
+  INVENTORY.open = false;
 }
 
 // ─── Trash Search Mini-Game ───────────────────────────────────────────────────
@@ -1301,12 +1305,21 @@ const SIERRA_STAND_IDLE_B = [  // shoulder roll → scan → exhale → return
 
 // Gun emote — plays when player taps gun in inventory
 const SIERRA_GUN_EMOTE = [
-  { key:'sierra_gun_1', dur:0.18 },  // gun at side, smirk
-  { key:'sierra_gun_2', dur:0.16 },  // raising arm
-  { key:'sierra_gun_3', dur:0.22 },  // aimed at camera
-  { key:'sierra_gun_4', dur:0.35 },  // hold — peak pose
-  { key:'sierra_gun_5', dur:0.18 },  // lowering, smirk widens
-  { key:'sierra_gun_6', dur:0.28 },  // back to neutral
+  { key:'sierra_gun_1', dur:0.18 },
+  { key:'sierra_gun_2', dur:0.16 },
+  { key:'sierra_gun_3', dur:0.22 },
+  { key:'sierra_gun_4', dur:0.35 },
+  { key:'sierra_gun_5', dur:0.18 },
+  { key:'sierra_gun_6', dur:0.28 },
+];
+
+const SIERRA_GUN_SQUAT_EMOTE = [
+  { key:'sierra_gun_squat_1', dur:0.18 },
+  { key:'sierra_gun_squat_2', dur:0.16 },
+  { key:'sierra_gun_squat_3', dur:0.22 },
+  { key:'sierra_gun_squat_4', dur:0.35 },
+  { key:'sierra_gun_squat_5', dur:0.18 },
+  { key:'sierra_gun_squat_6', dur:0.28 },
 ];
 
 const SIERRA_STEP_POOL = [
@@ -1525,6 +1538,7 @@ function startGame() {
   P.standIdleSeq=null; P.standIdleNext=2.5;
   NPC._stepState='idle'; NPC._stepCooldown=0;
   NPC._plantedWx = NPC.wx; NPC._plantedWz = NPC.wz;
+  NPC.gunEmoteActive=false; NPC.gunEmoteFrame=0; NPC.gunEmoteTimer=0; NPC._gunEmoteSeq=SIERRA_GUN_EMOTE;
   P.lastMvx=0; P.lastMvz=1;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
   NPC.targetWx=0.80; NPC.targetWz=0.62; NPC.crouchLerp=1;
@@ -1863,7 +1877,7 @@ function update(ts) {
   // ─── Sierra gun emote tick ────────────────────────────────────────────────
   if (NPC.gunEmoteActive) {
     NPC.gunEmoteTimer += dt;
-    if (NPC.gunEmoteTimer >= SIERRA_GUN_EMOTE[NPC.gunEmoteFrame].dur) {
+    if (NPC.gunEmoteTimer >= NPC._gunEmoteSeq[NPC.gunEmoteFrame].dur) {
       NPC.gunEmoteTimer = 0;
       NPC.gunEmoteFrame++;
       if (NPC.gunEmoteFrame >= SIERRA_GUN_EMOTE.length) {
@@ -2084,7 +2098,7 @@ function drawEntities() {
       const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
       // Gun emote > step > gum priority
       const sierraSprKey = NPC.gunEmoteActive
-        ? SIERRA_GUN_EMOTE[NPC.gunEmoteFrame].key
+        ? NPC._gunEmoteSeq[NPC.gunEmoteFrame].key
         : (NPC.stepSeq ? NPC.stepSeq[NPC.stepFrame].key : gumSprKey);
       drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, sierraSprKey, 0, 1.22, NPC.moving);
 
