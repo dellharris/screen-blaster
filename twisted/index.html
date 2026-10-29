@@ -855,8 +855,10 @@ const NPC = {
   gumFade: 0, gumFading: false,
   // Micro-step animation state
   stepSeq: null, stepFrame: 0, stepTimer: 0,
-  stepIdleTimer: 0,   // counts up while Sierra is near-settled
-  stepNext: 4.0,      // seconds until next animation fires — she stays still
+  stepIdleTimer: 0,
+  stepNext: 4.0,
+  // Blink
+  blinkTimer: 0, blinkNext: 3.0 + Math.random()*3, blinkAlpha: 0,
 };
 
 // ─── Patrol car ───────────────────────────────────────────────────────────────
@@ -1259,11 +1261,12 @@ const SIERRA_PHONE_IDLE = [
   { key:'sierra_phone_idle4', dur:0.22 },
 ];
 
+// Standing idle pool — feet stay planted, only body/arm animations
+// Step sequences removed: they move feet which looks wrong when standing
 const SIERRA_STEP_POOL = [
-  SIERRA_STEP_FWD, SIERRA_STEP_FWD,
-  SIERRA_STEP_RIGHT,
-  SIERRA_STEP_LEFT,
-  SIERRA_PHONE_IDLE, SIERRA_PHONE_IDLE,  // phone scroll fires often — she's always on it
+  SIERRA_PHONE_IDLE,
+  SIERRA_PHONE_IDLE,
+  SIERRA_PHONE_IDLE,  // phone scroll is her primary idle — she's always on it
 ];
 
 // Naomi micro-step forward/side: single tap while standing
@@ -1466,6 +1469,7 @@ function startGame() {
   P.standIdleSeq=null; P.standIdleNext=2.5;
   NPC._stepState='idle'; NPC._stepCooldown=0;
   NPC._plantedWx = NPC.wx; NPC._plantedWz = NPC.wz;
+  NPC.blinkTimer=0; NPC.blinkNext=3.0+Math.random()*3; NPC.blinkAlpha=0;
   P.lastMvx=0; P.lastMvz=1;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
   NPC.targetWx=0.80; NPC.targetWz=0.62; NPC.crouchLerp=1;
@@ -1663,6 +1667,15 @@ function update(ts) {
   // Idle phase ticks (breathing animation)
   P.idlePhase   = (P.idlePhase   + dt) % (Math.PI * 200);
   NPC.idlePhase = (NPC.idlePhase + dt) % (Math.PI * 200);
+
+  // ─── Sierra blink ─────────────────────────────────────────────────────────
+  NPC.blinkTimer += dt;
+  if (NPC.blinkTimer >= NPC.blinkNext) {
+    NPC.blinkTimer = 0;
+    NPC.blinkNext  = 2.5 + Math.random() * 3.5;
+    NPC.blinkAlpha = 1;
+  }
+  if (NPC.blinkAlpha > 0) NPC.blinkAlpha = Math.max(0, NPC.blinkAlpha - dt * 6.0);
 
 
 
@@ -2000,6 +2013,22 @@ function drawEntities() {
       // Micro-step overrides gum when active — she can't chew gum AND step
       const sierraSprKey = NPC.stepSeq ? NPC.stepSeq[NPC.stepFrame].key : gumSprKey;
       drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, sierraSprKey, 0, 1.22, NPC.moving);
+
+      // Sierra blink overlay
+      if (NPC.blinkAlpha > 0) {
+        const sp2 = w2s(NPC.renderWx, NPC.renderWz);
+        const s2  = dScale(NPC.renderWz);
+        const hm2 = NPC.crouchLerp > 0.5 ? 0.70 : 1.0;
+        const ch2 = 360 * s2 * SQUISH * hm2 * 1.22;
+        const ey2 = sp2.y - ch2 * 0.83;
+        cx.save();
+        cx.globalAlpha = NPC.blinkAlpha * 0.85;
+        cx.fillStyle = '#8b5a3a';  // Sierra's warm skin tone
+        cx.beginPath();
+        cx.ellipse(sp2.x, ey2, ch2 * 0.18, ch2 * 0.042, 0, 0, Math.PI * 2);
+        cx.fill();
+        cx.restore();
+      }
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
