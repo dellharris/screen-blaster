@@ -834,7 +834,6 @@ const P = {
   standIdleSeq: null,       // current randomly chosen sequence
   standIdleNext: 2.5,
   // Blink state — random blinks every 3-6 seconds
-  blinkTimer: 0, blinkNext: 3.5, blinkAlpha: 0,
 };
 
 // ─── NPC: Sierra ─────────────────────────────────────────────────────────────
@@ -853,7 +852,7 @@ const NPC = {
   // Micro-step animation state
   stepSeq: null, stepFrame: 0, stepTimer: 0,
   stepIdleTimer: 0,   // counts up while Sierra is near-settled
-  stepNext: 1.5,      // seconds until next micro-step fires
+  stepNext: 4.0,      // seconds until next animation fires — she stays still
 };
 
 // ─── Patrol car ───────────────────────────────────────────────────────────────
@@ -1461,7 +1460,6 @@ function startGame() {
   P.sqWalkTimer=0; P.sqWalkStep=0;
   P.standIdleTimer=0; P.standIdleActive=false; P.standIdleFrame=0; P.standIdleFrameTimer=0;
   P.standIdleSeq=null; P.standIdleNext=2.5;
-  P.blinkTimer=0; P.blinkNext=3.5+Math.random()*2; P.blinkAlpha=0;
   NPC._stepState='idle'; NPC._stepCooldown=0;
   P.lastMvx=0; P.lastMvz=1;
   NPC.wx=0.80; NPC.wz=0.62; NPC.renderWx=0.80; NPC.renderWz=0.62;
@@ -1617,34 +1615,7 @@ function update(ts) {
     NPC.lastMvz = lerp(NPC.lastMvz, toNaomiZ / toMag, dt * 1.5);
   }
 
-  // ─── Sierra step-then-move: every repositioning triggers a step anim ─────
-  // Velocity this frame — distinguishes micro-adjustment from full walk
-  const sierraFrameVel = nmag / (dt || 0.016);
-
-  if (!NPC._stepState) NPC._stepState = 'idle';
-  if (!NPC._stepCooldown) NPC._stepCooldown = 0;
-  NPC._stepCooldown = Math.max(0, NPC._stepCooldown - dt);
-
-  const distToTarget = Math.hypot(NPC.wx - NPC._smoothTargetX, NPC.wz - (NPC._smoothTargetZ || NPC.wz));
-
-  // Trigger a step anim for ANY small repositioning that isn't already animated
-  if (!NPC.stepSeq && !NPC.gumActive && NPC._stepCooldown <= 0) {
-    if (sierraFrameVel > 0.004 && sierraFrameVel < 0.12 && !P.running) {
-      // Micro-adjustment — pick direction-aware step
-      const movingLeft  = ndx < -0.0003;
-      const movingRight = ndx >  0.0003;
-      if (movingLeft)       { NPC.stepSeq = SIERRA_STEP_LEFT; }
-      else if (movingRight) { NPC.stepSeq = SIERRA_STEP_RIGHT; }
-      else                  { NPC.stepSeq = SIERRA_STEP_FWD; }
-      NPC.stepFrame = 0; NPC.stepTimer = 0;
-      NPC._stepCooldown = NPC.stepSeq.reduce(function(s,f){return s+f.dur;},0) + 0.05;
-    } else if (sierraFrameVel >= 0.12 && !NPC.moving) {
-      // Bigger move — phone idle gives weight even during full walk
-      NPC.stepSeq = SIERRA_PHONE_IDLE;
-      NPC.stepFrame = 0; NPC.stepTimer = 0;
-      NPC._stepCooldown = 0.4;
-    }
-  }
+  // Sierra plants and stays still — animations fire from the idle pool only, not from movement
 
   // Player world-space movement from joystick
   let mx = 0, mz = 0;
@@ -1705,19 +1676,7 @@ function update(ts) {
   P.idlePhase   = (P.idlePhase   + dt) % (Math.PI * 200);
   NPC.idlePhase = (NPC.idlePhase + dt) % (Math.PI * 200);
 
-  // ─── Naomi blink ──────────────────────────────────────────────────────────
-  // Canvas-overlay blink — quick eyelid close/open every 3-6s
-  P.blinkTimer += dt;
-  if (P.blinkTimer >= P.blinkNext) {
-    P.blinkTimer = 0;
-    P.blinkNext  = 3.0 + Math.random() * 3.0;
-    // blinkAlpha drives the blink overlay (0=open, 1=closed, back to 0)
-    P.blinkAlpha = 1;
-  }
-  // Ease blink in/out: fast close (0.06s), hold (0.04s), fast open (0.08s)
-  if (P.blinkAlpha > 0) {
-    P.blinkAlpha = Math.max(0, P.blinkAlpha - dt * 5.5);
-  }
+
 
   // Footstep sound effects
   tickFootsteps(dt, P.moving, P.running, P.crouch);
@@ -1851,7 +1810,7 @@ function update(ts) {
       NPC.stepFrame = 0;
       NPC.stepTimer = 0;
       NPC.stepIdleTimer = 0;
-      NPC.stepNext  = 1.5 + Math.random() * 1.5; // 1.5-3s randomized
+      NPC.stepNext  = 3.5 + Math.random() * 2.5; // 3.5-6s — she plants and stays
     }
   } else if (NPC.moving || P.crouch) {
     NPC.stepIdleTimer = 0; NPC.stepSeq = null; NPC.stepFrame = 0;
@@ -2067,26 +2026,6 @@ function drawEntities() {
       }
       drawChar('naomi', P.renderWx, P.renderWz, P.lastMvx, P.lastMvz, P.walkFrame, P.crouch, P.crouchLerp, P.idlePhase, naomiSprKey, 0, undefined, P.moving);
 
-      // Blink overlay — thin warm strip over eye area when blinkAlpha > 0
-      if (P.blinkAlpha > 0) {
-        const sp = w2s(P.renderWx, P.renderWz);
-        const s  = dScale(P.renderWz);
-        const baseH = 360;
-        const hm = P.crouch ? 0.70 : 1.0;
-        const charH = baseH * s * SQUISH * hm;
-        // Eyes are roughly 78-84% up the character height from feet
-        const eyeY  = sp.y - charH * 0.81;
-        const lidH  = charH * 0.045; // eyelid thickness
-        const lidW  = charH * 0.38;  // approximate face width at eyes
-        cx.save();
-        cx.globalAlpha = P.blinkAlpha * 0.88;
-        // Warm skin tone for the closed eyelid
-        cx.fillStyle = '#c8936a';
-        cx.beginPath();
-        cx.ellipse(sp.x, eyeY, lidW * 0.5, lidH, 0, 0, Math.PI * 2);
-        cx.fill();
-        cx.restore();
-      }
     }},
   ];
   ents.sort((a, b) => a.wz - b.wz);
