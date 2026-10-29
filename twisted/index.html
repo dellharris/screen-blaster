@@ -412,6 +412,8 @@ for (let _ss = 1; _ss <= 4; _ss++) {
 for (let _pi = 1; _pi <= 4; _pi++) loadImg('sierra_phone_idle' + _pi, 'assets/sierra_phone_idle' + _pi + '.png?v=2');
 // Sierra standing idle emotes (weight shift, phone glance, scan, exhale)
 for (let _si = 1; _si <= 8; _si++) loadImg('sierra_stand_idle' + _si, 'assets/sierra_stand_idle' + _si + '.png');
+// Sierra gun emote — triggered when player taps gun in inventory
+for (let _gi2 = 1; _gi2 <= 6; _gi2++) loadImg('sierra_gun_' + _gi2, 'assets/sierra_gun_' + _gi2 + '.png');
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png?v=2');
 // Jacket off frames
@@ -859,6 +861,8 @@ const NPC = {
   stepSeq: null, stepFrame: 0, stepTimer: 0,
   stepIdleTimer: 0,
   stepNext: 4.0,
+  // Gun emote state
+  gunEmoteActive: false, gunEmoteFrame: 0, gunEmoteTimer: 0,
   // Blink
 };
 
@@ -957,6 +961,17 @@ function hasItem(id) { return !!INVENTORY.items.find(i => i.id === id); }
 // ─── Interact: try to open/loot the mission dumpster ─────────────────────────
 // Screen position of interact button — updated each frame for tap detection
 var INTERACT_BTN_POS = { x:0, y:0, w:0, h:0, visible:false };
+var GUN_ITEM_BTN = { x:0, y:0, w:0, h:0, visible:false };
+
+function triggerGunEmote() {
+  if (NPC.gunEmoteActive) return; // already playing
+  NPC.gunEmoteActive = true;
+  NPC.gunEmoteFrame = 0;
+  NPC.gunEmoteTimer = 0;
+  NPC.stepSeq = null; // cancel any step animation
+  SFX.btnTap();
+  INVENTORY.open = false; // close bag after triggering
+}
 
 // ─── Trash Search Mini-Game ───────────────────────────────────────────────────
 var TRASH_GAME_EL  = null;  // initialized after DOM ready
@@ -1279,6 +1294,16 @@ const SIERRA_STAND_IDLE_B = [  // shoulder roll → scan → exhale → return
   { key:'sierra_stand_idle8', dur:0.28 },
 ];
 
+// Gun emote — plays when player taps gun in inventory
+const SIERRA_GUN_EMOTE = [
+  { key:'sierra_gun_1', dur:0.18 },  // gun at side, smirk
+  { key:'sierra_gun_2', dur:0.16 },  // raising arm
+  { key:'sierra_gun_3', dur:0.22 },  // aimed at camera
+  { key:'sierra_gun_4', dur:0.35 },  // hold — peak pose
+  { key:'sierra_gun_5', dur:0.18 },  // lowering, smirk widens
+  { key:'sierra_gun_6', dur:0.28 },  // back to neutral
+];
+
 const SIERRA_STEP_POOL = [
   SIERRA_PHONE_IDLE,
   SIERRA_PHONE_IDLE,
@@ -1407,7 +1432,8 @@ cv.addEventListener('touchstart', e => {
       else if (isMuteBtn(p.x, p.y)) { toggleMute(); }
       else if (isPhoneBtn(p.x, p.y)) { openSoundCloud(); }
       else if (handlePhoneMenuTap(p.x, p.y)) { /* handled */ }
-      else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; }
+      else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; GUN_ITEM_BTN.visible=false; }
+      else if (GUN_ITEM_BTN.visible && p.x > GUN_ITEM_BTN.x && p.x < GUN_ITEM_BTN.x+GUN_ITEM_BTN.w && p.y > GUN_ITEM_BTN.y && p.y < GUN_ITEM_BTN.y+GUN_ITEM_BTN.h) { triggerGunEmote(); }
       else if (isDumpsterTap(p.x, p.y)) { SFX.btnTap(); tryInteract(true); }
       else if (INTERACT_BTN_POS.visible && p.x > INTERACT_BTN_POS.x && p.x < INTERACT_BTN_POS.x + INTERACT_BTN_POS.w && p.y > INTERACT_BTN_POS.y && p.y < INTERACT_BTN_POS.y + INTERACT_BTN_POS.h) { SFX.btnTap(); tryInteract(true); }
       else if (isJoyZone(p.x, p.y) && !JOY.on) {
@@ -1449,7 +1475,8 @@ cv.addEventListener('mousedown', e => {
     if (isMuteBtn(x,y))   { toggleMute(); return; }
     if (isPhoneBtn(x,y))  { openSoundCloud(); return; }
     if (handlePhoneMenuTap(x,y)) return;
-    if (x > VW-116 && x < VW-16 && y > 56 && y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; return; }
+    if (x > VW-116 && x < VW-16 && y > 56 && y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; GUN_ITEM_BTN.visible=false; return; }
+    if (GUN_ITEM_BTN.visible && x > GUN_ITEM_BTN.x && x < GUN_ITEM_BTN.x+GUN_ITEM_BTN.w && y > GUN_ITEM_BTN.y && y < GUN_ITEM_BTN.y+GUN_ITEM_BTN.h) { triggerGunEmote(); return; }
     if (isDumpsterTap(x,y)) { tryInteract(true); return; }
     if (INTERACT_BTN_POS.visible && x > INTERACT_BTN_POS.x && x < INTERACT_BTN_POS.x + INTERACT_BTN_POS.w && y > INTERACT_BTN_POS.y && y < INTERACT_BTN_POS.y + INTERACT_BTN_POS.h) { tryInteract(true); return; }
     tryInteract();
@@ -1827,6 +1854,18 @@ function update(ts) {
     NPC.walkTimer = 0; NPC.walkStep = 0; NPC.walkFrame = 0;
   }
 
+  // ─── Sierra gun emote tick ────────────────────────────────────────────────
+  if (NPC.gunEmoteActive) {
+    NPC.gunEmoteTimer += dt;
+    if (NPC.gunEmoteTimer >= SIERRA_GUN_EMOTE[NPC.gunEmoteFrame].dur) {
+      NPC.gunEmoteTimer = 0;
+      NPC.gunEmoteFrame++;
+      if (NPC.gunEmoteFrame >= SIERRA_GUN_EMOTE.length) {
+        NPC.gunEmoteActive = false; NPC.gunEmoteFrame = 0;
+      }
+    }
+  }
+
   // ─── Sierra micro-step: fires when she's settled and needs to adjust ────────
   // She does a tiny forward step every 1.5-3s when standing still near Naomi
   const sierraSettled = !NPC.moving && !P.crouch && !NPC.gumActive && !NPC.stepSeq;
@@ -2037,8 +2076,10 @@ function drawEntities() {
     }},
     { type:'npc',    wz: NPC.renderWz, draw: () => {
       const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
-      // Micro-step overrides gum when active — she can't chew gum AND step
-      const sierraSprKey = NPC.stepSeq ? NPC.stepSeq[NPC.stepFrame].key : gumSprKey;
+      // Gun emote > step > gum priority
+      const sierraSprKey = NPC.gunEmoteActive
+        ? SIERRA_GUN_EMOTE[NPC.gunEmoteFrame].key
+        : (NPC.stepSeq ? NPC.stepSeq[NPC.stepFrame].key : gumSprKey);
       drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, sierraSprKey, 0, 1.22, NPC.moving);
 
 
@@ -2477,7 +2518,14 @@ function drawInventoryBag() {
         cx.textAlign = 'left';
         cx.fillText(item.label.toUpperCase(), panX + 10 + iw + 6, iy + 18);
         cx.font = '9px monospace'; cx.fillStyle = '#888';
-        cx.fillText(item.id === 'key' ? 'UNLOCKS DOOR' : 'BONUS WEAPON', panX + 10 + iw + 6, iy + 32);
+        var subLabel = item.id === 'key' ? 'UNLOCKS DOOR' : 'TAP TO EQUIP';
+        cx.fillText(subLabel, panX + 10 + iw + 6, iy + 32);
+        // Store gun tile hit area for tap detection
+        if (item.id === 'gun') {
+          GUN_ITEM_BTN.x = panX + 6; GUN_ITEM_BTN.y = iy;
+          GUN_ITEM_BTN.w = 136; GUN_ITEM_BTN.h = 44;
+          GUN_ITEM_BTN.visible = true;
+        }
       } else {
         // Fallback text if image not loaded
         cx.globalAlpha = 1;
