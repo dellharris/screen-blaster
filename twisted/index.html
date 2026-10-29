@@ -410,6 +410,8 @@ for (let _ss = 1; _ss <= 4; _ss++) {
 }
 // Sierra phone idle frames (casual scroll + weight shift)
 for (let _pi = 1; _pi <= 4; _pi++) loadImg('sierra_phone_idle' + _pi, 'assets/sierra_phone_idle' + _pi + '.png?v=2');
+// Sierra standing idle emotes (weight shift, phone glance, scan, exhale)
+for (let _si = 1; _si <= 8; _si++) loadImg('sierra_stand_idle' + _si, 'assets/sierra_stand_idle' + _si + '.png');
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png?v=2');
 // Jacket off frames
@@ -1262,10 +1264,27 @@ const SIERRA_PHONE_IDLE = [
 
 // Standing idle pool — feet stay planted, only body/arm animations
 // Step sequences removed: they move feet which looks wrong when standing
+const SIERRA_STAND_IDLE_A = [  // neutral → hip shift → phone glance → back
+  { key:'sierra_stand_idle1', dur:0.28 },
+  { key:'sierra_stand_idle2', dur:0.22 },
+  { key:'sierra_stand_idle3', dur:0.30 },
+  { key:'sierra_stand_idle4', dur:0.22 },
+  { key:'sierra_stand_idle1', dur:0.25 },
+];
+const SIERRA_STAND_IDLE_B = [  // shoulder roll → scan → exhale → return
+  { key:'sierra_stand_idle5', dur:0.22 },
+  { key:'sierra_stand_idle6', dur:0.28 },
+  { key:'sierra_stand_idle7', dur:0.30 },
+  { key:'sierra_stand_idle8', dur:0.28 },
+];
+
 const SIERRA_STEP_POOL = [
   SIERRA_PHONE_IDLE,
   SIERRA_PHONE_IDLE,
-  SIERRA_PHONE_IDLE,  // phone scroll is her primary idle — she's always on it
+  SIERRA_STAND_IDLE_A,  // weight shift + phone glance
+  SIERRA_STAND_IDLE_A,
+  SIERRA_STAND_IDLE_B,  // shoulder roll + environment scan
+  SIERRA_STAND_IDLE_B,
 ];
 
 // Naomi micro-step forward/side: single tap while standing
