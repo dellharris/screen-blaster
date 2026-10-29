@@ -1544,41 +1544,52 @@ function update(ts) {
   if (Math.abs(CAR.la) > 1) CAR.ldir *= -1;
   CAR.ft += dt;
 
-  // ─── Sierra Follow System — PLANT AND COMMIT ──────────────────────────────
-  // Sierra stays completely still until the gap is too big, then snaps to a
-  // new planted position. No per-frame drift.
+  // ─── Sierra Follow System — GRACEFUL STAGING ─────────────────────────────
+  // Two girls who know each other — side by side, never stacked behind each other.
 
-  // Where Sierra SHOULD stand relative to Naomi
+  // Target position: Sierra is BESIDE Naomi, reading the situation
   let targetOffX, targetOffZ;
   if (P.crouch) {
-    targetOffX =  0.18; targetOffZ = -0.02;
+    // Crouching: side by side behind cover — Sierra to Naomi's right
+    targetOffX =  0.20; targetOffZ =  0.02;
   } else if (P.running) {
-    targetOffX = -0.18; targetOffZ = -0.16;
+    // Running: Sierra slightly ahead-left — she leads the way
+    targetOffX = -0.20; targetOffZ = -0.14;
   } else {
-    targetOffX = -0.12; targetOffZ = -0.10;
+    // Walking or idle: Sierra to Naomi's LEFT, same depth or slightly behind
+    // This looks like two friends moving through a space together
+    targetOffX = -0.20; targetOffZ = -0.04;
   }
 
   const rawTargetX = clamp(P.wx + targetOffX, 0.03, 0.95);
   const rawTargetZ = clamp(P.wz + targetOffZ, 0.02, 0.90);
 
-  // Initialize planted position on first frame
+  // Initialize planted position
   if (NPC._plantedWx === undefined) {
     NPC._plantedWx = NPC.wx;
     NPC._plantedWz = NPC.wz;
   }
 
-  const gapToPerfect = Math.hypot(NPC._plantedWx - rawTargetX, NPC._plantedWz - rawTargetZ);
+  // ── Character separation — they are TWO PEOPLE, never overlap ──────────────
+  const MIN_SEP = 0.16;  // minimum world-distance between characters
+  const rawSepDist = Math.hypot(NPC._plantedWx - P.wx, NPC._plantedWz - P.wz);
+  if (rawSepDist < MIN_SEP && rawSepDist > 0.001) {
+    // Push Sierra away from Naomi along the separation vector
+    const sepAngle = Math.atan2(NPC._plantedWz - P.wz, NPC._plantedWx - P.wx);
+    NPC._plantedWx = P.wx + Math.cos(sepAngle) * MIN_SEP;
+    NPC._plantedWz = P.wz + Math.sin(sepAngle) * MIN_SEP;
+    NPC._plantedWx = clamp(NPC._plantedWx, 0.03, 0.95);
+    NPC._plantedWz = clamp(NPC._plantedWz, 0.02, 0.90);
+  }
 
-  // Only move when gap is large enough to warrant a real step
-  const moveThreshold = P.running ? 0.12 : P.crouch ? 0.08 : 0.18;
+  const gapToPerfect = Math.hypot(NPC._plantedWx - rawTargetX, NPC._plantedWz - rawTargetZ);
+  const moveThreshold = P.running ? 0.12 : P.crouch ? 0.08 : 0.20;
 
   if (gapToPerfect > moveThreshold) {
-    // Commit to new planted position — move fast
-    const catchSpeed = P.running ? 12.0 : 7.0;
+    const catchSpeed = P.running ? 12.0 : 6.0;
     NPC._plantedWx = lerp(NPC._plantedWx, rawTargetX, Math.min(1, dt * catchSpeed));
     NPC._plantedWz = lerp(NPC._plantedWz, rawTargetZ, Math.min(1, dt * catchSpeed));
   }
-  // else: stay exactly where she is — planted
 
   // Lock NPC position to planted position
   const prevNx = NPC.wx, prevNz = NPC.wz;
