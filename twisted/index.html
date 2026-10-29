@@ -2447,17 +2447,44 @@ function drawInventoryBag() {
   }
   // Drawer — show items when open
   if (INVENTORY.open && itemCount > 0) {
-    var dy = by + bh + 8;
+    var panW = 148, panH = itemCount * 56 + 12;
+    var panX = bx - panW - 4, panY = by + bh + 6;
+    // Panel background
+    cx.globalAlpha = 0.94;
+    cx.fillStyle = '#0a0816'; cx.strokeStyle = '#ff2d78'; cx.lineWidth = 1.2;
+    cx.beginPath(); cx.roundRect(panX, panY, panW, panH, 10); cx.fill(); cx.stroke();
+
     INVENTORY.items.forEach(function(item, i) {
-      cx.globalAlpha = 0.92;
-      cx.fillStyle = '#0a0816'; cx.strokeStyle = '#ff2d78'; cx.lineWidth = 1;
-      cx.beginPath(); cx.roundRect(bx - 130, dy, 118, 30, 5); cx.fill(); cx.stroke();
-      cx.globalAlpha = 1;
-      cx.font = '16px sans-serif'; cx.textAlign = 'left';
-      cx.fillText(item.emoji, bx - 126, dy + 22);
-      cx.font = 'bold 10px monospace'; cx.fillStyle = '#ccc';
-      cx.fillText(item.label, bx - 104, dy + 20);
-      dy += 36;
+      var iy = panY + 8 + i * 56;
+      // Item tile background
+      cx.globalAlpha = 0.85;
+      cx.fillStyle = item.id === 'key' ? 'rgba(40,30,0,0.8)' : 'rgba(0,20,40,0.8)';
+      cx.strokeStyle = item.id === 'key' ? '#ffcc0066' : '#00ccff44';
+      cx.lineWidth = 1;
+      cx.beginPath(); cx.roundRect(panX + 6, iy, 136, 44, 7); cx.fill(); cx.stroke();
+
+      // Game graphic — trash_key or trash_gun
+      var sprKey = item.id === 'key' ? 'trash_key' : (item.id === 'gun' ? 'trash_gun' : null);
+      var spr = sprKey ? (IMG[sprKey] || null) : null;
+      if (spr && spr.naturalWidth) {
+        var ar2 = spr.naturalWidth / spr.naturalHeight;
+        var ih = 36, iw = ih * ar2;
+        cx.globalAlpha = 1;
+        cx.drawImage(spr, panX + 10, iy + 4, iw, ih);
+        // Label beside image
+        cx.font = 'bold 10px monospace';
+        cx.fillStyle = item.id === 'key' ? '#ffcc00' : '#00ccff';
+        cx.textAlign = 'left';
+        cx.fillText(item.label.toUpperCase(), panX + 10 + iw + 6, iy + 18);
+        cx.font = '9px monospace'; cx.fillStyle = '#888';
+        cx.fillText(item.id === 'key' ? 'UNLOCKS DOOR' : 'BONUS WEAPON', panX + 10 + iw + 6, iy + 32);
+      } else {
+        // Fallback text if image not loaded
+        cx.globalAlpha = 1;
+        cx.font = 'bold 11px monospace';
+        cx.fillStyle = '#ccc'; cx.textAlign = 'left';
+        cx.fillText(item.label, panX + 14, iy + 26);
+      }
     });
   }
   cx.restore();
