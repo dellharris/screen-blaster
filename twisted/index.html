@@ -1114,10 +1114,11 @@ function closeTrashGame() {
 
 function tryInteract(forcedByTap) {
   if (phase !== PH.PLAY) return;
-  const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
-  // Mobile tap on dumpster/button uses wider range — if you can see it you can reach it
-  const range = forcedByTap ? 0.55 : MISSION_DUMP.interactRange;
-  if (dist > range) return;
+  // Tap on dumpster/ring = no proximity check — you see it you can use it
+  if (!forcedByTap) {
+    const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
+    if (dist > MISSION_DUMP.interactRange) return;
+  }
 
   if (MISSION_DUMP.state === 'closed') {
     MISSION_DUMP.state = 'opening';
@@ -1370,10 +1371,15 @@ function isRunBtn(x, y)    { return Math.hypot(x-RUN_BTN.cx,    y-RUN_BTN.cy)   
 
 // Check if tap hits the mission dumpster on screen — generous hit area for mobile
 function isDumpsterTap(x, y) {
+  if (MISSION_DUMP.state === 'open_empty' || MISSION_DUMP.state === 'opening') return false;
   const ds = w2s(MISSION_DUMP.wx, MISSION_DUMP.wz);
   const sc = dScale(MISSION_DUMP.wz);
-  const hitR = 80 * sc;  // scales with depth
-  return Math.hypot(x - ds.x, y - ds.y) < hitR;
+  // Big hit area covering both the dumpster body AND the ground ring below it
+  const hitW = 160 * sc;
+  const hitH = 200 * sc;  // tall enough to catch the ring at ds.y
+  // Check rectangle: centered on dumpster, extending from ring to top of dumpster
+  return x > ds.x - hitW/2 && x < ds.x + hitW/2 &&
+         y > ds.y - hitH   && y < ds.y + 40 * sc;  // +40 below ground for ring
 }
 function isMuteBtn(x, y)   { return x > VW-110 && x < VW-16 && y > 8 && y < 44; }
 function isJoyZone(x, y)   { return x < VW*0.45 && y > VH*0.42; }
@@ -2409,11 +2415,12 @@ function drawInteractPrompt() {
   cx.restore();
 
   // Wide tap zone — whole dumpster area is tappable, no separate button
-  const hitW = 160 * s, hitH = 120 * s;
+  // Hit zone: dumpster body PLUS ring area below — both trigger the game
+  const hitW = 180 * s, hitH = 160 * s;
   INTERACT_BTN_POS.x = ds.x - hitW/2;
-  INTERACT_BTN_POS.y = ds.y - hitH;
+  INTERACT_BTN_POS.y = ds.y - hitH;  // top of dumpster
   INTERACT_BTN_POS.w = hitW;
-  INTERACT_BTN_POS.h = hitH;
+  INTERACT_BTN_POS.h = hitH + 50 * s;  // extend below ground to cover ring
   INTERACT_BTN_POS.visible = true;
 }
 
