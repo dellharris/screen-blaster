@@ -70,6 +70,8 @@
 <!-- Caught video — plays when all lives lost then returns to title -->
 <video id="caught-video" src="assets/caught.mp4" playsinline webkit-playsinline preload="auto"
   style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:15;background:#000;"></video>
+<!-- Dance emote audio — Tweetsie slow4u, 75 BPM -->
+<audio id="dance-audio" src="assets/dance_emote.mp3" preload="auto"></audio>
 
 <iframe id="sc-game" allow="autoplay" style="display:none;width:1px;height:1px;"
   src="https://w.soundcloud.com/player/?url=https%3A%2F%2Fsoundcloud.com%2Fdellharris%2Fsets%2Flo-fi-hip-hop&auto_play=false&hide_related=true&show_comments=false&show_user=false&buying=false&liking=false&download=false&sharing=false&show_artwork=false&show_playcount=false&show_teaser=false&start_track=0"></iframe>
@@ -421,6 +423,8 @@ for (let _gi2 = 1; _gi2 <= 6; _gi2++) loadImg('sierra_gun_' + _gi2, 'assets/sier
 for (let _gsi = 1; _gsi <= 6; _gsi++) loadImg('sierra_gun_squat_' + _gsi, 'assets/sierra_gun_squat_' + _gsi + '.png');
 // Sierra dance emote — 8 frames across 2 sheets
 for (let _di = 1; _di <= 8; _di++) loadImg('sierra_dance_' + _di, 'assets/sierra_dance_' + _di + '.png');
+// Naomi dance emote — 8 frames across 2 sheets
+for (let _ndi = 1; _ndi <= 8; _ndi++) loadImg('naomi_dance_' + _ndi, 'assets/naomi_dance_' + _ndi + '.png');
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png?v=2');
 // Jacket off frames
@@ -529,6 +533,7 @@ WVID.addEventListener('ended', function() {
 
 // ─── Caught video sequence ───────────────────────────────────────────────────
 const CVID = document.getElementById('caught-video');
+const DANCE_AUDIO = document.getElementById('dance-audio');
 
 function playCaughtVideo() {
   if (SC_WIDGET && scReady) SC_WIDGET.setVolume(0);
@@ -850,6 +855,8 @@ const P = {
   standIdleFrameTimer: 0,
   standIdleSeq: null,       // current randomly chosen sequence
   standIdleNext: 2.5,
+  // Dance emote state — loops until movement or crouch cancels
+  danceActive: false, danceFrame: 0, danceTimer: 0,
   // Blink state — random blinks every 3-6 seconds
 };
 
@@ -1024,10 +1031,12 @@ function triggerEmoteSlot(idx) {
   if (slot.seq === 'DANCE') {
     NPC.danceActive = true; NPC.danceFrame = 0; NPC.danceTimer = 0;
     NPC.stepSeq = null; NPC.gunEmoteActive = false;
-    // Naomi placeholder — will use naomi dance seq when Naomi sheets arrive
-    // For now cancel any idle and let her do her hair groove as stand-in
-    P.transSeq = NAOMI_HAIR_D; P.transFrame=0; P.transTimer=0;
-    P.standIdleActive = false;
+    // Naomi uses her own dance sequence
+    P.danceActive = true; P.danceFrame = 0; P.danceTimer = 0;
+    P.transSeq = null; P.standIdleActive = false;
+    // Play the dance track, ducking the background playlist
+    if (DANCE_AUDIO) { DANCE_AUDIO.currentTime = 0; DANCE_AUDIO.play().catch(function(){}); }
+    if (SC_WIDGET && scReady) SC_WIDGET.setVolume(30);
   } else if (slot.seq && slot.seq !== null) {
     P.transSeq = slot.seq; P.transFrame=0; P.transTimer=0;
     P.standIdleActive = false;
@@ -1387,20 +1396,30 @@ const SIERRA_GUN_SQUAT_EMOTE = [
   { key:'sierra_gun_squat_6', dur:0.28 },
 ];
 
-// Dance — 8-frame loop, each frame ~0.18s = full cycle ~1.44s
+// Dance — 8-frame loop at 75 BPM = 0.2s per frame (8 frames = 2 beats = 1.6s cycle)
+const BPM75_FRAME = 0.20;  // 60/75/2 = 0.4s half-beat, 2 frames per half-beat
 const SIERRA_DANCE_SEQ = [
-  { key:'sierra_dance_1', dur:0.18 },
-  { key:'sierra_dance_2', dur:0.18 },
-  { key:'sierra_dance_3', dur:0.16 },
-  { key:'sierra_dance_4', dur:0.18 },
-  { key:'sierra_dance_5', dur:0.18 },
-  { key:'sierra_dance_6', dur:0.16 },
-  { key:'sierra_dance_7', dur:0.18 },
-  { key:'sierra_dance_8', dur:0.18 },
+  { key:'sierra_dance_1', dur:BPM75_FRAME },
+  { key:'sierra_dance_2', dur:BPM75_FRAME },
+  { key:'sierra_dance_3', dur:BPM75_FRAME },
+  { key:'sierra_dance_4', dur:BPM75_FRAME },
+  { key:'sierra_dance_5', dur:BPM75_FRAME },
+  { key:'sierra_dance_6', dur:BPM75_FRAME },
+  { key:'sierra_dance_7', dur:BPM75_FRAME },
+  { key:'sierra_dance_8', dur:BPM75_FRAME },
 ];
 
-// Dance state for NPC — loops until cancelled
-// NPC.danceActive / NPC.danceFrame / NPC.danceTimer handled in update
+// Naomi dance — same BPM, perfectly in sync
+const NAOMI_DANCE_SEQ = [
+  { key:'naomi_dance_1', dur:BPM75_FRAME },
+  { key:'naomi_dance_2', dur:BPM75_FRAME },
+  { key:'naomi_dance_3', dur:BPM75_FRAME },
+  { key:'naomi_dance_4', dur:BPM75_FRAME },
+  { key:'naomi_dance_5', dur:BPM75_FRAME },
+  { key:'naomi_dance_6', dur:BPM75_FRAME },
+  { key:'naomi_dance_7', dur:BPM75_FRAME },
+  { key:'naomi_dance_8', dur:BPM75_FRAME },
+];
 
 const SIERRA_STEP_POOL = [
   SIERRA_PHONE_IDLE,
@@ -1635,6 +1654,7 @@ function startGame() {
   P.sqWalkTimer=0; P.sqWalkStep=0;
   P.standIdleTimer=0; P.standIdleActive=false; P.standIdleFrame=0; P.standIdleFrameTimer=0;
   P.standIdleSeq=null; P.standIdleNext=2.5;
+  P.danceActive=false; P.danceFrame=0; P.danceTimer=0;
   NPC._stepState='idle'; NPC._stepCooldown=0;
   NPC._plantedWx = NPC.wx; NPC._plantedWz = NPC.wz;
   NPC.gunEmoteActive=false; NPC.gunEmoteFrame=0; NPC.gunEmoteTimer=0; NPC._gunEmoteSeq=SIERRA_GUN_EMOTE;
@@ -1999,6 +2019,21 @@ function update(ts) {
     }
   }
 
+  // ─── Naomi dance tick — mirrors Sierra, cancels on movement/crouch ──────────
+  if (P.danceActive) {
+    if (P.moving || P.crouch) {
+      P.danceActive = false; P.danceFrame = 0; P.danceTimer = 0;
+      if (DANCE_AUDIO) { DANCE_AUDIO.pause(); DANCE_AUDIO.currentTime = 0; }
+      if (SC_WIDGET && scReady) SC_WIDGET.setVolume(100);
+    } else {
+      P.danceTimer += dt;
+      if (P.danceTimer >= NAOMI_DANCE_SEQ[P.danceFrame].dur) {
+        P.danceTimer = 0;
+        P.danceFrame = (P.danceFrame + 1) % NAOMI_DANCE_SEQ.length;
+      }
+    }
+  }
+
   // ─── Sierra micro-step: fires when she's settled and needs to adjust ────────
   // She does a tiny forward step every 1.5-3s when standing still near Naomi
   const sierraSettled = !NPC.moving && !P.crouch && !NPC.gumActive && !NPC.stepSeq;
@@ -2221,7 +2256,8 @@ function drawEntities() {
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
-      let naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
+      let naomiSprKey = P.danceActive ? NAOMI_DANCE_SEQ[P.danceFrame].key : null;
+      if (!naomiSprKey) naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
       if (!naomiSprKey && P.sqIdleActive) naomiSprKey = NAOMI_SQUAT_IDLE[P.sqIdleFrame].key;
       if (!naomiSprKey && P.standIdleActive && P.standIdleSeq) {
         naomiSprKey = P.standIdleSeq[P.standIdleFrame] ? P.standIdleSeq[P.standIdleFrame].key : null;
