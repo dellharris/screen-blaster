@@ -425,6 +425,8 @@ for (let _gsi = 1; _gsi <= 6; _gsi++) loadImg('sierra_gun_squat_' + _gsi, 'asset
 for (let _di = 1; _di <= 8; _di++) loadImg('sierra_dance_' + _di, 'assets/sierra_dance_' + _di + '.png');
 // Naomi dance emote — 8 frames across 2 sheets
 for (let _ndi = 1; _ndi <= 8; _ndi++) loadImg('naomi_dance_' + _ndi, 'assets/naomi_dance_' + _ndi + '.png');
+// Naomi spotlight shock reaction — 8 frames
+for (let _nsh = 1; _nsh <= 8; _nsh++) loadImg('naomi_shock_' + _nsh, 'assets/naomi_shock_' + _nsh + '.png');
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png?v=2');
 // Jacket off frames
@@ -859,6 +861,8 @@ const P = {
   danceActive: false, danceFrame: 0, danceTimer: 0, danceElapsed: 0,
   // Queued emote — fires after standup completes if emote triggered while crouching
   queuedEmoteIdx: -1,
+  // Spotlight shock — active whenever P.det > 0, loops until clear
+  shockActive: false, shockFrame: 0, shockTimer: 0,
   // Blink state — random blinks every 3-6 seconds
 };
 
@@ -1344,6 +1348,24 @@ const NAOMI_IDLE_POOL = [
   NAOMI_JACKET_ZIP,
 ];
 
+// Spotlight shock — loops while Naomi is in the beam, moveable
+// Standing panic cycle (used while still)
+const NAOMI_SHOCK_STILL = [
+  { key:'naomi_shock_2', dur:0.22 },  // shield eyes from light
+  { key:'naomi_shock_1', dur:0.20 },  // wide-eyed alert
+  { key:'naomi_shock_7', dur:0.28 },  // hands up freeze
+  { key:'naomi_shock_4', dur:0.22 },  // hands out defensive
+  { key:'naomi_shock_3', dur:0.25 },  // cowering inward
+  { key:'naomi_shock_1', dur:0.18 },  // snap back wide-eyed
+];
+// Running panic cycle (used while moving)
+const NAOMI_SHOCK_RUN = [
+  { key:'naomi_shock_8', dur:0.18 },  // panic sprint
+  { key:'naomi_shock_6', dur:0.18 },  // low sprint
+  { key:'naomi_shock_8', dur:0.18 },
+  { key:'naomi_shock_6', dur:0.18 },
+];
+
 // Sierra micro-step forward — plays when she settles near Naomi
 const SIERRA_STEP_FWD = [
   { key:'sierra_step_fwd1', dur:0.10 },
@@ -1676,6 +1698,7 @@ function startGame() {
   P.standIdleTimer=0; P.standIdleActive=false; P.standIdleFrame=0; P.standIdleFrameTimer=0;
   P.standIdleSeq=null; P.standIdleNext=2.5;
   P.danceActive=false; P.danceFrame=0; P.danceTimer=0; P.danceElapsed=0; P.queuedEmoteIdx=-1;
+  P.shockActive=false; P.shockFrame=0; P.shockTimer=0;
   NPC._stepState='idle'; NPC._stepCooldown=0;
   NPC._plantedWx = NPC.wx; NPC._plantedWz = NPC.wz;
   NPC.gunEmoteActive=false; NPC.gunEmoteFrame=0; NPC.gunEmoteTimer=0; NPC._gunEmoteSeq=SIERRA_GUN_EMOTE;
@@ -2130,6 +2153,23 @@ function update(ts) {
     P.det = Math.max(0, P.det - 0.4 * dt);
   }
 
+  // ─── Spotlight shock animation ────────────────────────────────────────────
+  const shouldShock = P.det > 0 && !isCaught;
+  if (shouldShock !== P.shockActive) {
+    P.shockActive = shouldShock;
+    P.shockFrame = 0; P.shockTimer = 0;  // reset on enter/exit
+  }
+  if (P.shockActive) {
+    const shockSeq = P.moving ? NAOMI_SHOCK_RUN : NAOMI_SHOCK_STILL;
+    // Reset frame index if seq changed (moving ↔ still)
+    if (P.shockFrame >= shockSeq.length) P.shockFrame = 0;
+    P.shockTimer += dt;
+    if (P.shockTimer >= shockSeq[P.shockFrame].dur) {
+      P.shockTimer = 0;
+      P.shockFrame = (P.shockFrame + 1) % shockSeq.length;
+    }
+  }
+
   if (P.det >= 1 && !isCaught) {
     isCaught = true; catchFlash = 1; P.det = 0; P.catches++;
     SFX.caught(); SFX.spotlight();
@@ -2287,7 +2327,14 @@ function drawEntities() {
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
-      let naomiSprKey = P.danceActive ? NAOMI_DANCE_SEQ[P.danceFrame].key : null;
+      // Shock overrides everything — active whenever in spotlight beam
+      let naomiSprKey = null;
+      if (P.shockActive) {
+        const shockSeq = P.moving ? NAOMI_SHOCK_RUN : NAOMI_SHOCK_STILL;
+        const fi = Math.min(P.shockFrame, shockSeq.length - 1);
+        naomiSprKey = shockSeq[fi].key;
+      }
+      if (!naomiSprKey) naomiSprKey = P.danceActive ? NAOMI_DANCE_SEQ[P.danceFrame].key : null;
       if (!naomiSprKey) naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
       if (!naomiSprKey && P.sqIdleActive) naomiSprKey = NAOMI_SQUAT_IDLE[P.sqIdleFrame].key;
       if (!naomiSprKey && P.standIdleActive && P.standIdleSeq) {
