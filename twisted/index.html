@@ -1350,22 +1350,16 @@ const NAOMI_IDLE_POOL = [
   NAOMI_JACKET_ZIP,
 ];
 
-// Spotlight shock — loops while Naomi is in the beam, moveable
-// Standing panic cycle (used while still)
-const NAOMI_SHOCK_STILL = [
-  { key:'naomi_shock_2', dur:0.22 },  // shield eyes from light
-  { key:'naomi_shock_1', dur:0.20 },  // wide-eyed alert
-  { key:'naomi_shock_7', dur:0.28 },  // hands up freeze
-  { key:'naomi_shock_4', dur:0.22 },  // hands out defensive
-  { key:'naomi_shock_3', dur:0.25 },  // cowering inward
-  { key:'naomi_shock_1', dur:0.18 },  // snap back wide-eyed
-];
-// Running panic cycle (used while moving)
-const NAOMI_SHOCK_RUN = [
-  { key:'naomi_shock_8', dur:0.18 },  // panic sprint
-  { key:'naomi_shock_6', dur:0.18 },  // low sprint
-  { key:'naomi_shock_8', dur:0.18 },
-  { key:'naomi_shock_6', dur:0.18 },
+// Spotlight shock — single 8-frame loop, plays all poses regardless of movement state
+const NAOMI_SHOCK_SEQ = [
+  { key:'naomi_shock_2', dur:0.20 },  // shield eyes from light
+  { key:'naomi_shock_1', dur:0.18 },  // wide-eyed alert
+  { key:'naomi_shock_7', dur:0.25 },  // hands up freeze
+  { key:'naomi_shock_4', dur:0.20 },  // hands out defensive
+  { key:'naomi_shock_3', dur:0.22 },  // cowering inward
+  { key:'naomi_shock_5', dur:0.18 },  // crouched panic
+  { key:'naomi_shock_8', dur:0.18 },  // sprint pose 1
+  { key:'naomi_shock_6', dur:0.18 },  // sprint pose 2
 ];
 
 // Sierra micro-step forward — plays when she settles near Naomi
@@ -2162,13 +2156,10 @@ function update(ts) {
     P.shockFrame = 0; P.shockTimer = 0;  // reset on enter/exit
   }
   if (P.shockActive) {
-    const shockSeq = P.moving ? NAOMI_SHOCK_RUN : NAOMI_SHOCK_STILL;
-    // Reset frame index if seq changed (moving ↔ still)
-    if (P.shockFrame >= shockSeq.length) P.shockFrame = 0;
     P.shockTimer += dt;
-    if (P.shockTimer >= shockSeq[P.shockFrame].dur) {
+    if (P.shockTimer >= NAOMI_SHOCK_SEQ[P.shockFrame].dur) {
       P.shockTimer = 0;
-      P.shockFrame = (P.shockFrame + 1) % shockSeq.length;
+      P.shockFrame = (P.shockFrame + 1) % NAOMI_SHOCK_SEQ.length;
     }
   }
 
@@ -2332,9 +2323,8 @@ function drawEntities() {
       // Shock overrides everything — active whenever in spotlight beam
       let naomiSprKey = null;
       if (P.shockActive) {
-        const shockSeq = P.moving ? NAOMI_SHOCK_RUN : NAOMI_SHOCK_STILL;
-        const fi = Math.min(P.shockFrame, shockSeq.length - 1);
-        naomiSprKey = shockSeq[fi].key;
+        const fi = Math.min(P.shockFrame, NAOMI_SHOCK_SEQ.length - 1);
+        naomiSprKey = NAOMI_SHOCK_SEQ[fi].key;
       }
       if (!naomiSprKey) naomiSprKey = P.danceActive ? NAOMI_DANCE_SEQ[P.danceFrame].key : null;
       if (!naomiSprKey) naomiSprKey = P.transSeq ? P.transSeq[P.transFrame].key : null;
@@ -2418,11 +2408,12 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   let spr = SPR[sprKey] || SPR[baseDir] || SPR[key+'_front'] || IMG[sprKey] || IMG[key+'_front'];
 
   // Active gum/transition sequence key overrides base sprite entirely.
-  // Pre-oriented images (step_left is already mirrored) — suppress flip so no double-mirror.
+  // Shock sprites face right by default — allow direction-based flip.
+  // All other sequence sprites are pre-oriented — suppress flip.
   let flip = baseFlip;
   if (gumSprKey) {
     spr  = SPR[gumSprKey] || IMG[gumSprKey] || spr;
-    flip = false;  // sequence images are pre-oriented, never re-flip them
+    if (gumSprKey.indexOf('naomi_shock') < 0) flip = false;
   }
 
   const baseH = 360;
