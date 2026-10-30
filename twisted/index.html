@@ -1573,7 +1573,7 @@ function handleTap() {
   if (phase === PH.WIN)       { endWinSequence(); return; }  // tap skips win video
   if (phase === PH.WIN_DLG)   { winDlgIdx++; if (winDlgIdx >= WIN_DLG.length) { phase = PH.END; endTimer = 0; } return; }
   if (phase === PH.END)       { resetGame(); return; }
-  if (phase === PH.CAUGHT)    { endCaughtVideo(); return; }  // tap skips caught video
+  if (phase === PH.CAUGHT)    { if (P.catches < P.maxCatches) endCaughtVideo(); return; }  // tap skips only if lives remain
 }
 
 cv.addEventListener('touchstart', e => {
