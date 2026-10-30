@@ -253,8 +253,12 @@ const cx = cv.getContext('2d');
 const VW = 900, VH = 500;
 let scale = 1, offX = 0, offY = 0;
 
+// Demo/capture mode — activated via ?demo=1 in URL
+const DEMO_MODE = new URLSearchParams(window.location.search).get('demo') === '1';
+// Center character zone for portrait crop (game x ≈ 600 = mid-alley)
+const DEMO_FOCUS_X = 595;
+
 function resize() {
-  // visualViewport is accurate on iOS Safari — always use it when available
   const vv = window.visualViewport;
   const w = vv ? vv.width  : window.innerWidth;
   const h = vv ? vv.height : window.innerHeight;
@@ -263,14 +267,17 @@ function resize() {
   cv.height = Math.round(h * dpr);
   cv.style.width  = w + 'px';
   cv.style.height = h + 'px';
-  // Pin canvas to top-left of visual viewport (handles iOS address bar shifts)
-  if (vv) {
-    cv.style.left = vv.offsetLeft + 'px';
-    cv.style.top  = vv.offsetTop  + 'px';
+  if (vv) { cv.style.left = vv.offsetLeft + 'px'; cv.style.top = vv.offsetTop + 'px'; }
+  if (DEMO_MODE) {
+    // Fill portrait height, center crop on character zone
+    scale = cv.height / VH;
+    offX  = cv.width / 2 - DEMO_FOCUS_X * scale;
+    offY  = 0;
+  } else {
+    scale = Math.min(cv.width / VW, cv.height / VH);
+    offX  = (cv.width  - VW * scale) / 2;
+    offY  = (cv.height - VH * scale) / 2;
   }
-  scale = Math.min(cv.width / VW, cv.height / VH);
-  offX  = (cv.width  - VW * scale) / 2;
-  offY  = (cv.height - VH * scale) / 2;
 }
 
 // Fire resize immediately, then again after iOS finishes animating the rotation
@@ -1763,6 +1770,7 @@ function update(ts) {
 
   // Win flash → win dialogue
   tickWinFlash(dt);
+  tickDemo(dt);
 
   // End card auto-replay after 8s
   if (phase === PH.END) {
@@ -2201,6 +2209,64 @@ function tickWinFlash(dt) {
   if (winFlashTimer > 1.4) { phase = PH.WIN_DLG; winFlashTimer = 0; winDlgIdx = 0; }
 }
 
+// ─── Demo mode controller ────────────────────────────────────────────────────
+let _demoT = 0, _demoInteracted = false, _demoTapTimer = 0;
+function tickDemo(dt) {
+  if (!DEMO_MODE) return;
+
+  // Cap detection — show shock reaction but never trigger game-over
+  if (P.det > 0.88) P.det = 0.88;
+
+  // Auto-tap through title/intro screens
+  if (phase !== PH.PLAY) {
+    _demoTapTimer += dt;
+    if (_demoTapTimer > 1.2) { handleTap(); _demoTapTimer = 0; }
+    return;
+  }
+
+  _demoT += dt;
+  const t = _demoT;
+
+  // Auto-click trash piles during mini-game
+  if (TRASH_GAME_EL && TRASH_GAME_EL.style.display !== 'none') {
+    _demoTapTimer += dt;
+    if (_demoTapTimer > 1.8) {
+      _demoTapTimer = 0;
+      var pile = TRASH_GAME_EL.querySelector('.trash-pile:not(.searched)');
+      if (pile) pile.click();
+    }
+    JOY.dx = 0; JOY.dy = 0;
+    return;
+  }
+
+  // Scripted movement timeline (JOY without JOY.on so no joystick renders)
+  if (t < 1.0) {
+    if (P.crouch) triggerCrouch();         // stand up immediately
+    JOY.dx = 0; JOY.dy = 0;
+  } else if (t < 4.5) {
+    JOY.dx =  0.40; JOY.dy = -0.35;       // walk right + forward into alley
+  } else if (t < 7.5) {
+    JOY.dx = -0.30; JOY.dy = -0.40;       // sweep left, deeper in
+  } else if (t < 9.5) {
+    JOY.dx =  0.45; JOY.dy =  0.10;       // dodge right (light hits here)
+  } else if (t < 11.5) {
+    JOY.dx = -0.20; JOY.dy = -0.30;       // settle, head toward dumpster
+  } else if (t < 12.2) {
+    JOY.dx = 0; JOY.dy = 0;               // stop, face dumpster
+  } else if (!_demoInteracted) {
+    _demoInteracted = true;
+    tryInteract(true);                     // open dumpster
+  } else if (MISSION_DUMP.state === 'open_key' || MISSION_DUMP.state === 'open_empty') {
+    if (t < 22.0) {
+      JOY.dx = -0.30; JOY.dy = -0.45;     // walk toward door with key
+    } else {
+      // Loop demo from beginning
+      _demoT = 0; _demoInteracted = false;
+      resetGame();
+    }
+  }
+}
+
 // ─── Drawing: background ─────────────────────────────────────────────────────
 function drawBg(darken = 0) {
   if (IMG['scene']) {
@@ -2522,6 +2588,7 @@ function drawMinimap() {
 }
 
 function drawHUD() {
+  if (DEMO_MODE) return;  // clean capture — no HUD chrome
   cx.save();
   // Objective
   cx.globalAlpha = 0.85;
@@ -2657,7 +2724,7 @@ function drawHUD() {
 }
 
 function drawInteractPrompt() {
-  const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
+  if (DEMO_MODE) return;
   INTERACT_BTN_POS.visible = false;
 
   if (dist > MISSION_DUMP.interactRange * 2.8) return;
@@ -2980,7 +3047,7 @@ function handlePhoneMenuTap(x, y) {
 }
 
 function drawEmoteWheel() {
-  // Always draw the emote button (small icon bottom-right)
+  if (DEMO_MODE) return;
   var bcx = VW-175, bcy = VH-64, br = 22;
   cx.save();
   cx.globalAlpha = 0.82;

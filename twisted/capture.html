@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TWISTED — Capture Mode</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; font-family: 'Courier New', monospace; color: #fff; }
+
+  #gate {
+    text-align: center; padding: 40px;
+  }
+  #gate .logo {
+    font-size: 52px; font-weight: 900; letter-spacing: 8px;
+    text-transform: uppercase; color: #ff2d78;
+    text-shadow: 0 0 30px #ff2d78aa;
+    margin-bottom: 8px;
+  }
+  #gate .sub {
+    font-size: 13px; letter-spacing: 5px; color: #555; margin-bottom: 48px;
+  }
+  #gate .info {
+    color: #444; font-size: 11px; line-height: 2; margin-bottom: 40px;
+  }
+  #gate .info span { color: #ff2d78; }
+
+  .open-btn {
+    display: inline-block; padding: 18px 48px;
+    background: #ff2d78; color: #fff; font-size: 14px;
+    letter-spacing: 3px; text-transform: uppercase; font-weight: 700;
+    border: none; cursor: pointer; border-radius: 2px;
+    box-shadow: 0 0 40px #ff2d7855;
+    transition: all 0.15s;
+    margin: 8px;
+  }
+  .open-btn:hover { background: #ff5599; box-shadow: 0 0 60px #ff2d78aa; }
+  .open-btn.sec {
+    background: transparent; border: 1px solid #333; color: #555;
+    box-shadow: none;
+  }
+  .open-btn.sec:hover { border-color: #ff2d78; color: #ff2d78; }
+
+  .note {
+    margin-top: 32px; color: #333; font-size: 10px; line-height: 2;
+  }
+  .note span { color: #555; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="logo">TWISTED</div>
+  <div class="sub">Miami Underworld — Capture Mode</div>
+
+  <div class="info">
+    Opens the game in <span>portrait demo mode</span><br>
+    Window: <span>540 × 960 px</span> — Retina (2×) = <span>1080 × 1920 (Full HD portrait)</span><br>
+    On a Retina Mac: record the window with QuickTime Player for <span>4K portrait footage</span>
+  </div>
+
+  <button class="open-btn" onclick="openDemo()">▶ Open Demo Window</button>
+  <button class="open-btn sec" onclick="openFull()">Open Fullscreen</button>
+
+  <div class="note">
+    <span>DEMO MODE:</span> auto-plays alley walk → spotlight reaction → dumpster mini-game<br>
+    All game UI hidden. Portrait crop centered on character zone.<br>
+    Record the window — Retina display captures at 2× (1080×1920 native pixels)
+  </div>
+</div>
+
+<script>
+function openDemo() {
+  // 540×960 = half of 1080×1920, so on 2× Retina = full 4K portrait
+  const w = 540, h = 960;
+  const left = Math.round((screen.width - w) / 2);
+  const top  = Math.round((screen.height - h) / 2);
+  window.open(
+    './index.html?demo=1',
+    'twisted-demo',
+    `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=no,resizable=no`
+  );
+}
+
+function openFull() {
+  const win = window.open('./index.html?demo=1', '_blank');
+  if (win) setTimeout(() => win.document.documentElement.requestFullscreen?.(), 500);
+}
+</script>
+
+</body>
+</html>
