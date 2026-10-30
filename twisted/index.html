@@ -2725,6 +2725,7 @@ function drawHUD() {
 
 function drawInteractPrompt() {
   if (DEMO_MODE) return;
+  const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
   INTERACT_BTN_POS.visible = false;
 
   if (dist > MISSION_DUMP.interactRange * 2.8) return;
