@@ -857,6 +857,8 @@ const P = {
   standIdleNext: 2.5,
   // Dance emote state — loops until movement or crouch cancels
   danceActive: false, danceFrame: 0, danceTimer: 0, danceElapsed: 0,
+  // Queued emote — fires after standup completes if emote triggered while crouching
+  queuedEmoteIdx: -1,
   // Blink state — random blinks every 3-6 seconds
 };
 
@@ -1026,6 +1028,17 @@ function triggerEmoteSlot(idx) {
   var slots=getEmoteSlots();
   if (idx<0||!slots[idx]) return;
   var slot = slots[idx];
+
+  // If crouching, stand up first — queue the emote to fire after standup finishes
+  if (P.crouch) {
+    P.crouch = false;
+    const facingLeft = P.lastMvx < -0.1;
+    P.transSeq = facingLeft ? NAOMI_CROUCH_OUT_LEFT : NAOMI_CROUCH_OUT;
+    P.transFrame = 0; P.transTimer = 0;
+    P.queuedEmoteIdx = idx;
+    EMOTE_WHEEL.active=false; EMOTE_WHEEL.selectedSlot=-1;
+    return;
+  }
 
   // DANCE — special: both Naomi and Sierra dance simultaneously
   if (slot.seq === 'DANCE') {
@@ -1662,7 +1675,7 @@ function startGame() {
   P.sqWalkTimer=0; P.sqWalkStep=0;
   P.standIdleTimer=0; P.standIdleActive=false; P.standIdleFrame=0; P.standIdleFrameTimer=0;
   P.standIdleSeq=null; P.standIdleNext=2.5;
-  P.danceActive=false; P.danceFrame=0; P.danceTimer=0; P.danceElapsed=0;
+  P.danceActive=false; P.danceFrame=0; P.danceTimer=0; P.danceElapsed=0; P.queuedEmoteIdx=-1;
   NPC._stepState='idle'; NPC._stepCooldown=0;
   NPC._plantedWx = NPC.wx; NPC._plantedWz = NPC.wz;
   NPC.gunEmoteActive=false; NPC.gunEmoteFrame=0; NPC.gunEmoteTimer=0; NPC._gunEmoteSeq=SIERRA_GUN_EMOTE;
@@ -1845,7 +1858,14 @@ function update(ts) {
     if (P.transTimer >= cur.dur) {
       P.transTimer = 0;
       P.transFrame++;
-      if (P.transFrame >= P.transSeq.length) P.transSeq = null;
+      if (P.transFrame >= P.transSeq.length) {
+        P.transSeq = null;
+        // Fire any emote that was queued while crouching
+        if (P.queuedEmoteIdx >= 0) {
+          const qi = P.queuedEmoteIdx; P.queuedEmoteIdx = -1;
+          triggerEmoteSlot(qi);
+        }
+      }
     }
   }
 
