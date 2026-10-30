@@ -2491,7 +2491,7 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
     gumSprKey.indexOf('naomi_shock') >= 0 ||
     (gumSprKey.indexOf('_idle_') >= 0 && gumSprKey.indexOf('squat') < 0)
   );
-  const heightMul = lerp(1.0, 0.87, crouchLerp);
+  const heightMul = lerp(1.09, 0.87, crouchLerp);
   const boost = (!gumSprKey && crouchBinary && sqBoost) ? sqBoost : 1.0;
   const sh = baseH * s * SQUISH * heightMul * boost;
   const ar = spr ? (spr.width / spr.height) : 0.5;
