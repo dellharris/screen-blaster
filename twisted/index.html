@@ -1910,7 +1910,16 @@ function update(ts) {
   P.wz = clamp(pRes.wz, 0.01, 0.98);
 
   // Smooth crouch interpolation — player and Sierra each independent
-  P.crouchLerp   = lerp(P.crouchLerp,   P.crouch ? 1 : 0, Math.min(1, dt * 9));
+  // During CROUCH_IN: tie crouchLerp to animation frame progress so height scale
+  // and artwork change at exactly the same rate — no shrink-then-land artifact
+  const isCrouchingIn = P.crouch && P.transSeq &&
+    (P.transSeq === NAOMI_CROUCH_IN || P.transSeq === NAOMI_CROUCH_IN_LEFT);
+  if (isCrouchingIn && P.transSeq.length > 0) {
+    const frameDur = P.transSeq[P.transFrame] ? P.transSeq[P.transFrame].dur : 0.07;
+    P.crouchLerp = Math.min(1, (P.transFrame + P.transTimer / frameDur) / P.transSeq.length);
+  } else {
+    P.crouchLerp = lerp(P.crouchLerp, P.crouch ? 1 : 0, Math.min(1, dt * 9));
+  }
   NPC.crouchLerp = lerp(NPC.crouchLerp, P.crouch ? 1 : 0, Math.min(1, dt * 9));
 
   // Smooth render positions — tiny lag makes motion feel organic
