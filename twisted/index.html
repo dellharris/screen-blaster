@@ -419,6 +419,8 @@ for (let _si = 1; _si <= 8; _si++) loadImg('sierra_stand_idle' + _si, 'assets/si
 for (let _gi2 = 1; _gi2 <= 6; _gi2++) loadImg('sierra_gun_' + _gi2, 'assets/sierra_gun_' + _gi2 + '.png');
 // Sierra squat gun emote — used when crouching
 for (let _gsi = 1; _gsi <= 6; _gsi++) loadImg('sierra_gun_squat_' + _gsi, 'assets/sierra_gun_squat_' + _gsi + '.png');
+// Sierra dance emote — 8 frames across 2 sheets
+for (let _di = 1; _di <= 8; _di++) loadImg('sierra_dance_' + _di, 'assets/sierra_dance_' + _di + '.png');
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png?v=2');
 // Jacket off frames
@@ -870,6 +872,8 @@ const NPC = {
   stepNext: 4.0,
   // Gun emote state
   gunEmoteActive: false, gunEmoteFrame: 0, gunEmoteTimer: 0,
+  // Dance state — loops until movement or crouch
+  danceActive: false, danceFrame: 0, danceTimer: 0,
   // Blink
 };
 
@@ -989,7 +993,7 @@ var EMOTE_SLOTS_DEF = [
   { label:'JACKET', color:'#cc8800', icon:'jacket' },
   { label:'ZIP',    color:'#ffcc00', icon:'zip'    },
   { label:'STRESS', color:'#ff6600', icon:'stress' },
-  { label:'SOON',   color:'#334455', icon:'plus'   },
+  { label:'SOON',   color:'#cc44ff', icon:'dance'  },  // dance slot
 ];
 function getEmoteSlots() {
   return [
@@ -998,7 +1002,7 @@ function getEmoteSlots() {
     { ...EMOTE_SLOTS_DEF[2], seq: typeof NAOMI_JACKET_OFF!=='undefined'?NAOMI_JACKET_OFF:null },
     { ...EMOTE_SLOTS_DEF[3], seq: typeof NAOMI_JACKET_ZIP!=='undefined'?NAOMI_JACKET_ZIP:null },
     { ...EMOTE_SLOTS_DEF[4], seq: typeof NAOMI_HAIR_A!=='undefined'?NAOMI_HAIR_A:null },
-    { ...EMOTE_SLOTS_DEF[5], seq: null },
+    { ...EMOTE_SLOTS_DEF[5], seq: 'DANCE', label:'DANCE' },  // special — triggers both girls
   ];
 }
 function isEmoteWheelBtn(x, y) {
@@ -1013,9 +1017,21 @@ function getSlotAtPoint(x, y) {
 }
 function triggerEmoteSlot(idx) {
   var slots=getEmoteSlots();
-  if (idx<0||!slots[idx]||!slots[idx].seq) return;
-  P.transSeq=slots[idx].seq; P.transFrame=0; P.transTimer=0;
-  P.standIdleActive=false;
+  if (idx<0||!slots[idx]) return;
+  var slot = slots[idx];
+
+  // DANCE — special: both Naomi and Sierra dance simultaneously
+  if (slot.seq === 'DANCE') {
+    NPC.danceActive = true; NPC.danceFrame = 0; NPC.danceTimer = 0;
+    NPC.stepSeq = null; NPC.gunEmoteActive = false;
+    // Naomi placeholder — will use naomi dance seq when Naomi sheets arrive
+    // For now cancel any idle and let her do her hair groove as stand-in
+    P.transSeq = NAOMI_HAIR_D; P.transFrame=0; P.transTimer=0;
+    P.standIdleActive = false;
+  } else if (slot.seq && slot.seq !== null) {
+    P.transSeq = slot.seq; P.transFrame=0; P.transTimer=0;
+    P.standIdleActive = false;
+  }
   EMOTE_WHEEL.active=false; EMOTE_WHEEL.selectedSlot=-1;
 }
 
@@ -1370,6 +1386,21 @@ const SIERRA_GUN_SQUAT_EMOTE = [
   { key:'sierra_gun_squat_5', dur:0.18 },
   { key:'sierra_gun_squat_6', dur:0.28 },
 ];
+
+// Dance — 8-frame loop, each frame ~0.18s = full cycle ~1.44s
+const SIERRA_DANCE_SEQ = [
+  { key:'sierra_dance_1', dur:0.18 },
+  { key:'sierra_dance_2', dur:0.18 },
+  { key:'sierra_dance_3', dur:0.16 },
+  { key:'sierra_dance_4', dur:0.18 },
+  { key:'sierra_dance_5', dur:0.18 },
+  { key:'sierra_dance_6', dur:0.16 },
+  { key:'sierra_dance_7', dur:0.18 },
+  { key:'sierra_dance_8', dur:0.18 },
+];
+
+// Dance state for NPC — loops until cancelled
+// NPC.danceActive / NPC.danceFrame / NPC.danceTimer handled in update
 
 const SIERRA_STEP_POOL = [
   SIERRA_PHONE_IDLE,
@@ -1954,6 +1985,20 @@ function update(ts) {
     }
   }
 
+  // ─── Sierra dance tick — loops until movement or crouch cancels ────────────
+  if (NPC.danceActive) {
+    // Cancel if Naomi moves or crouches
+    if (P.moving || P.crouch) {
+      NPC.danceActive = false; NPC.danceFrame = 0; NPC.danceTimer = 0;
+    } else {
+      NPC.danceTimer += dt;
+      if (NPC.danceTimer >= SIERRA_DANCE_SEQ[NPC.danceFrame].dur) {
+        NPC.danceTimer = 0;
+        NPC.danceFrame = (NPC.danceFrame + 1) % SIERRA_DANCE_SEQ.length; // loop
+      }
+    }
+  }
+
   // ─── Sierra micro-step: fires when she's settled and needs to adjust ────────
   // She does a tiny forward step every 1.5-3s when standing still near Naomi
   const sierraSettled = !NPC.moving && !P.crouch && !NPC.gumActive && !NPC.stepSeq;
@@ -2164,10 +2209,12 @@ function drawEntities() {
     }},
     { type:'npc',    wz: NPC.renderWz, draw: () => {
       const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
-      // Gun emote > step > gum priority
-      const sierraSprKey = NPC.gunEmoteActive
-        ? NPC._gunEmoteSeq[NPC.gunEmoteFrame].key
-        : (NPC.stepSeq ? NPC.stepSeq[NPC.stepFrame].key : gumSprKey);
+      // Dance > gun emote > step > gum priority
+      const sierraSprKey = NPC.danceActive
+        ? SIERRA_DANCE_SEQ[NPC.danceFrame].key
+        : NPC.gunEmoteActive
+          ? NPC._gunEmoteSeq[NPC.gunEmoteFrame].key
+          : (NPC.stepSeq ? NPC.stepSeq[NPC.stepFrame].key : gumSprKey);
       drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, sierraSprKey, 0, 1.22, NPC.moving);
 
 
