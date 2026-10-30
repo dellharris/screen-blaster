@@ -969,6 +969,11 @@ function hasItem(id) { return !!INVENTORY.items.find(i => i.id === id); }
 // Screen position of interact button — updated each frame for tap detection
 var INTERACT_BTN_POS = { x:0, y:0, w:0, h:0, visible:false };
 var GUN_ITEM_BTN = { x:0, y:0, w:0, h:0, visible:false };
+// Target icon — persistent HUD button, lights up when gun is in inventory
+var TARGET_BTN = { cx: VW-64, cy: 155, r: 26 };
+function isTargetBtn(x, y) {
+  return hasItem('gun') && Math.hypot(x-TARGET_BTN.cx, y-TARGET_BTN.cy) < TARGET_BTN.r + 8;
+}
 
 function triggerGunEmote() {
   if (NPC.gunEmoteActive) return;
@@ -1448,6 +1453,7 @@ cv.addEventListener('touchstart', e => {
       if (isCrouchBtn(p.x, p.y) && crouchId === null) { crouchId = t.identifier; triggerCrouch(); }
       else if (isRunBtn(p.x, p.y) && runId === null)  { runId = t.identifier; P.running = true; }
       else if (isMuteBtn(p.x, p.y)) { toggleMute(); }
+      else if (isTargetBtn(p.x, p.y)) { triggerGunEmote(); }
       else if (isPhoneBtn(p.x, p.y)) { openSoundCloud(); }
       else if (handlePhoneMenuTap(p.x, p.y)) { /* handled */ }
       else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; GUN_ITEM_BTN.visible=false; }
@@ -1491,6 +1497,7 @@ cv.addEventListener('mousedown', e => {
     if (isCrouchBtn(x,y)) { triggerCrouch(); return; }
     if (isRunBtn(x,y))    { P.running = true; return; }
     if (isMuteBtn(x,y))   { toggleMute(); return; }
+    if (isTargetBtn(x,y))  { triggerGunEmote(); return; }
     if (isPhoneBtn(x,y))  { openSoundCloud(); return; }
     if (handlePhoneMenuTap(x,y)) return;
     if (x > VW-116 && x < VW-16 && y > 56 && y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; GUN_ITEM_BTN.visible=false; return; }
@@ -2485,6 +2492,61 @@ function drawInteractPrompt() {
   INTERACT_BTN_POS.visible = true;
 }
 
+function drawTargetIcon() {
+  var cx2 = TARGET_BTN.cx, cy2 = TARGET_BTN.cy, r = TARGET_BTN.r;
+  var armed = hasItem('gun');
+  var col = armed ? '#00ccff' : 'rgba(255,255,255,0.18)';
+  var breathe = armed ? 0.75 + Math.sin(pulse * 3.5) * 0.25 : 0.4;
+
+  cx.save();
+  cx.globalAlpha = breathe;
+
+  if (armed) {
+    // Glow when active
+    cx.shadowBlur = 14 + Math.sin(pulse * 3.5) * 6;
+    cx.shadowColor = '#00ccff';
+  }
+
+  cx.strokeStyle = col;
+  cx.lineWidth = armed ? 2.0 : 1.2;
+
+  // Outer circle
+  cx.beginPath(); cx.arc(cx2, cy2, r, 0, Math.PI*2); cx.stroke();
+
+  // Inner circle
+  cx.beginPath(); cx.arc(cx2, cy2, r*0.38, 0, Math.PI*2); cx.stroke();
+
+  // Center dot
+  cx.fillStyle = col;
+  cx.beginPath(); cx.arc(cx2, cy2, r*0.12, 0, Math.PI*2); cx.fill();
+
+  // 4 crosshair lines — gap in center
+  var gap = r * 0.52, len = r * 0.42;
+  cx.beginPath();
+  // Top
+  cx.moveTo(cx2, cy2 - r + 1); cx.lineTo(cx2, cy2 - gap);
+  // Bottom
+  cx.moveTo(cx2, cy2 + gap); cx.lineTo(cx2, cy2 + r - 1);
+  // Left
+  cx.moveTo(cx2 - r + 1, cy2); cx.lineTo(cx2 - gap, cy2);
+  // Right
+  cx.moveTo(cx2 + gap, cy2); cx.lineTo(cx2 + r - 1, cy2);
+  cx.stroke();
+
+  cx.shadowBlur = 0;
+
+  // "TAP" hint text when armed
+  if (armed) {
+    cx.globalAlpha = breathe * 0.7;
+    cx.font = 'bold 7px monospace';
+    cx.fillStyle = '#00ccff';
+    cx.textAlign = 'center';
+    cx.fillText('TAP', cx2, cy2 + r + 12);
+  }
+
+  cx.restore();
+}
+
 function drawInventoryBag() {
   var bx = VW - 16, by = 56;
   var itemCount = INVENTORY.items.length;
@@ -3329,6 +3391,7 @@ function render(ts) {
       drawHUD();
       drawInteractPrompt();
       drawInventoryBag();
+      drawTargetIcon();
       drawPhoneMenu();
       drawJoystick();
       break;
