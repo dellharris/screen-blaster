@@ -305,6 +305,8 @@ const CHAR_KEYS = [
   'naomi_front_a','naomi_front_b','naomi_back_a','naomi_back_b',
   'naomi_side_a','naomi_side_b','naomi_backq_a','naomi_backq_b',
   'naomi_squat',
+  'naomi_shock_1','naomi_shock_2','naomi_shock_3','naomi_shock_4',
+  'naomi_shock_5','naomi_shock_6','naomi_shock_7','naomi_shock_8',
   'police',
 ];
 
@@ -2430,6 +2432,7 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   // Standing-height artwork: standup transition frames + standing idle frames.
   const isStandingArt = gumSprKey && (
     gumSprKey.indexOf('standup') >= 0 ||
+    gumSprKey.indexOf('naomi_shock') >= 0 ||
     (gumSprKey.indexOf('_idle_') >= 0 && gumSprKey.indexOf('squat') < 0)
   );
   const heightMul = isStandingArt ? 1.0 : lerp(1.0, 0.70, crouchLerp);
