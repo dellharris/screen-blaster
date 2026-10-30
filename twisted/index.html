@@ -975,6 +975,50 @@ function isTargetBtn(x, y) {
   return hasItem('gun') && Math.hypot(x-TARGET_BTN.cx, y-TARGET_BTN.cy) < TARGET_BTN.r + 8;
 }
 
+// ─── Emote Wheel ──────────────────────────────────────────────────────────────
+var EMOTE_WHEEL = {
+  active: false, touchId: null,
+  cx: VW - 120, cy: VH - 220,
+  selectedSlot: -1,
+  innerR: 44, outerR: 115,
+  holdTimer: 0,
+};
+var EMOTE_SLOTS_DEF = [
+  { label:'HAIR',   color:'#ff2d78', icon:'hair'   },
+  { label:'CHILL',  color:'#00ffcc', icon:'wave'   },
+  { label:'JACKET', color:'#cc8800', icon:'jacket' },
+  { label:'ZIP',    color:'#ffcc00', icon:'zip'    },
+  { label:'STRESS', color:'#ff6600', icon:'stress' },
+  { label:'SOON',   color:'#334455', icon:'plus'   },
+];
+function getEmoteSlots() {
+  return [
+    { ...EMOTE_SLOTS_DEF[0], seq: typeof NAOMI_HAIR_D!=='undefined'?NAOMI_HAIR_D:null },
+    { ...EMOTE_SLOTS_DEF[1], seq: typeof NAOMI_HAIR_C!=='undefined'?NAOMI_HAIR_C:null },
+    { ...EMOTE_SLOTS_DEF[2], seq: typeof NAOMI_JACKET_OFF!=='undefined'?NAOMI_JACKET_OFF:null },
+    { ...EMOTE_SLOTS_DEF[3], seq: typeof NAOMI_JACKET_ZIP!=='undefined'?NAOMI_JACKET_ZIP:null },
+    { ...EMOTE_SLOTS_DEF[4], seq: typeof NAOMI_HAIR_A!=='undefined'?NAOMI_HAIR_A:null },
+    { ...EMOTE_SLOTS_DEF[5], seq: null },
+  ];
+}
+function isEmoteWheelBtn(x, y) {
+  return Math.hypot(x-(VW-64), y-(VH-172)) < 42;  // overlaps RUN button area
+}
+function getSlotAtPoint(x, y) {
+  var dx=x-EMOTE_WHEEL.cx, dy=y-EMOTE_WHEEL.cy;
+  var dist=Math.hypot(dx,dy);
+  if (dist < EMOTE_WHEEL.innerR || dist > EMOTE_WHEEL.outerR+20) return -1;
+  var angle=((Math.atan2(dy,dx)*180/Math.PI+90+360)%360);
+  return Math.floor(angle/60)%6;
+}
+function triggerEmoteSlot(idx) {
+  var slots=getEmoteSlots();
+  if (idx<0||!slots[idx]||!slots[idx].seq) return;
+  P.transSeq=slots[idx].seq; P.transFrame=0; P.transTimer=0;
+  P.standIdleActive=false;
+  EMOTE_WHEEL.active=false; EMOTE_WHEEL.selectedSlot=-1;
+}
+
 function triggerGunEmote() {
   if (NPC.gunEmoteActive) return;
   NPC.gunEmoteActive = true;
@@ -1454,6 +1498,13 @@ cv.addEventListener('touchstart', e => {
       else if (isRunBtn(p.x, p.y) && runId === null)  { runId = t.identifier; P.running = true; }
       else if (isMuteBtn(p.x, p.y)) { toggleMute(); }
       else if (isTargetBtn(p.x, p.y)) { triggerGunEmote(); }
+      else if (isEmoteWheelBtn(p.x, p.y)) {
+        EMOTE_WHEEL.active = true; EMOTE_WHEEL.touchId = t.identifier;
+        EMOTE_WHEEL.selectedSlot = -1;
+      } else if (EMOTE_WHEEL.active && t.identifier === EMOTE_WHEEL.touchId) {
+        var s = getSlotAtPoint(p.x, p.y);
+        EMOTE_WHEEL.selectedSlot = s;
+      }
       else if (isPhoneBtn(p.x, p.y)) { openSoundCloud(); }
       else if (handlePhoneMenuTap(p.x, p.y)) { /* handled */ }
       else if (p.x > VW-116 && p.x < VW-16 && p.y > 56 && p.y < 96) { INVENTORY.open = !INVENTORY.open; if (INVENTORY.open) PHONE_OPEN = false; GUN_ITEM_BTN.visible=false; }
@@ -1471,6 +1522,11 @@ cv.addEventListener('touchstart', e => {
 cv.addEventListener('touchmove', e => {
   e.preventDefault();
   for (const t of e.changedTouches) {
+    // Update emote wheel selection on drag
+    if (EMOTE_WHEEL.active && t.identifier === EMOTE_WHEEL.touchId) {
+      const p = toV(t);
+      EMOTE_WHEEL.selectedSlot = getSlotAtPoint(p.x, p.y);
+    }
     if (t.identifier !== JOY.id) continue;
     const p = toV(t);
     const dx = p.x - JOY.sx, dy = p.y - JOY.sy;
@@ -1483,6 +1539,11 @@ cv.addEventListener('touchmove', e => {
 cv.addEventListener('touchend', e => {
   e.preventDefault();
   for (const t of e.changedTouches) {
+    // Trigger emote on wheel release
+    if (EMOTE_WHEEL.active && t.identifier === EMOTE_WHEEL.touchId) {
+      if (EMOTE_WHEEL.selectedSlot >= 0) triggerEmoteSlot(EMOTE_WHEEL.selectedSlot);
+      EMOTE_WHEEL.active = false; EMOTE_WHEEL.touchId = null; EMOTE_WHEEL.selectedSlot = -1;
+    }
     if (t.identifier === JOY.id)    { JOY.on = false; JOY.id = null; JOY.dx = JOY.dy = 0; }
     if (t.identifier === crouchId)  crouchId = null;
     if (t.identifier === runId)     { runId = null; P.running = false; }
@@ -2764,6 +2825,96 @@ function handlePhoneMenuTap(x, y) {
   return false;
 }
 
+function drawEmoteWheel() {
+  // Always draw the emote button (small icon bottom-right)
+  var bcx = VW-64, bcy = VH-172, br = 22;
+  cx.save();
+  cx.globalAlpha = 0.82;
+  // Button background
+  const bg = cx.createRadialGradient(bcx-br*0.2, bcy-br*0.25, 1, bcx, bcy, br);
+  bg.addColorStop(0, '#2a1a3a'); bg.addColorStop(1, '#110818');
+  cx.fillStyle = bg;
+  cx.strokeStyle = '#cc44ff'; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.arc(bcx, bcy, br, 0, Math.PI*2); cx.fill(); cx.stroke();
+  // Draw small wheel hint (3 dots in a ring)
+  cx.globalAlpha = 0.9;
+  for (var i=0; i<6; i++) {
+    var a = (i/6)*Math.PI*2 - Math.PI/2;
+    var dx2=Math.cos(a)*13, dy2=Math.sin(a)*13;
+    cx.fillStyle = i===5 ? '#334455' : '#cc44ff';
+    cx.globalAlpha = i===5 ? 0.3 : 0.7;
+    cx.beginPath(); cx.arc(bcx+dx2, bcy+dy2, 2.8, 0, Math.PI*2); cx.fill();
+  }
+  cx.shadowBlur = 0;
+
+  if (!EMOTE_WHEEL.active) { cx.restore(); return; }
+
+  // ── Full wheel ──────────────────────────────────────────────────────────────
+  var wcx = EMOTE_WHEEL.cx, wcy = EMOTE_WHEEL.cy;
+  var inner = EMOTE_WHEEL.innerR, outer = EMOTE_WHEEL.outerR;
+  var slots = getEmoteSlots();
+
+  // Backdrop
+  cx.globalAlpha = 0.78;
+  cx.fillStyle = '#080412';
+  cx.beginPath(); cx.arc(wcx, wcy, outer+18, 0, Math.PI*2); cx.fill();
+  cx.globalAlpha = 0.4;
+  cx.strokeStyle = '#cc44ff'; cx.lineWidth = 1;
+  cx.beginPath(); cx.arc(wcx, wcy, outer+18, 0, Math.PI*2); cx.stroke();
+
+  for (var s=0; s<6; s++) {
+    var startA = (s/6)*Math.PI*2 - Math.PI/2 - Math.PI/6;
+    var endA   = startA + Math.PI/3;
+    var midA   = startA + Math.PI/6;
+    var slot   = slots[s];
+    var isSelected = EMOTE_WHEEL.selectedSlot === s;
+    var isEmpty = !slot.seq;
+
+    // Segment fill
+    cx.globalAlpha = isEmpty ? 0.25 : (isSelected ? 0.95 : 0.65);
+    cx.fillStyle = isSelected ? slot.color : (isEmpty ? '#1a1a2a' : '#0d0818');
+    cx.beginPath();
+    cx.arc(wcx, wcy, outer, startA, endA);
+    cx.arc(wcx, wcy, inner, endA, startA, true);
+    cx.closePath(); cx.fill();
+
+    // Segment border
+    cx.globalAlpha = isEmpty ? 0.15 : (isSelected ? 1.0 : 0.4);
+    cx.strokeStyle = slot.color; cx.lineWidth = isSelected ? 2.2 : 1.0;
+    if (isSelected) { cx.shadowBlur = 12; cx.shadowColor = slot.color; }
+    cx.beginPath();
+    cx.arc(wcx, wcy, outer, startA, endA);
+    cx.arc(wcx, wcy, inner, endA, startA, true);
+    cx.closePath(); cx.stroke();
+    cx.shadowBlur = 0;
+
+    // Label
+    var labelR = (inner + outer) / 2;
+    var lx = wcx + Math.cos(midA) * labelR;
+    var ly = wcy + Math.sin(midA) * labelR;
+    cx.globalAlpha = isEmpty ? 0.25 : (isSelected ? 1.0 : 0.75);
+    cx.font = isSelected ? 'bold 10px monospace' : 'bold 9px monospace';
+    cx.fillStyle = isSelected ? '#fff' : slot.color;
+    cx.textAlign = 'center';
+    cx.fillText(slot.label, lx, ly + 3.5);
+  }
+
+  // Center circle — shows selected or instruction
+  cx.globalAlpha = 0.9;
+  cx.fillStyle = '#0d0818'; cx.strokeStyle = '#cc44ff'; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.arc(wcx, wcy, inner-4, 0, Math.PI*2); cx.fill(); cx.stroke();
+  cx.font = 'bold 8px monospace'; cx.textAlign = 'center';
+  if (EMOTE_WHEEL.selectedSlot >= 0 && slots[EMOTE_WHEEL.selectedSlot].seq) {
+    cx.fillStyle = slots[EMOTE_WHEEL.selectedSlot].color;
+    cx.fillText('GO', wcx, wcy+3);
+  } else {
+    cx.fillStyle = 'rgba(204,68,255,0.6)';
+    cx.fillText('DRAG', wcx, wcy+3);
+  }
+
+  cx.restore();
+}
+
 function drawJoystick() {
   if (!JOY.on) return;
   cx.save();
@@ -3392,6 +3543,7 @@ function render(ts) {
       drawInteractPrompt();
       drawInventoryBag();
       drawTargetIcon();
+      drawEmoteWheel();
       drawPhoneMenu();
       drawJoystick();
       break;
