@@ -989,7 +989,7 @@ function isTargetBtn(x, y) {
 // ─── Emote Wheel ──────────────────────────────────────────────────────────────
 var EMOTE_WHEEL = {
   active: false, touchId: null,
-  cx: VW - 120, cy: VH - 220,
+  cx: VW - 185, cy: VH - 190,
   selectedSlot: -1,
   innerR: 44, outerR: 115,
   holdTimer: 0,
@@ -1013,7 +1013,7 @@ function getEmoteSlots() {
   ];
 }
 function isEmoteWheelBtn(x, y) {
-  return Math.hypot(x-(VW-64), y-(VH-172)) < 42;  // overlaps RUN button area
+  return Math.hypot(x-(VW-185), y-(VH-190)) < 42;
 }
 function getSlotAtPoint(x, y) {
   var dx=x-EMOTE_WHEEL.cx, dy=y-EMOTE_WHEEL.cy;
@@ -2910,7 +2910,7 @@ function handlePhoneMenuTap(x, y) {
 
 function drawEmoteWheel() {
   // Always draw the emote button (small icon bottom-right)
-  var bcx = VW-64, bcy = VH-172, br = 22;
+  var bcx = VW-185, bcy = VH-190, br = 22;
   cx.save();
   cx.globalAlpha = 0.82;
   // Button background
