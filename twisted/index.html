@@ -2417,16 +2417,15 @@ function drawChar(key, wx, wz, mvx, mvz, walkFrame, crouch, crouchLerp, idlePhas
   }
 
   const baseH = 360;
-  // Only STANDING-HEIGHT artwork bypasses the crouch compression.
-  // Crouch-height artwork (squat_walk crouch_t*, gum frames, squat_idle) still
-  // uses the normal lerp so they don't pop to full size while crouching.
-  // Standing-height artwork: standup transition frames + standing idle frames.
+  // Standup frames during CROUCH_OUT (crouch=false) → full height.
+  // Standup frames during CROUCH_IN (crouch=true) → scale with crouchLerp so no size pop at transition end.
+  // Idle and shock frames always full standing height.
   const isStandingArt = gumSprKey && (
-    gumSprKey.indexOf('standup') >= 0 ||
+    (!crouch && gumSprKey.indexOf('standup') >= 0) ||
     gumSprKey.indexOf('naomi_shock') >= 0 ||
     (gumSprKey.indexOf('_idle_') >= 0 && gumSprKey.indexOf('squat') < 0)
   );
-  const heightMul = isStandingArt ? 1.0 : lerp(1.0, 0.70, crouchLerp);
+  const heightMul = isStandingArt ? 1.0 : lerp(1.0, 0.82, crouchLerp);
   const boost = (!gumSprKey && crouchBinary && sqBoost) ? sqBoost : 1.0;
   const sh = baseH * s * SQUISH * heightMul * boost;
   const ar = spr ? (spr.width / spr.height) : 0.5;
