@@ -2752,60 +2752,18 @@ function drawBirds() {
   });
 }
 
-// Fills letterbox bars (side/top/bottom) with extended scene edges + dark vignette
-// Draws in raw canvas pixel coordinates, called BEFORE the game transform is applied
+// Cover-fill the entire canvas with the scene before the game transform.
+// Uses CSS background-size:cover logic so every pixel is filled — no black bars anywhere.
+// drawBg() renders the correctly scaled game version on top, covering the center area.
 function drawExtendedBg() {
   var img = IMG['scene'];
   if (!img || !img.naturalWidth) return;
-  var iw = img.naturalWidth, ih = img.naturalHeight;
-  var gL = offX, gT = offY;
-  var gR = offX + VW * scale, gB = offY + VH * scale;
-  var sW = Math.round(iw * 0.09);  // sample 9% from each side edge
-  var sH = Math.round(ih * 0.10);  // sample 10% from top/bottom edge
-
-  cx.save();
-
-  // LEFT bar
-  if (gL > 4) {
-    cx.drawImage(img, 0, 0, sW, ih, 0, 0, gL + 1, cv.height);
-    var lg = cx.createLinearGradient(0, 0, gL, 0);
-    lg.addColorStop(0,   'rgba(0,0,0,0.90)');
-    lg.addColorStop(0.6, 'rgba(0,0,0,0.18)');
-    lg.addColorStop(1,   'rgba(0,0,0,0)');
-    cx.fillStyle = lg; cx.fillRect(0, 0, gL + 1, cv.height);
-  }
-
-  // RIGHT bar
-  if (gR < cv.width - 4) {
-    cx.drawImage(img, iw - sW, 0, sW, ih, gR - 1, 0, cv.width - gR + 1, cv.height);
-    var rg = cx.createLinearGradient(gR, 0, cv.width, 0);
-    rg.addColorStop(0,   'rgba(0,0,0,0)');
-    rg.addColorStop(0.4, 'rgba(0,0,0,0.18)');
-    rg.addColorStop(1,   'rgba(0,0,0,0.90)');
-    cx.fillStyle = rg; cx.fillRect(gR - 1, 0, cv.width - gR + 1, cv.height);
-  }
-
-  // TOP bar
-  if (gT > 4) {
-    cx.drawImage(img, 0, 0, iw, sH, gL, 0, VW * scale, gT + 1);
-    var tg = cx.createLinearGradient(0, 0, 0, gT);
-    tg.addColorStop(0,   'rgba(0,0,0,0.92)');
-    tg.addColorStop(0.6, 'rgba(0,0,0,0.20)');
-    tg.addColorStop(1,   'rgba(0,0,0,0)');
-    cx.fillStyle = tg; cx.fillRect(gL, 0, VW * scale, gT + 1);
-  }
-
-  // BOTTOM bar
-  if (gB < cv.height - 4) {
-    cx.drawImage(img, 0, ih - sH, iw, sH, gL, gB - 1, VW * scale, cv.height - gB + 1);
-    var bg2 = cx.createLinearGradient(0, gB, 0, cv.height);
-    bg2.addColorStop(0,   'rgba(0,0,0,0)');
-    bg2.addColorStop(0.4, 'rgba(0,0,0,0.20)');
-    bg2.addColorStop(1,   'rgba(0,0,0,0.92)');
-    cx.fillStyle = bg2; cx.fillRect(gL, gB - 1, VW * scale, cv.height - gB + 1);
-  }
-
-  cx.restore();
+  var coverScale = Math.max(cv.width / img.naturalWidth, cv.height / img.naturalHeight);
+  var bw = img.naturalWidth  * coverScale;
+  var bh = img.naturalHeight * coverScale;
+  var bx = (cv.width  - bw) / 2;
+  var by = (cv.height - bh) / 2;
+  cx.drawImage(img, bx, by, bw, bh);
 }
 
 function drawBg(darken = 0) {  if (IMG['scene']) {
