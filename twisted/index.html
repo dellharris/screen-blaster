@@ -314,6 +314,10 @@ const CHAR_KEYS = [
   'naomi_squat',
   'naomi_shock_1','naomi_shock_2','naomi_shock_3','naomi_shock_4',
   'naomi_shock_5','naomi_shock_6','naomi_shock_7','naomi_shock_8',
+  'bird_fly_1','bird_fly_2','bird_fly_3','bird_fly_4','bird_fly_5','bird_fly_6',
+  'bird_fly_7','bird_fly_8','bird_fly_9','bird_fly_10','bird_fly_11','bird_fly_12',
+  'bird_land_1','bird_land_2','bird_land_3','bird_land_4',
+  'bird_perch_1','bird_perch_2',
   'police',
 ];
 
@@ -436,6 +440,11 @@ for (let _di = 1; _di <= 8; _di++) loadImg('sierra_dance_' + _di, 'assets/sierra
 for (let _ndi = 1; _ndi <= 8; _ndi++) loadImg('naomi_dance_' + _ndi, 'assets/naomi_dance_' + _ndi + '.png');
 // Naomi spotlight shock reaction — 8 frames
 for (let _nsh = 1; _nsh <= 8; _nsh++) loadImg('naomi_shock_' + _nsh, 'assets/naomi_shock_' + _nsh + '.png');
+// Bird fly/land/perch frames — black bg removed by CHAR_KEYS processing
+for (let _bf = 1; _bf <= 12; _bf++) loadImg('bird_fly_' + _bf, 'assets/bird_fly_' + _bf + '.png');
+for (let _bl = 1; _bl <= 4;  _bl++) loadImg('bird_land_' + _bl, 'assets/bird_land_' + _bl + '.png');
+loadImg('bird_perch_1', 'assets/bird_perch_1.png');
+loadImg('bird_perch_2', 'assets/bird_perch_2.png');
 // Naomi standing idle animation frames (anxious fidget)
 for (let _ni = 1; _ni <= 8; _ni++) loadImg('naomi_idle_' + _ni, 'assets/naomi_idle_' + _ni + '.png?v=2');
 // Jacket off frames
@@ -1369,6 +1378,23 @@ const NAOMI_SHOCK_SEQ = [
   { key:'naomi_shock_6', dur:0.18 },  // sprint pose 2
 ];
 
+// ─── Bird animation sequences ────────────────────────────────────────────────
+const BIRD_FLY_SEQ = [
+  {key:'bird_fly_1',dur:0.07},{key:'bird_fly_2',dur:0.07},{key:'bird_fly_3',dur:0.07},
+  {key:'bird_fly_4',dur:0.07},{key:'bird_fly_5',dur:0.07},{key:'bird_fly_6',dur:0.07},
+  {key:'bird_fly_7',dur:0.07},{key:'bird_fly_8',dur:0.07},{key:'bird_fly_9',dur:0.07},
+  {key:'bird_fly_10',dur:0.07},{key:'bird_fly_11',dur:0.07},{key:'bird_fly_12',dur:0.07},
+];
+const BIRD_PERCH_SEQ = [
+  {key:'bird_perch_1',dur:1.8},{key:'bird_perch_2',dur:0.12},
+];
+
+// Two independent crows fly across the alley at different heights + timings
+function makeBird(idleDelay) {
+  return { active:false, x:0, y:0, vx:0, frame:0, frameTimer:0, idleTimer:0, nextFly:idleDelay };
+}
+const BIRDS = [ makeBird(6), makeBird(18) ];
+
 // Sierra micro-step forward — plays when she settles near Naomi
 const SIERRA_STEP_FWD = [
   { key:'sierra_step_fwd1', dur:0.10 },
@@ -1770,6 +1796,7 @@ function update(ts) {
 
   // Win flash → win dialogue
   tickWinFlash(dt);
+  tickBirds(dt);
   tickDemo(dt);
 
   // End card auto-replay after 8s
@@ -2218,6 +2245,34 @@ function tickWinFlash(dt) {
   if (winFlashTimer > 1.4) { phase = PH.WIN_DLG; winFlashTimer = 0; winDlgIdx = 0; }
 }
 
+function tickBirds(dt) {
+  if (phase !== PH.PLAY) return;
+  BIRDS.forEach(function(b, i) {
+    if (!b.active) {
+      b.idleTimer += dt;
+      if (b.idleTimer >= b.nextFly) {
+        b.idleTimer = 0;
+        b.nextFly = 14 + Math.random() * 22;  // re-appear every 14–36s
+        const fromLeft = Math.random() < 0.5;
+        b.flip  = !fromLeft;                   // flip so bird faces direction of travel
+        b.x     = fromLeft ? -160 : VW + 160;
+        b.y     = 28 + Math.random() * 70 + i * 24;  // stagger heights per bird
+        b.vx    = fromLeft ? (110 + Math.random() * 70) : -(110 + Math.random() * 70);
+        b.frame = 0; b.frameTimer = 0;
+        b.active = true;
+      }
+    } else {
+      b.x += b.vx * dt;
+      b.frameTimer += dt;
+      if (b.frameTimer >= BIRD_FLY_SEQ[b.frame].dur) {
+        b.frameTimer = 0;
+        b.frame = (b.frame + 1) % BIRD_FLY_SEQ.length;
+      }
+      if ((b.vx > 0 && b.x > VW + 160) || (b.vx < 0 && b.x < -160)) b.active = false;
+    }
+  });
+}
+
 // ─── Demo mode controller ────────────────────────────────────────────────────
 let _demoT = 0, _demoInteracted = false, _demoTapTimer = 0;
 function tickDemo(dt) {
@@ -2277,8 +2332,23 @@ function tickDemo(dt) {
 }
 
 // ─── Drawing: background ─────────────────────────────────────────────────────
-function drawBg(darken = 0) {
-  if (IMG['scene']) {
+function drawBirds() {
+  BIRDS.forEach(function(b) {
+    if (!b.active) return;
+    var key = BIRD_FLY_SEQ[b.frame].key;
+    var spr = SPR[key] || IMG[key];
+    if (!spr) return;
+    var bh = 52;  // canvas-pixel height — feels right above the alley
+    var bw = bh * (spr.width / spr.height);
+    cx.save();
+    cx.translate(b.x, b.y);
+    if (b.flip) cx.scale(-1, 1);
+    cx.drawImage(spr, -bw / 2, -bh / 2, bw, bh);
+    cx.restore();
+  });
+}
+
+function drawBg(darken = 0) {  if (IMG['scene']) {
     cx.drawImage(IMG['scene'], 0, 0, VW, VH);
   } else {
     // Fallback gradient
@@ -3756,6 +3826,7 @@ function render(ts) {
 
     case PH.PLAY:
       drawBg();
+      drawBirds();
       drawSpotlight();
       drawCar();
       drawEntities();    // bins + characters depth-sorted together
