@@ -314,6 +314,11 @@ const CHAR_KEYS = [
   'naomi_squat',
   'naomi_shock_1','naomi_shock_2','naomi_shock_3','naomi_shock_4',
   'naomi_shock_5','naomi_shock_6','naomi_shock_7','naomi_shock_8',
+  'rat_run_1','rat_run_2','rat_run_3','rat_run_4','rat_run_5','rat_run_6',
+  'rat_run_7','rat_run_8','rat_run_9',
+  'rat_situp_1','rat_situp_2','rat_situp_3','rat_situp_4',
+  'rat_eat_1','rat_eat_2','rat_eat_3','rat_eat_4','rat_eat_5','rat_eat_6',
+  'rat_eat_7','rat_eat_8','rat_eat_9','rat_eat_10','rat_eat_11',
   'bird_fly_1','bird_fly_2','bird_fly_3','bird_fly_4','bird_fly_5','bird_fly_6',
   'bird_fly_7','bird_fly_8','bird_fly_9','bird_fly_10','bird_fly_11','bird_fly_12',
   'bird_front_1','bird_front_2','bird_front_3','bird_front_4','bird_front_5','bird_front_6',
@@ -442,6 +447,13 @@ for (let _di = 1; _di <= 8; _di++) loadImg('sierra_dance_' + _di, 'assets/sierra
 for (let _ndi = 1; _ndi <= 8; _ndi++) loadImg('naomi_dance_' + _ndi, 'assets/naomi_dance_' + _ndi + '.png');
 // Naomi spotlight shock reaction — 8 frames
 for (let _nsh = 1; _nsh <= 8; _nsh++) loadImg('naomi_shock_' + _nsh, 'assets/naomi_shock_' + _nsh + '.png');
+// Rat frames — black bg removed via CHAR_KEYS
+['rat_run_1','rat_run_2','rat_run_3','rat_run_4','rat_run_5','rat_run_6',
+ 'rat_run_7','rat_run_8','rat_run_9',
+ 'rat_situp_1','rat_situp_2','rat_situp_3','rat_situp_4',
+ 'rat_eat_1','rat_eat_2','rat_eat_3','rat_eat_4','rat_eat_5','rat_eat_6',
+ 'rat_eat_7','rat_eat_8','rat_eat_9','rat_eat_10','rat_eat_11',
+].forEach(function(k){ loadImg(k, 'assets/' + k + '.png'); });
 // Bird fly/land/perch frames — black bg removed by CHAR_KEYS processing
 for (let _bf = 1; _bf <= 12; _bf++) loadImg('bird_fly_' + _bf, 'assets/bird_fly_' + _bf + '.png');
 for (let _bff = 1; _bff <= 12; _bff++) loadImg('bird_front_' + _bff, 'assets/bird_front_' + _bff + '.png');
@@ -1459,6 +1471,159 @@ function birdPickSpeed(b) {
   b.seq = Math.abs(dy) > Math.abs(dx) * 1.4 ? BIRD_FRONT_SEQ : BIRD_FLY_SEQ;
 }
 
+// ─── Rat animation sequences ─────────────────────────────────────────────────
+var RAT_RUN_SEQ = [
+  {key:'rat_run_1',dur:0.055},{key:'rat_run_2',dur:0.055},{key:'rat_run_3',dur:0.055},
+  {key:'rat_run_4',dur:0.055},{key:'rat_run_5',dur:0.055},{key:'rat_run_6',dur:0.055},
+];
+var RAT_SITUP_SEQ = [
+  {key:'rat_situp_1',dur:0.11},{key:'rat_situp_2',dur:0.11},
+  {key:'rat_situp_3',dur:0.11},{key:'rat_situp_4',dur:0.11},
+];
+var RAT_EAT_SEQ = [
+  {key:'rat_eat_1',dur:0.14},{key:'rat_eat_2',dur:0.14},{key:'rat_eat_3',dur:0.14},
+  {key:'rat_eat_4',dur:0.14},{key:'rat_eat_5',dur:0.14},{key:'rat_eat_6',dur:0.14},
+  {key:'rat_eat_7',dur:0.14},{key:'rat_eat_8',dur:0.14},
+];
+var RAT_SITDOWN_SEQ = [  // situp reversed — transition back to run
+  {key:'rat_situp_4',dur:0.09},{key:'rat_situp_3',dur:0.09},
+  {key:'rat_situp_2',dur:0.09},{key:'rat_situp_1',dur:0.09},
+];
+
+// Pack state — 2 concurrent packs max
+var RAT_PACKS = [{foodX:-1},{foodX:-1}];
+
+// Pool of 6 rat instances
+var RAT_POOL = (function(){
+  var p=[];
+  for(var i=0;i<6;i++) p.push({
+    active:false, state:'dormant', packId:0, isLeader:false,
+    x:0, y:0, vx:0, baseVx:0, h:26,
+    frame:0, frameTimer:0, seq:null, flipH:false,
+    eatTimer:0, eatDur:6,
+    spawnDelay:0, spawnTimer:0,
+  });
+  return p;
+})();
+var _ratNextPack = 6 + Math.random() * 16;  // first pack 6-22s in
+
+function _ratFreeSlot() { return RAT_POOL.find(function(r){ return !r.active; })||null; }
+
+function _ratSpawnOne(packId, fromLeft, y, speed, h, delay, isLeader) {
+  var r = _ratFreeSlot(); if (!r) return;
+  r.active=true; r.packId=packId; r.isLeader=isLeader;
+  r.flipH=!fromLeft;
+  r.x = fromLeft ? -55 : VW+55;
+  r.y=y; r.h=h;
+  r.baseVx = fromLeft ? speed : -speed; r.vx = r.baseVx;
+  r.state='pending'; r.spawnDelay=delay; r.spawnTimer=0;
+  r.frame=0; r.frameTimer=0; r.seq=RAT_RUN_SEQ;
+  r.eatTimer=0; r.eatDur = 4 + Math.random()*5;
+}
+
+function _ratSpawnPack() {
+  // Find pack slot not in use
+  var pid=0;
+  for(var pi=0;pi<RAT_PACKS.length;pi++){
+    if(!RAT_POOL.some(function(r){ return r.active && r.packId===pi; })){pid=pi;break;}
+  }
+  RAT_PACKS[pid].foodX=-1;
+  var fromLeft = Math.random()<0.55;
+  var count    = Math.random()<0.38 ? 3 : 2;  // 38% three rats, 62% two
+  // Pick depth tier: near (larger/slower), mid, far (smaller/faster)
+  var tier = Math.random();
+  var baseY  = tier<0.40 ? 462+Math.random()*10 : tier<0.74 ? 422+Math.random()*10 : 384+Math.random()*10;
+  var baseH  = tier<0.40 ? 28 : tier<0.74 ? 21 : 15;
+  var baseSpd= tier<0.40 ? 195+Math.random()*55 : tier<0.74 ? 175+Math.random()*45 : 155+Math.random()*35;
+  for(var i=0;i<count;i++){
+    var delay  = i===0 ? 0 : 0.12 + Math.random()*0.68*i;  // irregular stagger
+    var yOff   = (Math.random()-0.5)*18;
+    var spdMul = 0.88+Math.random()*0.24;
+    _ratSpawnOne(pid, fromLeft, baseY+yOff, baseSpd*spdMul, baseH+Math.round((Math.random()-0.5)*4), delay, i===0);
+  }
+}
+
+function tickRats(dt) {
+  if (phase !== PH.PLAY) return;
+  _ratNextPack -= dt;
+  if (_ratNextPack <= 0) {
+    _ratSpawnPack();
+    // Next pack: 25-70s, with irregular jitter so it never feels rhythmic
+    _ratNextPack = 25 + Math.random()*45 + (Math.random()<0.3 ? 15 : 0);
+  }
+  RAT_POOL.forEach(function(r) {
+    if (!r.active) return;
+    // Wait for stagger delay
+    if (r.state==='pending') {
+      r.spawnTimer+=dt;
+      if (r.spawnTimer>=r.spawnDelay) r.state='running';
+      else return;
+    }
+    // Advance animation frame
+    r.frameTimer+=dt;
+    var seq=r.seq||RAT_RUN_SEQ;
+    if (r.frameTimer>=seq[r.frame].dur) {
+      r.frameTimer=0; r.frame++;
+      if (r.frame>=seq.length) {
+        if      (seq===RAT_SITUP_SEQ)   { r.seq=RAT_EAT_SEQ;  r.state='eating'; r.frame=0; }
+        else if (seq===RAT_SITDOWN_SEQ) { r.seq=RAT_RUN_SEQ;  r.state='running'; r.frame=0; r.vx=r.baseVx; }
+        else r.frame=0;  // run + eat loop
+      }
+    }
+    if (r.state==='running') {
+      r.x+=r.vx*dt;
+      // Leader decides whether pack eats
+      if (r.isLeader && RAT_PACKS[r.packId].foodX<0) {
+        var inZone = r.x>185 && r.x<665;
+        // Probabilistic check — not at a fixed point, feels organic
+        if (inZone && Math.random()<dt*0.5) {
+          RAT_PACKS[r.packId].foodX=r.x;
+          r.state='slowing';
+        }
+      }
+      // Follower: join eat if pack food spot set and close enough
+      if (!r.isLeader && RAT_PACKS[r.packId].foodX>0) {
+        if (Math.abs(r.x - RAT_PACKS[r.packId].foodX)<100) r.state='slowing';
+      }
+      if (r.x<-80||r.x>VW+80) { r.active=false; RAT_PACKS[r.packId].foodX=-1; }
+    }
+    if (r.state==='slowing') {
+      r.vx*=Math.pow(0.025,dt);  // rapid deceleration
+      r.x+=r.vx*dt;
+      if (Math.abs(r.vx)<6) {
+        // Snap near pack food spot (within ±28px so they look like sharing a source)
+        if(RAT_PACKS[r.packId].foodX>0) r.x=RAT_PACKS[r.packId].foodX+(Math.random()-0.5)*28;
+        r.vx=0; r.state='situp'; r.seq=RAT_SITUP_SEQ; r.frame=0; r.frameTimer=0;
+      }
+    }
+    if (r.state==='eating') {
+      r.eatTimer+=dt;
+      if (r.eatTimer>=r.eatDur) {
+        r.eatTimer=0; r.state='sitdown'; r.seq=RAT_SITDOWN_SEQ; r.frame=0; r.frameTimer=0;
+        // Release food spot once first rat finishes
+        if(r.isLeader) RAT_PACKS[r.packId].foodX=-1;
+      }
+    }
+  });
+}
+
+function drawRats() {
+  if (phase !== PH.PLAY) return;
+  RAT_POOL.forEach(function(r) {
+    if (!r.active || r.state==='pending' || r.state==='dormant') return;
+    var seq=r.seq||RAT_RUN_SEQ;
+    var fi=Math.min(r.frame, seq.length-1);
+    var key=seq[fi].key;
+    var spr=SPR[key]||IMG[key]; if (!spr) return;
+    var rh=r.h, rw=rh*(spr.width/spr.height);
+    cx.save();
+    cx.translate(r.x, r.y);
+    if (r.flipH) cx.scale(-1,1);
+    cx.drawImage(spr, -rw/2, -rh, rw, rh);
+    cx.restore();
+  });
+}
+
 // Sierra micro-step forward — plays when she settles near Naomi
 const SIERRA_STEP_FWD = [
   { key:'sierra_step_fwd1', dur:0.10 },
@@ -1861,6 +2026,7 @@ function update(ts) {
   // Win flash → win dialogue
   tickWinFlash(dt);
   tickBirds(dt);
+  tickRats(dt);
   tickDemo(dt);
 
   // End card auto-replay after 8s
@@ -4030,6 +4196,7 @@ function render(ts) {
     case PH.PLAY:
       drawBg();
       drawBirds();
+      drawRats();
       drawSpotlight();
       drawCar();
       drawEntities();    // bins + characters depth-sorted together
