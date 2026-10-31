@@ -368,6 +368,7 @@ function loadImg(k, src) {
 loadImg('intro',        'assets/intro.jpg');
 loadImg('scene',        'assets/scene.png?v=4');
 loadImg('fg',           'assets/foreground.png');
+loadImg('fg_box',       'assets/fg_box.png');     // foreground crates — bottom-right parallax
 loadImg('police',       'assets/police.png');
 // Dialogue comic portraits (used as-is, no black removal needed)
 loadImg('dumpster',     'assets/dumpster.png');
@@ -2950,8 +2951,16 @@ function drawEntities() {
 }
 
 // Draw win glow only — called AFTER characters
-function drawWinGlow() {
-  if (IMG['fg']) cx.drawImage(IMG['fg'], 0, 0, VW, VH);
+// Foreground crate overlay — fixed bottom-right, drawn on top of characters for depth
+function drawFgBox() {
+  var img = IMG['fg_box']; if (!img) return;
+  // Anchor to bottom-right corner of virtual canvas
+  // Width ~290 virtual px gives strong near-camera depth without blocking center
+  var fw = 290, fh = fw * (img.naturalHeight / img.naturalWidth);
+  cx.drawImage(img, VW - fw, VH - fh, fw, fh);
+}
+
+function drawWinGlow() {  if (IMG['fg']) cx.drawImage(IMG['fg'], 0, 0, VW, VH);
   const ws = w2s(WIN.wxMin + 0.07, WIN.wzMin + 0.12);
   cx.save();
 
@@ -4273,6 +4282,7 @@ function render(ts) {
       drawSpotlight();
       drawCar();
       drawEntities();    // bins + characters depth-sorted together
+      drawFgBox();       // near-camera foreground crates — in front of characters
       drawWinGlow();
       // Spotted flash
       if (catchFlash > 0) {
