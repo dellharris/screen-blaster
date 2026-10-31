@@ -314,11 +314,7 @@ const CHAR_KEYS = [
   'naomi_squat',
   'naomi_shock_1','naomi_shock_2','naomi_shock_3','naomi_shock_4',
   'naomi_shock_5','naomi_shock_6','naomi_shock_7','naomi_shock_8',
-  'rat_run_1','rat_run_2','rat_run_3','rat_run_4','rat_run_5','rat_run_6',
-  'rat_run_7','rat_run_8','rat_run_9',
-  'rat_situp_1','rat_situp_2','rat_situp_3','rat_situp_4',
-  'rat_eat_1','rat_eat_2','rat_eat_3','rat_eat_4','rat_eat_5','rat_eat_6',
-  'rat_eat_7','rat_eat_8','rat_eat_9','rat_eat_10','rat_eat_11',
+  // rats removed — already RGBA transparent, processSprite would strip ink outlines
   'cloud_flat','cloud_tall','cloud_wisp',
   'cloud_flat_1','cloud_flat_2','cloud_flat_3','cloud_flat_4','cloud_flat_5','cloud_flat_6',
   'cloud_tall_1','cloud_tall_2','cloud_tall_3','cloud_tall_4','cloud_tall_5','cloud_tall_6',
@@ -1564,7 +1560,7 @@ var RAT_POOL = (function(){
     x:0, y:0, vx:0, baseVx:0, h:26,
     frame:0, frameTimer:0, seq:null, flipH:false,
     eatTimer:0, eatDur:6,
-    spawnDelay:0, spawnTimer:0,
+    spawnDelay:0, spawnTimer:0, fleeing:false,
   });
   return p;
 })();
@@ -1579,7 +1575,7 @@ function _ratSpawnOne(packId, fromLeft, y, speed, h, delay, isLeader) {
   r.x = fromLeft ? -55 : VW+55;
   r.y=y; r.h=h;
   r.baseVx = fromLeft ? speed : -speed; r.vx = r.baseVx;
-  r.state='pending'; r.spawnDelay=delay; r.spawnTimer=0;
+  r.state='pending'; r.spawnDelay=delay; r.spawnTimer=0; r.fleeing=false;
   r.frame=0; r.frameTimer=0; r.seq=RAT_RUN_SEQ;
   r.eatTimer=0; r.eatDur = 4 + Math.random()*5;
 }
@@ -1635,8 +1631,22 @@ function tickRats(dt) {
     }
     if (r.state==='running') {
       r.x+=r.vx*dt;
-      // Leader decides whether pack eats
-      if (r.isLeader && RAT_PACKS[r.packId].foodX<0) {
+
+      // Flee if either character gets within 90px screen-space
+      if (!r.fleeing) {
+        var pScr=w2s(P.renderWx, P.renderWz);
+        var nScr=w2s(NPC.renderWx, NPC.renderWz);
+        var dP=Math.hypot(r.x-pScr.x, r.y-pScr.y);
+        var dN=Math.hypot(r.x-nScr.x, r.y-nScr.y);
+        if (dP<90||dN<90) {
+          r.fleeing=true;
+          RAT_PACKS[r.packId].foodX=-1;  // cancel pack eat
+          r.vx=(r.vx>=0?1:-1)*Math.abs(r.baseVx)*3.2;  // bolt in current direction
+        }
+      }
+
+      // Leader decides whether pack eats (skip if fleeing)
+      if (!r.fleeing && r.isLeader && RAT_PACKS[r.packId].foodX<0) {
         var inZone = r.x>185 && r.x<665;
         // Probabilistic check — not at a fixed point, feels organic
         if (inZone && Math.random()<dt*0.5) {
@@ -1645,7 +1655,7 @@ function tickRats(dt) {
         }
       }
       // Follower: join eat if pack food spot set and close enough
-      if (!r.isLeader && RAT_PACKS[r.packId].foodX>0) {
+      if (!r.fleeing && !r.isLeader && RAT_PACKS[r.packId].foodX>0) {
         if (Math.abs(r.x - RAT_PACKS[r.packId].foodX)<100) r.state='slowing';
       }
       if (r.x<-80||r.x>VW+80) { r.active=false; RAT_PACKS[r.packId].foodX=-1; }
