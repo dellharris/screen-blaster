@@ -366,7 +366,7 @@ function loadImg(k, src) {
 }
 
 loadImg('intro',        'assets/intro.jpg');
-loadImg('scene',        'assets/scene.png?v=3');
+loadImg('scene',        'assets/scene.png?v=4');
 loadImg('fg',           'assets/foreground.png');
 loadImg('police',       'assets/police.png');
 // Dialogue comic portraits (used as-is, no black removal needed)
@@ -1029,7 +1029,8 @@ function hasItem(id) { return !!INVENTORY.items.find(i => i.id === id); }
 var INTERACT_BTN_POS = { x:0, y:0, w:0, h:0, visible:false };
 var GUN_ITEM_BTN = { x:0, y:0, w:0, h:0, visible:false };
 // Target icon — persistent HUD button, lights up when gun is in inventory
-var TARGET_BTN = { cx: VW-64, cy: 155, r: 26 };
+var TARGET_BTN = { cx: VW-58, cy: VH-191, r: 40 };  // TAP — large teal crosshair
+const GADGET_BTN = { cx: VW-158, cy: VH-72, r: 30 }; // GADGET — emote/tool selector
 function isTargetBtn(x, y) {
   return hasItem('gun') && Math.hypot(x-TARGET_BTN.cx, y-TARGET_BTN.cy) < TARGET_BTN.r + 8;
 }
@@ -1037,7 +1038,7 @@ function isTargetBtn(x, y) {
 // ─── Emote Wheel ──────────────────────────────────────────────────────────────
 var EMOTE_WHEEL = {
   active: false, touchId: null, mouseHeld: false,
-  cx: VW - 175, cy: VH - 195,
+  cx: VW - 158, cy: VH - 210,  // wheel opens above GADGET button
   selectedSlot: -1,
   innerR: 44, outerR: 115,
   holdTimer: 0,
@@ -1061,7 +1062,7 @@ function getEmoteSlots() {
   ];
 }
 function isEmoteWheelBtn(x, y) {
-  return Math.hypot(x-(VW-175), y-(VH-64)) < 42;
+  return Math.hypot(x - GADGET_BTN.cx, y - GADGET_BTN.cy) < GADGET_BTN.r + 14;
 }
 function getSlotAtPoint(x, y) {
   var dx=x-EMOTE_WHEEL.cx, dy=y-EMOTE_WHEEL.cy;
@@ -1890,8 +1891,8 @@ function toV(touch) {
   };
 }
 
-const CROUCH_BTN = { cx: VW-64, cy: VH-64, r: 46 };
-const RUN_BTN    = { cx: VW-64, cy: VH-172, r: 38 };  // above Stay Low
+const CROUCH_BTN = { cx: VW-58,  cy: VH-88,  r: 46 };  // STAY LOW
+const RUN_BTN    = { cx: VW-135, cy: VH-148, r: 30 };  // RUN
 function isCrouchBtn(x, y) { return Math.hypot(x-CROUCH_BTN.cx, y-CROUCH_BTN.cy) < CROUCH_BTN.r; }
 function isRunBtn(x, y)    { return Math.hypot(x-RUN_BTN.cx,    y-RUN_BTN.cy)    < RUN_BTN.r;    }
 
@@ -3156,90 +3157,84 @@ function drawHUD() {
     cx.fillText(`SPOTTED ${P.catches}/${P.maxCatches}`, dx, dy+28);
   }
 
-  // MUTE button — top right
-  const mx2=VW-110, my2=8, mw2=94, mh2=36;
-  cx.globalAlpha=0.9;
-  cx.fillStyle = musicMuted ? '#07050c' : '#ff2d7820';
-  cx.strokeStyle = musicMuted ? '#3a3a3a' : '#ff2d78'; cx.lineWidth=1.5;
-  cx.beginPath(); cx.roundRect(mx2,my2,mw2,mh2,5); cx.fill(); cx.stroke();
-  cx.globalAlpha=1; cx.font='bold 10px monospace'; cx.textAlign='center';
+  // MUSIC button — top right pill
+  const mx2=VW-133, my2=14, mw2=120, mh2=38;
+  cx.globalAlpha=0.92;
+  cx.fillStyle='#07050c';
+  cx.strokeStyle = musicMuted ? '#444' : '#ff2d78'; cx.lineWidth=2;
+  cx.beginPath(); cx.roundRect(mx2,my2,mw2,mh2,19); cx.fill(); cx.stroke();
+  cx.globalAlpha=1; cx.textAlign='left';
+  // Speaker icon circle
+  const spkx=mx2+22, spky=my2+mh2/2;
+  cx.fillStyle = musicMuted ? '#333' : '#ff2d78';
+  cx.beginPath(); cx.arc(spkx, spky, 12, 0, Math.PI*2); cx.fill();
+  cx.fillStyle='#fff'; cx.font='bold 12px sans-serif'; cx.textAlign='center'; cx.textBaseline='middle';
+  cx.fillText(musicMuted?'🔇':'🔊', spkx, spky+1);
+  cx.textBaseline='alphabetic';
+  cx.font='bold 11px monospace'; cx.textAlign='left';
   cx.fillStyle = musicMuted ? '#555' : '#ff2d78';
-  cx.fillText(musicMuted ? '🔇 MUTED' : '🔊 MUSIC', mx2+mw2/2, my2+mh2/2+4);
+  cx.fillText('MUSIC', mx2+40, my2+mh2/2+4);
 
-  // STAY LOW — round arcade button
+  // ── STAY LOW — large magenta circle ─────────────────────────────────────────
   const { cx: bcx, cy: bcy, r: br } = CROUCH_BTN;
   cx.save();
-  // Outer shadow/depth
-  cx.globalAlpha = 0.85;
-  cx.fillStyle = '#000';
-  cx.beginPath(); cx.arc(bcx+1, bcy+5, br, 0, Math.PI*2); cx.fill();
-  // Button face gradient
-  const btnG = cx.createRadialGradient(bcx-br*0.25, bcy-br*0.25, 2, bcx, bcy, br);
+  cx.globalAlpha = 0.7; cx.fillStyle='#000';
+  cx.beginPath(); cx.arc(bcx+2, bcy+5, br, 0, Math.PI*2); cx.fill();
+  const btnG = cx.createRadialGradient(bcx-br*0.3, bcy-br*0.3, 2, bcx, bcy, br);
   if (P.crouch) {
-    btnG.addColorStop(0, '#ff6699'); btnG.addColorStop(0.5, '#ff2d78'); btnG.addColorStop(1, '#8a0030');
+    btnG.addColorStop(0,'#ff88cc'); btnG.addColorStop(1,'#cc0066');
   } else {
-    btnG.addColorStop(0, '#3a3a4a'); btnG.addColorStop(0.5, '#1e1e2a'); btnG.addColorStop(1, '#0d0d14');
+    btnG.addColorStop(0,'#aa2266'); btnG.addColorStop(1,'#660033');
   }
-  cx.fillStyle = btnG;
+  cx.globalAlpha=0.95; cx.fillStyle=btnG;
   cx.beginPath(); cx.arc(bcx, bcy, br, 0, Math.PI*2); cx.fill();
-  // Inner rim
   cx.globalAlpha = P.crouch ? 0.9 : 0.35;
-  cx.strokeStyle = P.crouch ? '#ff2d78' : '#555';
-  cx.lineWidth = 2.5;
-  cx.beginPath(); cx.arc(bcx, bcy, br - 2, 0, Math.PI*2); cx.stroke();
-  // Top highlight glint
-  cx.globalAlpha = P.crouch ? 0.35 : 0.15;
-  cx.fillStyle = '#fff';
-  cx.beginPath(); cx.ellipse(bcx - br*0.2, bcy - br*0.35, br*0.4, br*0.18, -0.4, 0, Math.PI*2); cx.fill();
-  // Crouching icon — head + body
-  cx.globalAlpha = 1;
-  cx.fillStyle = P.crouch ? '#fff' : '#777';
-  cx.beginPath(); cx.arc(bcx, bcy - 18, 7, 0, Math.PI*2); cx.fill();
+  cx.strokeStyle = P.crouch ? '#ff88cc' : '#882255'; cx.lineWidth=2.5;
+  if (P.crouch) { cx.shadowBlur=14; cx.shadowColor='#ff44aa'; }
+  cx.beginPath(); cx.arc(bcx, bcy, br-2, 0, Math.PI*2); cx.stroke();
+  cx.shadowBlur=0;
+  cx.globalAlpha=1;
+  cx.fillStyle = P.crouch ? '#fff' : '#ffaad4';
+  cx.beginPath(); cx.arc(bcx, bcy-16, 7, 0, Math.PI*2); cx.fill();
   cx.beginPath();
-  cx.moveTo(bcx-14, bcy-10); cx.quadraticCurveTo(bcx, bcy-2, bcx+14, bcy-10);
-  cx.quadraticCurveTo(bcx+18, bcy+4, bcx+10, bcy+10);
-  cx.quadraticCurveTo(bcx, bcy+4, bcx-10, bcy+10);
-  cx.quadraticCurveTo(bcx-18, bcy+4, bcx-14, bcy-10);
+  cx.moveTo(bcx-14, bcy-9); cx.quadraticCurveTo(bcx, bcy-1, bcx+14, bcy-9);
+  cx.quadraticCurveTo(bcx+17, bcy+5, bcx+9, bcy+11);
+  cx.quadraticCurveTo(bcx, bcy+5, bcx-9, bcy+11);
+  cx.quadraticCurveTo(bcx-17, bcy+5, bcx-14, bcy-9);
   cx.fill();
-  // Label
-  cx.font = 'bold 8px monospace'; cx.textAlign = 'center';
-  cx.fillStyle = P.crouch ? '#ff2d78' : '#555';
-  cx.fillText('STAY LOW', bcx, bcy + br + 14);
+  cx.font='bold 8px monospace'; cx.textAlign='center';
+  cx.fillStyle = P.crouch ? '#ff88cc' : '#cc4488';
+  cx.fillText('STAY LOW', bcx, bcy+br+13);
   cx.restore();
 
-  // RUN button — above Stay Low
+  // ── RUN — medium dark circle, gold lightning ─────────────────────────────────
   const { cx: rcx, cy: rcy, r: rr } = RUN_BTN;
   cx.save();
-  cx.globalAlpha = 0.88;
-  // Shadow
-  cx.fillStyle = '#000';
+  cx.globalAlpha=0.6; cx.fillStyle='#000';
   cx.beginPath(); cx.arc(rcx+1, rcy+4, rr, 0, Math.PI*2); cx.fill();
-  // Face
-  const runG = cx.createRadialGradient(rcx-rr*0.25, rcy-rr*0.25, 1, rcx, rcy, rr);
+  const runG = cx.createRadialGradient(rcx-rr*0.3, rcy-rr*0.3, 1, rcx, rcy, rr);
   if (P.running) {
-    runG.addColorStop(0,'#ffaa00'); runG.addColorStop(0.5,'#ff6600'); runG.addColorStop(1,'#882200');
+    runG.addColorStop(0,'#332200'); runG.addColorStop(1,'#110800');
   } else {
-    runG.addColorStop(0,'#3a3a4a'); runG.addColorStop(0.5,'#1e1e2a'); runG.addColorStop(1,'#0d0d14');
+    runG.addColorStop(0,'#1e1e2e'); runG.addColorStop(1,'#0a0a16');
   }
-  cx.fillStyle = runG;
+  cx.globalAlpha=0.95; cx.fillStyle=runG;
   cx.beginPath(); cx.arc(rcx, rcy, rr, 0, Math.PI*2); cx.fill();
-  // Rim
-  cx.globalAlpha = P.running ? 0.9 : 0.3;
-  cx.strokeStyle = P.running ? '#ff8800' : '#555'; cx.lineWidth = 2;
-  cx.beginPath(); cx.arc(rcx, rcy, rr-2, 0, Math.PI*2); cx.stroke();
-  // Glint
-  cx.globalAlpha = P.running ? 0.3 : 0.12;
-  cx.fillStyle = '#fff';
-  cx.beginPath(); cx.ellipse(rcx-rr*0.2, rcy-rr*0.32, rr*0.35, rr*0.15, -0.4, 0, Math.PI*2); cx.fill();
-  // Lightning bolt icon
-  cx.globalAlpha = 1;
-  cx.fillStyle = P.running ? '#fff' : '#777';
-  cx.font = 'bold 18px sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
-  cx.fillText('⚡', rcx, rcy);
-  // Label
-  cx.font = 'bold 8px monospace'; cx.textBaseline = 'alphabetic';
-  cx.fillStyle = P.running ? '#ff8800' : '#555';
-  cx.fillText('RUN', rcx, rcy + rr + 13);
+  cx.globalAlpha = P.running ? 0.9 : 0.25;
+  cx.strokeStyle = P.running ? '#ffaa00' : '#333'; cx.lineWidth=1.5;
+  if (P.running) { cx.shadowBlur=8; cx.shadowColor='#ffaa00'; }
+  cx.beginPath(); cx.arc(rcx, rcy, rr-1.5, 0, Math.PI*2); cx.stroke();
+  cx.shadowBlur=0;
+  // Lightning bolt polygon
+  cx.globalAlpha=1; cx.fillStyle = P.running ? '#ffcc00' : '#666';
+  cx.save(); cx.translate(rcx, rcy);
+  cx.beginPath();
+  cx.moveTo(-4,-12); cx.lineTo(3,-2); cx.lineTo(0,-2);
+  cx.lineTo(4,12);   cx.lineTo(-3,1);  cx.lineTo(0,1); cx.closePath();
+  cx.fill(); cx.restore();
+  cx.font='bold 8px monospace'; cx.textAlign='center';
+  cx.fillStyle = P.running ? '#ffaa00' : '#555';
+  cx.fillText('RUN', rcx, rcy+rr+12);
   cx.restore();
   if (!JOY.on) {
     cx.save();
@@ -3314,57 +3309,40 @@ function drawInteractPrompt() {
 }
 
 function drawTargetIcon() {
-  var cx2 = TARGET_BTN.cx, cy2 = TARGET_BTN.cy, r = TARGET_BTN.r;
+  if (DEMO_MODE) return;
+  var tx = TARGET_BTN.cx, ty = TARGET_BTN.cy, tr = TARGET_BTN.r;
   var armed = hasItem('gun');
-  var col = armed ? '#00ccff' : 'rgba(255,255,255,0.18)';
-  var breathe = armed ? 0.75 + Math.sin(pulse * 3.5) * 0.25 : 0.4;
-
+  var breathe = armed ? 0.85 + Math.sin(pulse * 3.5) * 0.15 : 1;
   cx.save();
+  // Shadow
+  cx.globalAlpha=0.55; cx.fillStyle='#000';
+  cx.beginPath(); cx.arc(tx+2, ty+5, tr, 0, Math.PI*2); cx.fill();
+  // Dark fill
+  cx.globalAlpha=1; cx.fillStyle='#04101e';
+  cx.beginPath(); cx.arc(tx, ty, tr, 0, Math.PI*2); cx.fill();
+  // Teal ring
+  var tcol = armed ? '#00ddff' : '#006688';
   cx.globalAlpha = breathe;
-
-  if (armed) {
-    // Glow when active
-    cx.shadowBlur = 14 + Math.sin(pulse * 3.5) * 6;
-    cx.shadowColor = '#00ccff';
-  }
-
-  cx.strokeStyle = col;
-  cx.lineWidth = armed ? 2.0 : 1.2;
-
-  // Outer circle
-  cx.beginPath(); cx.arc(cx2, cy2, r, 0, Math.PI*2); cx.stroke();
-
-  // Inner circle
-  cx.beginPath(); cx.arc(cx2, cy2, r*0.38, 0, Math.PI*2); cx.stroke();
-
-  // Center dot
-  cx.fillStyle = col;
-  cx.beginPath(); cx.arc(cx2, cy2, r*0.12, 0, Math.PI*2); cx.fill();
-
-  // 4 crosshair lines — gap in center
-  var gap = r * 0.52, len = r * 0.42;
+  cx.strokeStyle = tcol; cx.lineWidth = armed ? 3 : 2;
+  if (armed) { cx.shadowBlur=10; cx.shadowColor='#00ddff'; }
+  cx.beginPath(); cx.arc(tx, ty, tr-1.5, 0, Math.PI*2); cx.stroke();
+  cx.shadowBlur=0;
+  // Crosshair lines
+  cx.strokeStyle=tcol; cx.lineWidth=armed?2:1.5;
+  var gap=8, len=tr-gap-5;
   cx.beginPath();
-  // Top
-  cx.moveTo(cx2, cy2 - r + 1); cx.lineTo(cx2, cy2 - gap);
-  // Bottom
-  cx.moveTo(cx2, cy2 + gap); cx.lineTo(cx2, cy2 + r - 1);
-  // Left
-  cx.moveTo(cx2 - r + 1, cy2); cx.lineTo(cx2 - gap, cy2);
-  // Right
-  cx.moveTo(cx2 + gap, cy2); cx.lineTo(cx2 + r - 1, cy2);
+  cx.moveTo(tx-gap,ty); cx.lineTo(tx-gap-len,ty);
+  cx.moveTo(tx+gap,ty); cx.lineTo(tx+gap+len,ty);
+  cx.moveTo(tx,ty-gap); cx.lineTo(tx,ty-gap-len);
+  cx.moveTo(tx,ty+gap); cx.lineTo(tx,ty+gap+len);
   cx.stroke();
-
-  cx.shadowBlur = 0;
-
-  // "TAP" hint text when armed
-  if (armed) {
-    cx.globalAlpha = breathe * 0.7;
-    cx.font = 'bold 7px monospace';
-    cx.fillStyle = '#00ccff';
-    cx.textAlign = 'center';
-    cx.fillText('TAP', cx2, cy2 + r + 12);
-  }
-
+  // Center dot
+  cx.fillStyle=tcol; cx.globalAlpha=breathe;
+  cx.beginPath(); cx.arc(tx, ty, 3.5, 0, Math.PI*2); cx.fill();
+  // Label always visible
+  cx.globalAlpha=1; cx.font='bold 8px monospace'; cx.textAlign='center';
+  cx.fillStyle=armed?'#00ddff':'#336';
+  cx.fillText('TAP', tx, ty+tr+13);
   cx.restore();
 }
 
@@ -3587,26 +3565,28 @@ function handlePhoneMenuTap(x, y) {
 
 function drawEmoteWheel() {
   if (DEMO_MODE) return;
-  var bcx = VW-175, bcy = VH-64, br = 22;
+  var bcx = GADGET_BTN.cx, bcy = GADGET_BTN.cy, br = GADGET_BTN.r;
   cx.save();
-  cx.globalAlpha = 0.82;
-  // Button background
-  const bg = cx.createRadialGradient(bcx-br*0.2, bcy-br*0.25, 1, bcx, bcy, br);
-  bg.addColorStop(0, '#2a1a3a'); bg.addColorStop(1, '#110818');
-  cx.fillStyle = bg;
-  cx.strokeStyle = '#cc44ff'; cx.lineWidth = 1.5;
-  cx.beginPath(); cx.arc(bcx, bcy, br, 0, Math.PI*2); cx.fill(); cx.stroke();
-  // Draw small wheel hint (3 dots in a ring)
-  cx.globalAlpha = 0.9;
-  for (var i=0; i<6; i++) {
-    var a = (i/6)*Math.PI*2 - Math.PI/2;
-    var dx2=Math.cos(a)*13, dy2=Math.sin(a)*13;
-    cx.fillStyle = i===5 ? '#334455' : '#cc44ff';
-    cx.globalAlpha = i===5 ? 0.3 : 0.7;
-    cx.beginPath(); cx.arc(bcx+dx2, bcy+dy2, 2.8, 0, Math.PI*2); cx.fill();
+  // Shadow
+  cx.globalAlpha=0.55; cx.fillStyle='#000';
+  cx.beginPath(); cx.arc(bcx+1, bcy+4, br, 0, Math.PI*2); cx.fill();
+  // Dark purple fill
+  const bg = cx.createRadialGradient(bcx-br*0.3, bcy-br*0.3, 2, bcx, bcy, br);
+  bg.addColorStop(0, '#2a0e44'); bg.addColorStop(1, '#0e0520');
+  cx.globalAlpha=0.92; cx.fillStyle=bg;
+  cx.beginPath(); cx.arc(bcx, bcy, br, 0, Math.PI*2); cx.fill();
+  cx.globalAlpha=0.5; cx.strokeStyle='#8844cc'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.arc(bcx, bcy, br-1.5, 0, Math.PI*2); cx.stroke();
+  // 5-dot pattern: center + 4 corners
+  cx.globalAlpha=1; cx.fillStyle='#aa55ff';
+  cx.beginPath(); cx.arc(bcx, bcy, 2.5, 0, Math.PI*2); cx.fill();
+  for (var i=0; i<4; i++) {
+    var a = (i/4)*Math.PI*2 + Math.PI/4;
+    cx.beginPath(); cx.arc(bcx+Math.cos(a)*10, bcy+Math.sin(a)*10, 2.5, 0, Math.PI*2); cx.fill();
   }
-  cx.shadowBlur = 0;
-
+  cx.font='bold 7px monospace'; cx.textAlign='center';
+  cx.fillStyle='#aa55ff';
+  cx.fillText('GADGET', bcx, bcy+br+12);
   if (!EMOTE_WHEEL.active) { cx.restore(); return; }
 
   // ── Full wheel ──────────────────────────────────────────────────────────────
