@@ -1414,30 +1414,29 @@ var CLOUD_SEQS = {
          {key:'cloud_wisp_4',dur:0.24},{key:'cloud_wisp_5',dur:0.24},{key:'cloud_wisp_6',dur:0.24}],
 };
 
-// 7 cloud instances — 3 types, staggered x/y/speed/frame/alpha for natural depth layering
-// x=position, y=sky y (0-75), w=render width in virtual px, spd=px/s drift, seq=type, f=start frame, a=alpha, flip=bool
-// 2-slot periodic cloud system — far background, one at a time, gentle drift
+// 2-slot periodic cloud system — puffy only, far-back sky, never over buildings
 var CLOUDS = [
   { active:false, x:0, y:0, w:0, spd:0, seq:'flat', f:0, ft:0, a:0, flip:false },
   { active:false, x:0, y:0, w:0, spd:0, seq:'flat', f:0, ft:0, a:0, flip:false },
 ];
-var _cloudNextSpawn = 12 + Math.random() * 20;  // first cloud 12-32s in
+var _cloudNextSpawn = 15 + Math.random() * 25;
 
 function _spawnCloud() {
   var slot = CLOUDS.find(function(c){ return !c.active; });
   if (!slot) return;
-  var types = ['flat','tall','wisp'];
+  // Only puffy cloud types — no wispy stringy ones
+  var types = ['flat','tall'];
   var t = types[Math.floor(Math.random() * types.length)];
   slot.active = true;
   slot.seq    = t;
   slot.f      = Math.floor(Math.random() * 6);
   slot.ft     = 0;
-  slot.w      = 160 + Math.random() * 90;   // small — reads as distant
-  slot.y      = 6  + Math.random() * 18;    // high in sky
-  slot.spd    = 5  + Math.random() * 5;     // very slow drift
-  slot.a      = 0.38 + Math.random() * 0.22; // faint — far background
+  slot.w      = 120 + Math.random() * 70;       // small — far distant
+  slot.y      = 4   + Math.random() * 28;        // y=4–32: strictly above building tops
+  slot.spd    = 1.2 + Math.random() * 1.8;       // 1.2–3 px/s: barely perceptible
+  slot.a      = 0.18 + Math.random() * 0.16;     // 18–34% — very faded, deep background
   slot.flip   = Math.random() < 0.5;
-  slot.x      = -slot.w / 2 - 10;           // enter from left edge
+  slot.x      = -slot.w / 2 - 10;
 }
 
 function tickClouds(dt) {
