@@ -1414,23 +1414,40 @@ var CLOUD_SEQS = {
 
 // 7 cloud instances — 3 types, staggered x/y/speed/frame/alpha for natural depth layering
 // x=position, y=sky y (0-75), w=render width in virtual px, spd=px/s drift, seq=type, f=start frame, a=alpha, flip=bool
+// 2-slot periodic cloud system — far background, one at a time, gentle drift
 var CLOUDS = [
-  {x:  60, y: 8, w:390, spd: 8,  seq:'flat', f:0, ft:0, a:0.92, flip:false},
-  {x: 590, y: 5, w:330, spd: 6,  seq:'flat', f:3, ft:0, a:0.82, flip:true },
-  {x: 290, y:22, w:240, spd:13,  seq:'tall', f:1, ft:0, a:0.90, flip:false},
-  {x: 830, y:16, w:200, spd:11,  seq:'tall', f:4, ft:0, a:0.78, flip:false},
-  {x: 140, y:46, w:300, spd:22,  seq:'wisp', f:2, ft:0, a:0.88, flip:true },
-  {x: 710, y:40, w:265, spd:19,  seq:'wisp', f:5, ft:0, a:0.95, flip:false},
-  {x: 380, y:11, w:275, spd: 5,  seq:'flat', f:2, ft:0, a:0.70, flip:false},
+  { active:false, x:0, y:0, w:0, spd:0, seq:'flat', f:0, ft:0, a:0, flip:false },
+  { active:false, x:0, y:0, w:0, spd:0, seq:'flat', f:0, ft:0, a:0, flip:false },
 ];
+var _cloudNextSpawn = 12 + Math.random() * 20;  // first cloud 12-32s in
+
+function _spawnCloud() {
+  var slot = CLOUDS.find(function(c){ return !c.active; });
+  if (!slot) return;
+  var types = ['flat','tall','wisp'];
+  var t = types[Math.floor(Math.random() * types.length)];
+  slot.active = true;
+  slot.seq    = t;
+  slot.f      = Math.floor(Math.random() * 6);
+  slot.ft     = 0;
+  slot.w      = 160 + Math.random() * 90;   // small — reads as distant
+  slot.y      = 6  + Math.random() * 18;    // high in sky
+  slot.spd    = 5  + Math.random() * 5;     // very slow drift
+  slot.a      = 0.38 + Math.random() * 0.22; // faint — far background
+  slot.flip   = Math.random() < 0.5;
+  slot.x      = -slot.w / 2 - 10;           // enter from left edge
+}
 
 function tickClouds(dt) {
+  _cloudNextSpawn -= dt;
+  if (_cloudNextSpawn <= 0) {
+    _spawnCloud();
+    _cloudNextSpawn = 28 + Math.random() * 35;  // next cloud 28-63s later
+  }
   CLOUDS.forEach(function(c) {
-    // Drift
+    if (!c.active) return;
     c.x += c.spd * dt;
-    // Wrap: when fully off right edge, teleport to left (off-screen)
-    if (c.x - c.w/2 > VW + 20) c.x = -c.w/2 - 20;
-    // Advance morph frame
+    if (c.x - c.w/2 > VW + 20) c.active = false;  // exit, don't wrap
     var seq = CLOUD_SEQS[c.seq];
     c.ft += dt;
     if (c.ft >= seq[c.f].dur) { c.ft = 0; c.f = (c.f+1) % seq.length; }
@@ -1440,6 +1457,7 @@ function tickClouds(dt) {
 function drawClouds() {
   cx.save();
   CLOUDS.forEach(function(c) {
+    if (!c.active) return;
     var seq = CLOUD_SEQS[c.seq];
     var key = seq[c.f].key;
     var spr = SPR[key] || IMG[key]; if (!spr) return;
