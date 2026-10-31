@@ -504,8 +504,8 @@ for (let _su = 1; _su <= 8; _su++) {
 // Calibrated against the Miami alley backdrop:
 // Vanishing point ~center at y≈52%, left wall converges harder than right.
 const FL = {
-  topY: VH * 0.52,  botY: VH * 0.97,   // floor y range (far → near)
-  topXL: VW * 0.36, topXR: VW * 0.64,  // alley mouth at far end (narrow)
+  topY: VH * 0.44,  botY: VH * 0.98,   // floor y range (far → near) — calibrated for new scene
+  topXL: VW * 0.33, topXR: VW * 0.67,  // alley mouth at far end (narrow)
   botXL: VW * 0.00, botXR: VW * 1.00,  // full width at near camera
 };
 
@@ -2766,10 +2766,10 @@ function drawExtendedBg() {
   cx.drawImage(img, bx, by, bw, bh);
 }
 
-function drawBg(darken = 0) {  if (IMG['scene']) {
-    cx.drawImage(IMG['scene'], 0, 0, VW, VH);
-  } else {
-    // Fallback gradient
+function drawBg(darken = 0) {
+  // Scene is drawn by drawExtendedBg() cover-fill — no redraw here to avoid seam.
+  // Fallback gradient only when scene hasn't loaded yet.
+  if (!IMG['scene']) {
     const g = cx.createLinearGradient(0,0,0,VH);
     g.addColorStop(0,'#09031a'); g.addColorStop(1,'#1a0828');
     cx.fillStyle = g; cx.fillRect(0,0,VW,VH);
