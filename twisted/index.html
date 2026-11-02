@@ -937,7 +937,7 @@ const NPC = {
 // ─── Patrol car ───────────────────────────────────────────────────────────────
 // Fixed at far-center of the alley
 const CAR = {
-  wx: 0.50, wz: 0.05,
+  wx: 0.50, wz: 0.14,  // wz raised from 0.05 → sits on the visible road in new background
   la: 0, lspd: 0.65, ldir: 1,  // light angle oscillation
   coneWx: 0.40,                 // half-width of detection cone in world X units
   coneWz: 0.35,                 // detection depth range
@@ -2826,7 +2826,7 @@ function drawCar() {
 
   if (spr) {
     cx.scale(-1, 1);
-    cx.drawImage(spr, -sw / 2, -sh, sw, sh);
+    cx.drawImage(spr, -sw / 2, -sh + sh * 0.12, sw, sh);  // nudge down 12% so wheels touch road
     cx.scale(-1, 1);
   } else {
     cx.fillStyle = '#111820';
@@ -2911,12 +2911,13 @@ function drawEntities() {
 // Draw win glow only — called AFTER characters
 // Foreground crate overlay — fixed bottom-right, drawn on top of characters for depth
 function drawFgBox() {
-  // Use the new detailed crate stack as primary — anchored to bottom-right corner
   var img = IMG['fg_crates'] || IMG['fg_box']; if (!img) return;
-  // Scale so it fills from the bottom-right corner, wide enough to cover any seam
-  var fw = 340, fh = fw * (img.naturalHeight / img.naturalWidth);
-  // Anchor at bottom-right — extend slightly off-screen so no gap at the very edge
-  cx.drawImage(img, VW - fw + 10, VH - fh + 8, fw, fh);
+  var iw = img.naturalWidth, ih = img.naturalHeight;
+  // Show only the bottom 42% of the image — skips empty upper area, anchors crate bases to corner
+  var sy = Math.floor(ih * 0.58), sh = ih - sy;
+  var fw = 420, fh = fw * (sh / iw);
+  // Push slightly below canvas bottom so crates read as sitting right on the floor edge
+  cx.drawImage(img, 0, sy, iw, sh, VW - fw + 22, VH - fh + 18, fw, fh);
 }
 
 function drawWinGlow() {  if (IMG['fg']) cx.drawImage(IMG['fg'], 0, 0, VW, VH);
