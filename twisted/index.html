@@ -368,8 +368,7 @@ function loadImg(k, src) {
 loadImg('intro',        'assets/intro.jpg');
 loadImg('scene',        'assets/scene.png?v=4');
 loadImg('fg',           'assets/foreground.png');
-loadImg('fg_box',       'assets/fg_box.png');     // foreground crates — bottom-right parallax
-loadImg('fg_crates',    'assets/fg_crates.png');  // new crate stack — covers bottom-right seam
+// fg_box and fg_crates removed — no longer used
 loadImg('police',       'assets/police.png');
 // Dialogue comic portraits (used as-is, no black removal needed)
 loadImg('dumpster',     'assets/dumpster.png');
@@ -2909,16 +2908,7 @@ function drawEntities() {
 }
 
 // Draw win glow only — called AFTER characters
-// Foreground crate overlay — fixed bottom-right, drawn on top of characters for depth
-function drawFgBox() {
-  var img = IMG['fg_crates'] || IMG['fg_box']; if (!img) return;
-  var iw = img.naturalWidth, ih = img.naturalHeight;
-  // Tight crop: skip left ~33% empty black area AND top ~58% empty — just the crate bases
-  var sx = Math.floor(iw * 0.33), sy = Math.floor(ih * 0.58);
-  var sw = iw - sx, sh = ih - sy;
-  var fw = 220, fh = fw * (sh / sw);  // small enough to sit in corner, not span center
-  cx.drawImage(img, sx, sy, sw, sh, VW - fw + 15, VH - fh + 22, fw, fh);
-}
+// drawFgBox removed
 
 function drawWinGlow() {  if (IMG['fg']) cx.drawImage(IMG['fg'], 0, 0, VW, VH);
   const ws = w2s(WIN.wxMin + 0.07, WIN.wzMin + 0.12);
