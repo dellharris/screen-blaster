@@ -446,6 +446,12 @@ for (let _gsi = 1; _gsi <= 6; _gsi++) loadImg('sierra_gun_squat_' + _gsi, 'asset
 for (let _di = 1; _di <= 8; _di++) loadImg('sierra_dance_' + _di, 'assets/sierra_dance_' + _di + '.png');
 // Naomi dance emote — 8 frames across 2 sheets
 for (let _ndi = 1; _ndi <= 8; _ndi++) loadImg('naomi_dance_' + _ndi, 'assets/naomi_dance_' + _ndi + '.png');
+// Naomi dumpster approach — 11 frames (6 walk + 5 look)
+for (let _ndw = 1; _ndw <= 6; _ndw++) loadImg('naomi_dump_walk_' + _ndw, 'assets/naomi_dump_walk_' + _ndw + '.png');
+for (let _ndl = 1; _ndl <= 5; _ndl++) loadImg('naomi_dump_look_' + _ndl, 'assets/naomi_dump_look_' + _ndl + '.png');
+// Sierra dumpster reaction — 10 frames (5 alert + 5 react)
+for (let _sda = 1; _sda <= 5; _sda++) loadImg('sierra_dump_alert_' + _sda, 'assets/sierra_dump_alert_' + _sda + '.png');
+for (let _sdr = 1; _sdr <= 5; _sdr++) loadImg('sierra_dump_react_' + _sdr, 'assets/sierra_dump_react_' + _sdr + '.png');
 // Naomi spotlight shock reaction — 8 frames
 for (let _nsh = 1; _nsh <= 8; _nsh++) loadImg('naomi_shock_' + _nsh, 'assets/naomi_shock_' + _nsh + '.png');
 // Cloud sprites — animated morph cycles + static variants
@@ -1273,7 +1279,6 @@ function closeTrashGame() {
 
 function tryInteract(forcedByTap) {
   if (phase !== PH.PLAY) return;
-  // Tap on dumpster/ring = no proximity check — you see it you can use it
   if (!forcedByTap) {
     const dist = Math.hypot(P.wx - MISSION_DUMP.wx, P.wz - MISSION_DUMP.wz);
     if (dist > MISSION_DUMP.interactRange) return;
@@ -1285,8 +1290,8 @@ function tryInteract(forcedByTap) {
     MISSION_DUMP.timer = 0;
     SFX.dumpsterOpen();
   } else if (MISSION_DUMP.state === 'open_key') {
-    // Launch trash search mini-game instead of direct pickup
-    openTrashGame();
+    // Play approach cutscene first — cutscene calls openTrashGame() when done
+    startDumpCutscene();
   }
 }
 
@@ -1403,6 +1408,87 @@ const NAOMI_SHOCK_SEQ = [
   { key:'naomi_shock_8', dur:0.18 },  // sprint pose 1
   { key:'naomi_shock_6', dur:0.18 },  // sprint pose 2
 ];
+
+// ─── Dumpster approach cutscene sequences ────────────────────────────────────
+var NAOMI_DUMP_WALK = [
+  {key:'naomi_dump_walk_1',dur:0.10},{key:'naomi_dump_walk_2',dur:0.10},
+  {key:'naomi_dump_walk_3',dur:0.10},{key:'naomi_dump_walk_4',dur:0.10},
+  {key:'naomi_dump_walk_5',dur:0.10},{key:'naomi_dump_walk_6',dur:0.12},
+];
+var NAOMI_DUMP_LOOK = [
+  {key:'naomi_dump_look_1',dur:0.18},{key:'naomi_dump_look_2',dur:0.18},
+  {key:'naomi_dump_look_3',dur:0.28},{key:'naomi_dump_look_4',dur:0.22},
+  {key:'naomi_dump_look_5',dur:0.20},
+];
+var SIERRA_DUMP_ALERT = [
+  {key:'sierra_dump_alert_1',dur:0.14},{key:'sierra_dump_alert_2',dur:0.14},
+  {key:'sierra_dump_alert_3',dur:0.14},{key:'sierra_dump_alert_4',dur:0.16},
+  {key:'sierra_dump_alert_5',dur:0.16},
+];
+var SIERRA_DUMP_REACT = [
+  {key:'sierra_dump_react_1',dur:0.18},{key:'sierra_dump_react_2',dur:0.18},
+  {key:'sierra_dump_react_3',dur:0.20},{key:'sierra_dump_react_4',dur:0.20},
+  {key:'sierra_dump_react_5',dur:0.22},
+];
+
+// Approach cutscene state — plays when player triggers dumpster interact
+var DUMP_CUTSCENE = {
+  active: false,
+  phase: 'walk',    // 'walk' | 'look' | 'sierra' | 'done'
+  naomiFrame: 0, naomiTimer: 0, naomiSeq: null,
+  sierraFrame: 0, sierraTimer: 0, sierraSeq: null,
+};
+
+function startDumpCutscene() {
+  if (DUMP_CUTSCENE.active) return;
+  DUMP_CUTSCENE.active    = true;
+  DUMP_CUTSCENE.phase     = 'walk';
+  DUMP_CUTSCENE.naomiFrame  = 0; DUMP_CUTSCENE.naomiTimer  = 0;
+  DUMP_CUTSCENE.sierraFrame = 0; DUMP_CUTSCENE.sierraTimer = 0;
+  DUMP_CUTSCENE.naomiSeq  = NAOMI_DUMP_WALK;
+  DUMP_CUTSCENE.sierraSeq = SIERRA_DUMP_ALERT;
+}
+
+function tickDumpCutscene(dt) {
+  if (!DUMP_CUTSCENE.active) return;
+  var dc = DUMP_CUTSCENE;
+
+  // Advance Naomi frame
+  if (dc.naomiSeq && dc.naomiFrame < dc.naomiSeq.length) {
+    dc.naomiTimer += dt;
+    if (dc.naomiTimer >= dc.naomiSeq[dc.naomiFrame].dur) {
+      dc.naomiTimer = 0; dc.naomiFrame++;
+      if (dc.naomiFrame >= dc.naomiSeq.length) {
+        // Walk done → start look sequence
+        if (dc.phase === 'walk') {
+          dc.phase = 'look';
+          dc.naomiSeq = NAOMI_DUMP_LOOK; dc.naomiFrame = 0;
+          dc.sierraSeq = SIERRA_DUMP_REACT; dc.sierraFrame = 0;
+        } else if (dc.phase === 'look') {
+          // Look done → open mini-game
+          dc.active = false;
+          openTrashGame();
+        }
+      }
+    }
+  }
+
+  // Advance Sierra frame (loops alert until look phase, then plays react once)
+  if (dc.sierraSeq) {
+    dc.sierraTimer += dt;
+    if (dc.sierraTimer >= dc.sierraSeq[dc.sierraFrame].dur) {
+      dc.sierraTimer = 0;
+      dc.sierraFrame++;
+      if (dc.sierraFrame >= dc.sierraSeq.length) {
+        if (dc.sierraSeq === SIERRA_DUMP_ALERT) {
+          dc.sierraFrame = 0;  // loop alert until look phase takes over
+        } else {
+          dc.sierraFrame = dc.sierraSeq.length - 1;  // hold last react frame
+        }
+      }
+    }
+  }
+}
 
 // ─── Cloud parallax system ───────────────────────────────────────────────────
 var CLOUD_SEQS = {
@@ -2120,6 +2206,7 @@ function update(ts) {
   tickBirds(dt);
   tickClouds(dt);
   tickRats(dt);
+  tickDumpCutscene(dt);
   tickDemo(dt);
 
   // End card auto-replay after 8s
@@ -2872,20 +2959,33 @@ function drawEntities() {
     { type:'npc',    wz: NPC.renderWz, draw: () => {
       const gumSprKey = NPC.gumActive ? GUM_SEQ[NPC.gumFrame].key : null;
       // Dance > gun emote > step > gum priority
-      const sierraSprKey = NPC.danceActive
-        ? SIERRA_DANCE_SEQ[NPC.danceFrame].key
-        : NPC.gunEmoteActive
-          ? NPC._gunEmoteSeq[NPC.gunEmoteFrame].key
-          : (NPC.stepSeq ? NPC.stepSeq[NPC.stepFrame].key : gumSprKey);
+      // Dumpster approach cutscene overrides Sierra sprite
+      let sierraSprKey = null;
+      if (DUMP_CUTSCENE.active && DUMP_CUTSCENE.sierraSeq) {
+        const fi = Math.min(DUMP_CUTSCENE.sierraFrame, DUMP_CUTSCENE.sierraSeq.length-1);
+        sierraSprKey = DUMP_CUTSCENE.sierraSeq[fi].key;
+      }
+      if (!sierraSprKey) {
+        sierraSprKey = NPC.danceActive
+          ? SIERRA_DANCE_SEQ[NPC.danceFrame].key
+          : NPC.gunEmoteActive
+            ? NPC._gunEmoteSeq[NPC.gunEmoteFrame].key
+            : (NPC.stepSeq ? NPC.stepSeq[NPC.stepFrame].key : gumSprKey);
+      }
       drawChar('sierra', NPC.renderWx, NPC.renderWz, NPC.lastMvx, NPC.lastMvz, NPC.walkFrame, P.crouch, NPC.crouchLerp, NPC.idlePhase, sierraSprKey, 0, 1.22, NPC.moving);
 
 
     }},
     { type:'player', wz: P.renderWz,   draw: () => {
       drawPlayerDetectGlow();
-      // Shock overrides everything — active whenever in spotlight beam
       let naomiSprKey = null;
-      if (P.shockActive) {
+      // Dumpster approach cutscene takes highest priority
+      if (DUMP_CUTSCENE.active && DUMP_CUTSCENE.naomiSeq) {
+        const fi = Math.min(DUMP_CUTSCENE.naomiFrame, DUMP_CUTSCENE.naomiSeq.length-1);
+        naomiSprKey = DUMP_CUTSCENE.naomiSeq[fi].key;
+      }
+      // Shock overrides everything else — active whenever in spotlight beam
+      if (!naomiSprKey && P.shockActive) {
         const fi = Math.min(P.shockFrame, NAOMI_SHOCK_SEQ.length - 1);
         naomiSprKey = NAOMI_SHOCK_SEQ[fi].key;
       }
