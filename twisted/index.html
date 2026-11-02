@@ -1447,11 +1447,26 @@ function startDumpCutscene() {
   DUMP_CUTSCENE.sierraFrame = 0; DUMP_CUTSCENE.sierraTimer = 0;
   DUMP_CUTSCENE.naomiSeq  = NAOMI_DUMP_WALK;
   DUMP_CUTSCENE.sierraSeq = SIERRA_DUMP_ALERT;
+
+  // Move girls to dumpster positions — render lerp will carry them there
+  // during the walk animation (~0.65s)
+  P.wx = MISSION_DUMP.wx - 0.11;  // just left of dumpster
+  P.wz = MISSION_DUMP.wz + 0.15;  // slightly in front (closer to camera)
+  P.lastMvx = 1; P.lastMvz = 0;   // facing right toward dumpster
+  P.crouch = false; P.crouchLerp = 0;
+  P.vwx = 0; P.vwz = 0; P.moving = false;
+
+  NPC.wx = MISSION_DUMP.wx - 0.27;  // behind and left — watching the alley
+  NPC.wz = MISSION_DUMP.wz + 0.09;
+  NPC.lastMvx = 1; NPC.lastMvz = 0; // also facing right
 }
 
 function tickDumpCutscene(dt) {
   if (!DUMP_CUTSCENE.active) return;
   var dc = DUMP_CUTSCENE;
+
+  // Lock player input during cutscene
+  JOY.dx = 0; JOY.dy = 0; P.moving = false; P.running = false;
 
   // Advance Naomi frame
   if (dc.naomiSeq && dc.naomiFrame < dc.naomiSeq.length) {
@@ -1459,13 +1474,14 @@ function tickDumpCutscene(dt) {
     if (dc.naomiTimer >= dc.naomiSeq[dc.naomiFrame].dur) {
       dc.naomiTimer = 0; dc.naomiFrame++;
       if (dc.naomiFrame >= dc.naomiSeq.length) {
-        // Walk done → start look sequence
         if (dc.phase === 'walk') {
+          // Walk done — snap render positions so look frames start clean
+          P.renderWx = P.wx; P.renderWz = P.wz;
+          NPC.renderWx = NPC.wx; NPC.renderWz = NPC.wz;
           dc.phase = 'look';
           dc.naomiSeq = NAOMI_DUMP_LOOK; dc.naomiFrame = 0;
           dc.sierraSeq = SIERRA_DUMP_REACT; dc.sierraFrame = 0;
         } else if (dc.phase === 'look') {
-          // Look done → open mini-game
           dc.active = false;
           openTrashGame();
         }
@@ -1473,7 +1489,7 @@ function tickDumpCutscene(dt) {
     }
   }
 
-  // Advance Sierra frame (loops alert until look phase, then plays react once)
+  // Advance Sierra frame (loops alert, then react once)
   if (dc.sierraSeq) {
     dc.sierraTimer += dt;
     if (dc.sierraTimer >= dc.sierraSeq[dc.sierraFrame].dur) {
@@ -1481,9 +1497,9 @@ function tickDumpCutscene(dt) {
       dc.sierraFrame++;
       if (dc.sierraFrame >= dc.sierraSeq.length) {
         if (dc.sierraSeq === SIERRA_DUMP_ALERT) {
-          dc.sierraFrame = 0;  // loop alert until look phase takes over
+          dc.sierraFrame = 0;
         } else {
-          dc.sierraFrame = dc.sierraSeq.length - 1;  // hold last react frame
+          dc.sierraFrame = dc.sierraSeq.length - 1;
         }
       }
     }
