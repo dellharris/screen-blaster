@@ -2913,11 +2913,11 @@ function drawEntities() {
 function drawFgBox() {
   var img = IMG['fg_crates'] || IMG['fg_box']; if (!img) return;
   var iw = img.naturalWidth, ih = img.naturalHeight;
-  // Show only the bottom 42% of the image — skips empty upper area, anchors crate bases to corner
-  var sy = Math.floor(ih * 0.58), sh = ih - sy;
-  var fw = 420, fh = fw * (sh / iw);
-  // Push slightly below canvas bottom so crates read as sitting right on the floor edge
-  cx.drawImage(img, 0, sy, iw, sh, VW - fw + 22, VH - fh + 18, fw, fh);
+  // Tight crop: skip left ~33% empty black area AND top ~58% empty — just the crate bases
+  var sx = Math.floor(iw * 0.33), sy = Math.floor(ih * 0.58);
+  var sw = iw - sx, sh = ih - sy;
+  var fw = 220, fh = fw * (sh / sw);  // small enough to sit in corner, not span center
+  cx.drawImage(img, sx, sy, sw, sh, VW - fw + 15, VH - fh + 22, fw, fh);
 }
 
 function drawWinGlow() {  if (IMG['fg']) cx.drawImage(IMG['fg'], 0, 0, VW, VH);
